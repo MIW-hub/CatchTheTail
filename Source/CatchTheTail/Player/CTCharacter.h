@@ -9,6 +9,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UAnimMontage;
 struct FInputActionValue;
 
 /**
@@ -19,6 +20,8 @@ struct FInputActionValue;
  *  - 잡기(좌클릭, 쿨타임 없음) / 밀기(우클릭, 쿨타임 1초)
  *  - 속도 "버프 합산" 방식: 최종 배율 = 1.0 + 달리기 0.5 + 추격 0.2 ... (유령은 -0.5)
  *  - 유령 상태: 이동만 가능
+ *  - 애니메이션: 이동/점프는 UCTAnimInstance가 상태를 읽어 재생,
+ *               잡기/밀기/잡힘/밀려남은 몽타주로 재생 (MulticastPlayAction)
  *
  * 규칙 판정(잡기 성공, 밀기, 달리기 시작)은 모두 서버가 합니다.
  */
@@ -36,6 +39,9 @@ public:
 	/** 유령이면 점프 불가 */
 	virtual bool CanJumpInternal_Implementation() const override;
 
+	/** 클라이언트: PlayerState가 캐릭터보다 늦게 도착해도 유령 상태를 맞춰 줍니다. */
+	virtual void OnRep_PlayerState() override;
+
 	// ===== 상태 읽기 =====
 	UFUNCTION(BlueprintPure, Category = "CT|State")
 	bool IsGhost() const;
@@ -51,6 +57,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Run")
 	float GetRunStateRemainingSeconds() const;
 
+	/** 배율 1.0일 때의 걷기 속도 (애니메이션 속도 계산용) */
+	UFUNCTION(BlueprintPure, Category = "CT|Speed")
+	float GetBaseWalkSpeed() const { return BaseWalkSpeed; }
+
+	/** 지금 잡기/밀기를 쓸 수 있는가? (게임 중 + 유령 아님) */
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	bool CanUseActions() const;
+
+	/** 행동에 해당하는 몽타주 (없으면 nullptr) */
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	UAnimMontage* GetActionMontage(ECTCharacterAction Action) const;
+
 	// ===== 서버 전용 함수 =====
 	/** 속도 버프 추가 (같은 이름이면 값만 바꿈) */
 	void AddSpeedBuff(FName BuffId, float Value);
@@ -64,16 +82,22 @@ public:
 	/** PlayerState가 "유령 상태가 바뀌었다"고 알려줄 때 호출 (서버, 클라이언트 모두) */
 	void OnGhostStateChanged(bool bNewIsGhost);
 
+	/**
+	 * 모두의 화면에서 행동 연출(몽타주 + 블루프린트 이벤트)을 재생합니다. 서버에서 호출하세요.
+	 * 내가 직접 한 잡기/밀기는 버튼을 누른 순간 이미 재생했으므로 몽타주를 다시 틀지 않습니다.
+	 * @param bSuccess 잡기 성공 여부 (잡기 외에는 항상 true)
+	 */
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayAction(ECTCharacterAction Action, bool bSuccess);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 
-	// ===== 블루프린트에서 연결할 이벤트 (애니메이션, 이펙트용) =====
+	// ===== 블루프린트에서 연결할 이벤트 (이펙트, 사운드용) =====
+	/** 잡기/밀기/잡힘/밀려남 연출. 모든 사람의 화면에서 호출됩니다. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
-	void BP_OnGrab();
-
-	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
-	void BP_OnPush();
+	void BP_OnAction(ECTCharacterAction Action, bool bSuccess);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
 	void BP_OnGhostStateChanged(bool bNewIsGhost);
@@ -103,6 +127,27 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> PushAction;
+
+	// ===== 애니메이션 몽타주 (블루프린트에서 넣어 주세요. 비워 두면 재생하지 않음) =====
+	/** 잡기 (왼손 뻗기) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GrabMontage;
+
+	/** 밀기 (오른손 밀기) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushMontage;
+
+	/** 꼬리를 잡혔을 때 반응 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> CaughtMontage;
+
+	/** 밀려났을 때 반응 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushedMontage;
+
+	/** 행동 몽타주 재생 속도 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float ActionMontagePlayRate = 1.f;
 
 	// ===== 속도 설정 (임의값. 엔진에서 확인하며 조정하세요) =====
 	/** 기본 걷기 속도 (배율 1.0일 때) */
@@ -180,12 +225,12 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerPush();
 
-	/** 모두의 화면에서 잡기/밀기 연출을 재생 */
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastPlayGrab();
+	// ===== 애니메이션 =====
+	/** 행동 몽타주를 이 컴퓨터에서만 재생 */
+	void PlayActionMontage(ECTCharacterAction Action);
 
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastPlayPush();
+	/** 잡기/밀기 몽타주 중지 (유령이 될 때) */
+	void StopAttackMontages();
 
 	// ===== 속도 =====
 	void RecalculateMaxWalkSpeed();
@@ -223,4 +268,7 @@ private:
 
 	/** 마지막으로 민 시각 (서버) */
 	double LastPushTime = -1000.0;
+
+	/** 마지막으로 밀기 버튼을 누른 시각 (내 컴퓨터. 쿨타임 중에는 몽타주를 틀지 않기 위해) */
+	double LocalLastPushTime = -1000.0;
 };

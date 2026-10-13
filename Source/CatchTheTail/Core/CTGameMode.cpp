@@ -267,6 +267,12 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	Victim->AddTailCount(-1);
 	Victim->SetIsGhost(true);
 
+	// 잡힌 사람의 반응 연출 (AI 등 다른 경로로 잡아도 똑같이 재생되도록 여기서 처리)
+	if (ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn()))
+	{
+		VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("[CT] %s 이(가) %s 의 꼬리를 잡음"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());
 	OnTailGrabbed(Grabber, Victim);
 	return true;

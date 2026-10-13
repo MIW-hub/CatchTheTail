@@ -3,6 +3,8 @@
 #include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "CTPlayerState.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
@@ -96,6 +98,17 @@ bool ACTCharacter::CanJumpInternal_Implementation() const
 	return Super::CanJumpInternal_Implementation();
 }
 
+void ACTCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	// PlayerState의 유령 알림이 캐릭터보다 먼저 와서 놓쳤을 수 있으므로 여기서 한 번 더 맞춥니다.
+	if (IsGhost())
+	{
+		OnGhostStateChanged(true);
+	}
+}
+
 // ============================================================
 // 상태 읽기
 // ============================================================
@@ -124,6 +137,26 @@ float ACTCharacter::GetRunStateRemainingSeconds() const
 		return 0.f;
 	}
 	return static_cast<float>(FMath::Max(0.0, RunStateEndTime - GetServerTime()));
+}
+
+bool ACTCharacter::CanUseActions() const
+{
+	if (IsGhost()) { return false; }
+
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	return CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing;
+}
+
+UAnimMontage* ACTCharacter::GetActionMontage(ECTCharacterAction Action) const
+{
+	switch (Action)
+	{
+	case ECTCharacterAction::Grab:   return GrabMontage;
+	case ECTCharacterAction::Push:   return PushMontage;
+	case ECTCharacterAction::Caught: return CaughtMontage;
+	case ECTCharacterAction::Pushed: return PushedMontage;
+	default:                         return nullptr;
+	}
 }
 
 // ============================================================
@@ -214,6 +247,8 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 	if (bNewIsGhost)
 	{
 		StopJumping();
+		// 잡힘 몽타주는 그대로 두고, 하던 잡기/밀기 동작만 멈춥니다.
+		StopAttackMontages();
 	}
 
 	BP_OnGhostStateChanged(bNewIsGhost);
@@ -300,13 +335,23 @@ void ACTCharacter::OnRunReleased()
 
 void ACTCharacter::OnGrabPressed()
 {
-	if (IsGhost()) { return; }
+	if (!CanUseActions()) { return; }
+
+	// 서버 응답을 기다리지 않고 바로 손을 뻗어서 조작감이 늦지 않게 합니다.
+	PlayActionMontage(ECTCharacterAction::Grab);
 	ServerGrab();
 }
 
 void ACTCharacter::OnPushPressed()
 {
-	if (IsGhost()) { return; }
+	if (!CanUseActions()) { return; }
+
+	// 쿨타임 중에는 서버도 거절하므로 동작을 재생하지 않습니다.
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LocalLastPushTime < PushCooldownSeconds) { return; }
+	LocalLastPushTime = Now;
+
+	PlayActionMontage(ECTCharacterAction::Push);
 	ServerPush();
 }
 
@@ -403,29 +448,33 @@ void ACTCharacter::ServerGrab_Implementation()
 	if (MyPlayerState->IsGhost()) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
-	// 손을 뻗는 연출은 잡기에 성공하든 못하든 재생합니다.
-	MulticastPlayGrab();
-
+	bool bSuccess = false;
 	const ECTColor MyTargetColor = MyPlayerState->GetTargetColor();
-	if (MyTargetColor == ECTColor::None) { return; }
 
 	// 정해진 목표 색을 가진 사람만 잡을 수 있습니다.
-	for (APlayerState* OtherState : CTGameState->PlayerArray)
+	if (MyTargetColor != ECTColor::None)
 	{
-		ACTPlayerState* OtherPlayerState = Cast<ACTPlayerState>(OtherState);
-		if (!OtherPlayerState || OtherPlayerState == MyPlayerState) { continue; }
-		if (OtherPlayerState->GetAssignedColor() != MyTargetColor) { continue; }
-		if (OtherPlayerState->IsGhost()) { continue; }
-
-		const ACTCharacter* OtherCharacter = Cast<ACTCharacter>(OtherPlayerState->GetPawn());
-		if (!OtherCharacter) { continue; }
-
-		if (IsInFrontCone(OtherCharacter, GrabDistance, GrabHalfAngleDegrees))
+		for (APlayerState* OtherState : CTGameState->PlayerArray)
 		{
-			CTGameMode->HandleTailGrabbed(MyPlayerState, OtherPlayerState);
-			break; // 목표 색은 한 명뿐이므로 더 찾지 않습니다.
+			ACTPlayerState* OtherPlayerState = Cast<ACTPlayerState>(OtherState);
+			if (!OtherPlayerState || OtherPlayerState == MyPlayerState) { continue; }
+			if (OtherPlayerState->GetAssignedColor() != MyTargetColor) { continue; }
+			if (OtherPlayerState->IsGhost()) { continue; }
+
+			const ACTCharacter* OtherCharacter = Cast<ACTCharacter>(OtherPlayerState->GetPawn());
+			if (!OtherCharacter) { continue; }
+
+			if (IsInFrontCone(OtherCharacter, GrabDistance, GrabHalfAngleDegrees))
+			{
+				// 잡힌 사람의 반응 연출은 GameMode가 성공 처리와 함께 재생합니다.
+				bSuccess = CTGameMode->HandleTailGrabbed(MyPlayerState, OtherPlayerState);
+				break; // 목표 색은 한 명뿐이므로 더 찾지 않습니다.
+			}
 		}
 	}
+
+	// 손을 뻗는 연출은 잡기에 성공하든 못하든 재생합니다. (성공 여부는 이펙트용)
+	MulticastPlayAction(ECTCharacterAction::Grab, bSuccess);
 }
 
 void ACTCharacter::ServerPush_Implementation()
@@ -443,7 +492,7 @@ void ACTCharacter::ServerPush_Implementation()
 	if (Now - LastPushTime < PushCooldownSeconds) { return; }
 	LastPushTime = Now;
 
-	MulticastPlayPush();
+	MulticastPlayAction(ECTCharacterAction::Push, true);
 
 	// 정면 부채꼴 안의 모든 상대를 밉니다. (유령은 밀 수 없음)
 	for (APlayerState* OtherState : CTGameState->PlayerArray)
@@ -459,17 +508,49 @@ void ACTCharacter::ServerPush_Implementation()
 
 		const FVector LaunchVelocity = Direction * PushSpeed + FVector(0.f, 0.f, PushUpSpeed);
 		OtherCharacter->LaunchCharacter(LaunchVelocity, /*bXYOverride=*/true, /*bZOverride=*/true);
+		OtherCharacter->MulticastPlayAction(ECTCharacterAction::Pushed, true);
 	}
 }
 
-void ACTCharacter::MulticastPlayGrab_Implementation()
+// ============================================================
+// 애니메이션
+// ============================================================
+
+void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action, bool bSuccess)
 {
-	BP_OnGrab();
+	// 내가 누른 잡기/밀기는 OnGrabPressed / OnPushPressed에서 이미 재생했습니다.
+	const bool bAlreadyPlayedLocally =
+		IsLocallyControlled() &&
+		(Action == ECTCharacterAction::Grab || Action == ECTCharacterAction::Push);
+
+	if (!bAlreadyPlayedLocally)
+	{
+		PlayActionMontage(Action);
+	}
+
+	BP_OnAction(Action, bSuccess);
 }
 
-void ACTCharacter::MulticastPlayPush_Implementation()
+void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 {
-	BP_OnPush();
+	if (UAnimMontage* Montage = GetActionMontage(Action))
+	{
+		PlayAnimMontage(Montage, ActionMontagePlayRate);
+	}
+}
+
+void ACTCharacter::StopAttackMontages()
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	for (UAnimMontage* Montage : { GrabMontage.Get(), PushMontage.Get() })
+	{
+		if (Montage && AnimInstance->Montage_IsPlaying(Montage))
+		{
+			AnimInstance->Montage_Stop(Montage->BlendOut.GetBlendTime(), Montage);
+		}
+	}
 }
 
 // ============================================================

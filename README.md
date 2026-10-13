@@ -114,7 +114,8 @@
 
 | 클래스 | 역할 |
 |---|---|
-| `ACTCharacter` | 이동, 카메라, 점프, 달리기, 잡기·밀기 입력 |
+| `ACTCharacter` | 이동, 카메라, 점프, 달리기, 잡기·밀기 입력, 행동 몽타주 재생 |
+| `UCTAnimInstance` | 애니메이션 BP 부모. 이동 속도·공중·달리기·유령 상태를 AnimGraph 변수로 제공 |
 | `ACTPlayerController` | 입력 매핑 등록, 개인 UI와 서버 요청 연결 |
 | `ACTGameMode` | 서버의 입장 처리, 색 배정, 라운드와 승패 진행 |
 | `ACTGameState` | 남은 시간, 라운드 번호, 경기 상태 공유 |
