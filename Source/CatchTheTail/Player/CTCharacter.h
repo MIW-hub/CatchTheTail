@@ -57,6 +57,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Run")
 	float GetRunStateRemainingSeconds() const;
 
+	/**
+	 * 달리기 게이지 (0~1, UI용)
+	 * 대기: 1 / 달리는 중: 남은 달리기 시간 비율 / 쿨타임: 충전된 비율
+	 */
+	UFUNCTION(BlueprintPure, Category = "CT|Run")
+	float GetRunGaugePercent() const;
+
+	/** 밀기 준비 정도 (0~1, 1이면 사용 가능). 내 캐릭터에서만 정확합니다. */
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetPushReadyPercent() const;
+
 	/** 배율 1.0일 때의 걷기 속도 (애니메이션 속도 계산용) */
 	UFUNCTION(BlueprintPure, Category = "CT|Speed")
 	float GetBaseWalkSpeed() const { return BaseWalkSpeed; }

@@ -139,6 +139,27 @@ float ACTCharacter::GetRunStateRemainingSeconds() const
 	return static_cast<float>(FMath::Max(0.0, RunStateEndTime - GetServerTime()));
 }
 
+float ACTCharacter::GetRunGaugePercent() const
+{
+	switch (RunState)
+	{
+	case ECTRunState::Running:
+		return RunDurationSeconds > 0.f ? FMath::Clamp(GetRunStateRemainingSeconds() / RunDurationSeconds, 0.f, 1.f) : 0.f;
+	case ECTRunState::Cooldown:
+		return RunCooldownSeconds > 0.f ? FMath::Clamp(1.f - GetRunStateRemainingSeconds() / RunCooldownSeconds, 0.f, 1.f) : 1.f;
+	default:
+		return 1.f;
+	}
+}
+
+float ACTCharacter::GetPushReadyPercent() const
+{
+	if (PushCooldownSeconds <= 0.f || !GetWorld()) { return 1.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastPushTime;
+	return FMath::Clamp(static_cast<float>(Elapsed / PushCooldownSeconds), 0.f, 1.f);
+}
+
 bool ACTCharacter::CanUseActions() const
 {
 	if (IsGhost()) { return false; }
