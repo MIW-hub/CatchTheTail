@@ -1,0 +1,18 @@
+
+# Unreal generated files
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+
+# Visual Studio / Rider generated files
+/.vs/
+/.idea/
+/*.sln
+/*.suo
+/*.VC.db
+/*.VC.opendb
+
+# Generated plugin build files
+/Plugins/**/Binaries/
+/Plugins/**/Intermediate/
