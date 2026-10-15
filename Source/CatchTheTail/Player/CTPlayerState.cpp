@@ -100,6 +100,11 @@ void ACTPlayerState::SetIsGhost(bool bNewIsGhost)
 
 void ACTPlayerState::OnRep_Colors()
 {
+	// 캐릭터 몸 색을 바꿉니다.
+	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
+	{
+		CTCharacter->RefreshBodyColor();
+	}
 	NotifyChanged();
 }
 
