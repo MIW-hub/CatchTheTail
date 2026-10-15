@@ -3,22 +3,53 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "../Type/CTTypes.h"
 #include "CTPlayerController.generated.h"
 
 class UInputMappingContext;
+class UCTHUDWidget;
+class UCTResultWidget;
+class ACTGameState;
 
 /**
  * 플레이어 컨트롤러.
- * 하는 일: Enhanced Input의 "키 설정(Mapping Context)"을 등록합니다.
- * (실제 입력 처리는 ACTCharacter가 합니다.)
+ * 하는 일
+ *  - Enhanced Input의 "키 설정(Mapping Context)"을 등록합니다. (실제 입력 처리는 ACTCharacter)
+ *  - 내 화면의 UI를 만듭니다: 게임 중 HUD, 경기가 끝나면 결과 화면
  */
 UCLASS()
 class CATCHTHETAIL_API ACTPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
+public:
+	UFUNCTION(BlueprintPure, Category = "CT|UI")
+	UCTHUDWidget* GetHUDWidget() const { return HUDWidget; }
+
+	/** 결과 화면 열기 (마우스 커서 표시) */
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	void ShowResultScreen();
+
+	/** 결과 화면 닫기 (게임 입력으로 복귀) */
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	void HideResultScreen();
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	// ===== UI (블루프린트에서 WBP를 넣어 주세요. 비워 두면 만들지 않음) =====
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTHUDWidget> HUDWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTResultWidget> ResultWidgetClass;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
+	TObjectPtr<UCTHUDWidget> HUDWidget;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
+	TObjectPtr<UCTResultWidget> ResultWidget;
 
 	/** 등록할 키 설정들 (블루프린트에서 IMC_Default 등을 넣어 주세요) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
@@ -33,4 +64,16 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
 	float ViewPitchMax = 30.f;
+
+private:
+	void CreateUI();
+
+	/** 클라이언트에서는 GameState가 늦게 도착하므로 찾을 때까지 다시 시도합니다. */
+	void TryBindGameState();
+
+	UFUNCTION()
+	void HandlePhaseChanged(ECTGamePhase NewPhase);
+
+	TWeakObjectPtr<ACTGameState> BoundGameState;
+	FTimerHandle BindGameStateTimerHandle;
 };

@@ -49,6 +49,9 @@ void ACTGameMode::StartGame()
 
 	GetWorldTimerManager().ClearTimer(AutoStartTimerHandle);
 
+	// 이전 경기 결과 지우기 (재시작 대비)
+	CTGameState->SetGameResult({}, false);
+
 	// 모든 플레이어 초기화
 	for (ACTPlayerState* PlayerState : CollectPlayers())
 	{
@@ -81,9 +84,6 @@ void ACTGameMode::EndGame()
 
 	GetWorldTimerManager().ClearTimer(FlowTimerHandle);
 
-	CTGameState->SetPhase(ECTGamePhase::Finished);
-	RefreshAllChaseBuffs(); // 게임이 끝났으니 추격 버프 해제
-
 	// 꼬리를 가장 많이 가진 사람(들) 찾기
 	const TArray<ACTPlayerState*> Players = CollectPlayers();
 	int32 MaxTailCount = -1;
@@ -103,6 +103,11 @@ void ACTGameMode::EndGame()
 
 	const bool bIsTie = Winners.Num() > 1;
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 종료: 승자 %d명, 동점=%s"), Winners.Num(), bIsTie ? TEXT("예") : TEXT("아니오"));
+
+	// 결과를 먼저 저장한 뒤 단계를 바꿔야, 클라이언트 결과 화면이 열릴 때 승자 정보가 함께 도착합니다.
+	CTGameState->SetGameResult(Winners, bIsTie);
+	CTGameState->SetPhase(ECTGamePhase::Finished);
+	RefreshAllChaseBuffs(); // 게임이 끝났으니 추격 버프 해제
 
 	OnGameFinished(Winners, bIsTie);
 }
@@ -266,6 +271,12 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	Grabber->AddTailCount(1);
 	Victim->AddTailCount(-1);
 	Victim->SetIsGhost(true);
+
+	// 잡힌 사람의 반응 연출 (AI 등 다른 경로로 잡아도 똑같이 재생되도록 여기서 처리)
+	if (ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn()))
+	{
+		VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] %s 이(가) %s 의 꼬리를 잡음"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());
 	OnTailGrabbed(Grabber, Victim);

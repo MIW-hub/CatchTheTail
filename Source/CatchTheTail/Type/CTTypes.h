@@ -42,6 +42,16 @@ enum class ECTRunState : uint8
 	Cooldown UMETA(DisplayName = "Cooldown")
 };
 
+/** 캐릭터 행동 연출 종류 (몽타주 재생, 이펙트 연결에 사용) */
+UENUM(BlueprintType)
+enum class ECTCharacterAction : uint8
+{
+	Grab   UMETA(DisplayName = "Grab"),   // 잡기 (왼손)
+	Push   UMETA(DisplayName = "Push"),   // 밀기 (오른손)
+	Caught UMETA(DisplayName = "Caught"), // 꼬리를 잡힘
+	Pushed UMETA(DisplayName = "Pushed")  // 밀려남
+};
+
 /** 속도 버프 하나. 최종 배율 = 1.0 + (모든 버프 값의 합) */
 USTRUCT(BlueprintType)
 struct FCTSpeedBuff

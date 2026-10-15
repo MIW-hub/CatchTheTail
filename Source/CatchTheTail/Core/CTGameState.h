@@ -6,6 +6,8 @@
 #include "../Type/CTTypes.h"
 #include "CTGameState.generated.h"
 
+class ACTPlayerState;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTPhaseChangedSignature, ECTGamePhase, NewPhase);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTRoundChangedSignature, int32, NewRoundNumber);
 
@@ -51,10 +53,24 @@ public:
 	double GetRoundEndServerTime() const { return RoundEndServerTime; }
 	double GetGameEndServerTime() const { return GameEndServerTime; }
 
+	/** 경기 종료 시 승자 목록 (꼬리를 가장 많이 가진 사람들). 결과 화면용 */
+	UFUNCTION(BlueprintPure, Category = "CT|Result")
+	TArray<ACTPlayerState*> GetWinners() const;
+
+	/** 승자가 2명 이상인가? (연장전 필요) */
+	UFUNCTION(BlueprintPure, Category = "CT|Result")
+	bool IsTie() const { return bIsTie; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Result")
+	bool IsWinner(const APlayerState* PlayerState) const;
+
 	// ----- 쓰기 (서버에서만 동작, GameMode가 호출) -----
 	void SetPhase(ECTGamePhase NewPhase);
 	void SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime);
 	void SetGameInfo(double NewGameEndServerTime, float NewRoundDurationSeconds, float NewCountdownSeconds);
+
+	/** 경기 결과 저장. SetPhase(Finished)보다 먼저 호출해야 결과 화면이 바로 정확하게 나옵니다. */
+	void SetGameResult(const TArray<ACTPlayerState*>& NewWinners, bool bNewIsTie);
 
 	UPROPERTY(BlueprintAssignable, Category = "CT|Game")
 	FCTPhaseChangedSignature OnPhaseChanged;
@@ -82,6 +98,14 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|Game")
 	float CountdownSeconds = 5.f;
+
+	/** 경기 결과: 승자들 */
+	UPROPERTY(Replicated)
+	TArray<TObjectPtr<ACTPlayerState>> Winners;
+
+	/** 경기 결과: 동점 여부 */
+	UPROPERTY(Replicated)
+	bool bIsTie = false;
 
 	UFUNCTION()
 	void OnRep_Phase();
