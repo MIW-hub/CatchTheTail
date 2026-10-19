@@ -1,6 +1,4 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
-// [보류 중] 켜는 방법은 CTGameInstance.h 맨 위 설명을 보세요.
-#if 0
 #include "CTGameInstance.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -112,4 +110,3 @@ void UCTGameInstance::HandleTravelFailure(UWorld* World, ETravelFailure::Type Fa
 		LeaveToMainMenu(Message);
 	}
 }
-#endif // 보류: 메인 메뉴 / 방 만들기

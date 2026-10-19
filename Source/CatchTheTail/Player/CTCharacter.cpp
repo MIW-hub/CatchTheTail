@@ -11,6 +11,7 @@
 #include "Animation/AnimMontage.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Camera/CameraComponent.h"
+#include "Curves/CurveFloat.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
@@ -30,9 +31,9 @@ namespace CTBuffNames
 
 ACTCharacter::ACTCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true; // 내 화면의 카메라 거리 보간에만 사용
 
-	// 몸은 "움직이는 방향"으로 돌립니다. (탑다운 시점에서는 카메라가 고정이라 컨트롤러 회전을 쓰지 않음)
+	// 카메라 방향으로 몸을 돌리지 않고, "움직이는 방향"으로 몸을 돌립니다. (3인칭 방식)
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
@@ -51,18 +52,18 @@ ACTCharacter::ACTCharacter()
 	// 서버의 캐릭터 메시도 화면 밖에서 몽타주(잡기 노티파이)를 계속 진행해야 합니다.
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
 
-	// 탑다운 카메라 (브롤스타즈 스타일): 각도를 고정하고 캐릭터 위치만 따라갑니다.
-	// 실제 각도, 거리, 시야각은 BeginPlay의 ApplyCameraSettings에서 CameraPitch 등으로 적용합니다.
+	// 3인칭 자유 카메라: 마우스로 회전하고, 벽에 막히면 스프링암이 플레이어 쪽으로 당겨집니다.
+	// 거리는 위/아래 보는 각도에 따라 Tick에서 보간합니다. (UpdateCameraDistance)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->SetUsingAbsoluteRotation(true); // 캐릭터가 돌아도 카메라는 돌지 않음
-	CameraBoom->bInheritPitch = false;
-	CameraBoom->bInheritYaw = false;
-	CameraBoom->bInheritRoll = false;
-	CameraBoom->bUsePawnControlRotation = false; // 마우스로 카메라를 돌리지 않음
-	CameraBoom->bDoCollisionTest = false; // 벽 때문에 카메라가 당겨지지 않게
+	CameraBoom->TargetArmLength = CameraDistanceBehind;
+	CameraBoom->SocketOffset = FVector(0.f, 0.f, 60.f);
+	CameraBoom->bUsePawnControlRotation = true; // 마우스로 카메라 회전
+	CameraBoom->bDoCollisionTest = true;        // 벽에 닿으면 카메라가 플레이어 쪽으로 가까워짐
+	CameraBoom->ProbeSize = CameraProbeSize;
+	CameraBoom->ProbeChannel = ECC_Camera;
 	CameraBoom->bEnableCameraLag = true;
-	CameraBoom->CameraLagSpeed = 12.f;
+	CameraBoom->CameraLagSpeed = 15.f;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
@@ -120,6 +121,12 @@ bool ACTCharacter::CanJumpInternal_Implementation() const
 {
 	// 유령은 점프할 수 없습니다.
 	if (IsGhost())
+	{
+		return false;
+	}
+
+	// 경기 시작 전(색 배정 전)에는 점프할 수 없습니다.
+	if (!CanMoveNow())
 	{
 		return false;
 	}
@@ -188,6 +195,16 @@ float ACTCharacter::GetPushReadyPercent() const
 
 	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastPushTime;
 	return FMath::Clamp(static_cast<float>(Elapsed / PushCooldownSeconds), 0.f, 1.f);
+}
+
+bool ACTCharacter::CanMoveNow() const
+{
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+
+	// 색이 배정되기 전에는 움직일 수 없습니다. (경기 시작 직후 색이 정해지는 동안 대기)
+	const ACTPlayerState* CTPlayerState = GetPlayerState<ACTPlayerState>();
+	return CTPlayerState && CTPlayerState->GetAssignedColor() != ECTColor::None;
 }
 
 bool ACTCharacter::CanUseActions() const
@@ -312,6 +329,9 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 		StopAttackMontages();
 	}
 
+	// 잡히면 몸이 회색으로, 부활하면 다시 내 색으로
+	RefreshBodyColor();
+
 	BP_OnGhostStateChanged(bNewIsGhost);
 }
 
@@ -333,6 +353,10 @@ void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	if (MoveAction)
 	{
 		EnhancedInput->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ACTCharacter::Move);
+	}
+	if (LookAction)
+	{
+		EnhancedInput->BindAction(LookAction, ETriggerEvent::Triggered, this, &ACTCharacter::Look);
 	}
 	if (JumpAction)
 	{
@@ -359,21 +383,55 @@ void ACTCharacter::ApplyCameraSettings()
 {
 	if (!CameraBoom || !FollowCamera) { return; }
 
-	// 각도는 월드 기준으로 고정. 위에서 비스듬히 내려다보는 시점
-	CameraBoom->SetWorldRotation(FRotator(CameraPitch, CameraYaw, 0.f));
-	CameraBoom->TargetArmLength = CameraDistance;
-	CameraBoom->SocketOffset = FVector::ZeroVector;
+	// BP에서 바꾼 값을 반영합니다. (생성자 시점에는 아직 BP 값이 적용되기 전)
+	CameraBoom->bDoCollisionTest = true;
+	CameraBoom->ProbeSize = CameraProbeSize;
+	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	FollowCamera->SetFieldOfView(CameraFieldOfView);
+}
+
+void ACTCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	UpdateRunMontage();
+
+	// 카메라는 내 화면에서만 필요합니다. (서버에 있는 다른 사람의 캐릭터는 건너뜀)
+	if (IsLocallyControlled())
+	{
+		UpdateCameraDistance(DeltaSeconds);
+	}
+}
+
+void ACTCharacter::UpdateCameraDistance(float DeltaSeconds)
+{
+	if (!CameraBoom || !Controller) { return; }
+
+	// 위/아래로 보는 각도. 0 근처 = 수평(뒤에서 봄), 음수가 클수록 = 위에서 내려다봄
+	const float Pitch = FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
+
+	// BehindPitch → 0, TopPitch → 1 (범위 밖은 0~1로 고정)
+	const float Range = BehindPitch - TopPitch;
+	float Alpha = Range > KINDA_SMALL_NUMBER ? FMath::Clamp((BehindPitch - Pitch) / Range, 0.f, 1.f) : 0.f;
+
+	// 곡선이 있으면 곡선으로, 없으면 부드러운 S자 곡선으로 보간
+	Alpha = DistanceCurve ? FMath::Clamp(DistanceCurve->GetFloatValue(Alpha), 0.f, 1.f) : FMath::SmoothStep(0.f, 1.f, Alpha);
+
+	const float TargetLength = FMath::Lerp(CameraDistanceBehind, CameraDistanceTop, Alpha);
+	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetLength, DeltaSeconds, CameraDistanceInterpSpeed);
 }
 
 void ACTCharacter::Move(const FInputActionValue& Value)
 {
 	const FVector2D MoveValue = Value.Get<FVector2D>();
 
+	// 경기가 시작되고 색이 배정될 때까지 움직일 수 없습니다. (카메라 회전은 가능)
+	if (!CanMoveNow()) { return; }
+
 	if (Controller)
 	{
-		// 고정 카메라의 방향 기준으로 위/오른쪽을 계산합니다. (화면 위쪽 = 앞, 유령도 이동 가능)
-		const FRotator YawRotation(0.f, CameraYaw, 0.f);
+		// 카메라가 보는 방향 기준으로 앞/옆을 계산합니다. (유령도 이동 가능)
+		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
 		const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
@@ -382,9 +440,17 @@ void ACTCharacter::Move(const FInputActionValue& Value)
 	}
 }
 
+void ACTCharacter::Look(const FInputActionValue& Value)
+{
+	const FVector2D LookValue = Value.Get<FVector2D>();
+
+	AddControllerYawInput(LookValue.X);
+	AddControllerPitchInput(LookValue.Y);
+}
+
 void ACTCharacter::OnRunPressed()
 {
-	if (IsGhost()) { return; }
+	if (IsGhost() || !CanMoveNow()) { return; }
 	ServerSetRunInput(true);
 }
 
@@ -775,6 +841,47 @@ void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 	}
 }
 
+void ACTCharacter::UpdateRunMontage()
+{
+	// 화면이 없는 전용 서버에서는 연출이 필요 없습니다.
+	if (!RunMontage || GetNetMode() == NM_DedicatedServer) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	// 달리기 중 + 이동 중 + 땅 위일 때만 재생합니다. (공중에서는 점프 동작을 보여 줌)
+	const bool bWantRunMontage =
+		RunState == ECTRunState::Running &&
+		!IsGhost() &&
+		!GetCharacterMovement()->IsFalling() &&
+		GetVelocity().Size2D() > RunMontageMinSpeed;
+
+	const bool bPlaying = AnimInstance->Montage_IsPlaying(RunMontage);
+
+	if (bWantRunMontage)
+	{
+		if (!bPlaying)
+		{
+			// 잡기/밀기 같은 다른 몽타주가 재생 중이면 끝날 때까지 기다립니다.
+			const UAnimMontage* Active = AnimInstance->GetCurrentActiveMontage();
+			if (Active && Active != RunMontage) { return; }
+
+			PlayAnimMontage(RunMontage, 1.f, RunMontageLoopSection);
+
+			// 섹션이 끝나면 스스로 이어지게 해서 반복합니다.
+			AnimInstance->Montage_SetNextSection(RunMontageLoopSection, RunMontageLoopSection, RunMontage);
+		}
+
+		// 실제 이동 속도에 맞춰 재생 속도를 조절 (발 미끄러짐 줄이기)
+		const float Rate = FMath::Clamp(GetVelocity().Size2D() / RunMontageReferenceSpeed, RunMontageMinPlayRate, RunMontageMaxPlayRate);
+		AnimInstance->Montage_SetPlayRate(RunMontage, Rate);
+	}
+	else if (bPlaying)
+	{
+		AnimInstance->Montage_Stop(RunMontage->BlendOut.GetBlendTime(), RunMontage);
+	}
+}
+
 void ACTCharacter::StopAttackMontages()
 {
 	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
@@ -828,6 +935,14 @@ bool ACTCharacter::IsInFrontCone(const AActor* Other, float MaxDistance, float H
 // 몸 색상
 // ============================================================
 
+void ACTCharacter::RefreshTailVisual()
+{
+	if (OwnedTail)
+	{
+		OwnedTail->RefreshVisual();
+	}
+}
+
 void ACTCharacter::RefreshBodyColor()
 {
 	USkeletalMeshComponent* MeshComp = GetMesh();
@@ -849,7 +964,11 @@ void ACTCharacter::RefreshBodyColor()
 
 	const ACTPlayerState* CTPlayerState = GetPlayerState<ACTPlayerState>();
 	const ECTColor Color = CTPlayerState ? CTPlayerState->GetAssignedColor() : ECTColor::None;
-	const FLinearColor Tint = Color == ECTColor::None ? NoColorTint : ACTPlayerState::GetLinearColorOf(Color);
+	const bool bIsGhost = CTPlayerState && CTPlayerState->IsGhost();
+
+	// 꼬리를 잡힌 유령은 회색, 색이 없으면 기본 색, 아니면 내 색
+	const FLinearColor Tint = bIsGhost ? GhostBodyColor
+		: (Color == ECTColor::None ? NoColorTint : ACTPlayerState::GetLinearColorOf(Color));
 
 	for (UMaterialInstanceDynamic* Material : BodyMaterials)
 	{

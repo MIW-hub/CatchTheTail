@@ -143,6 +143,9 @@ void UCTHUDWidget::HandlePhaseChanged(ECTGamePhase NewPhase)
 		case ECTGamePhase::Finished:
 			Text_Phase->SetText(NSLOCTEXT("CT", "UI_Phase_Finished", "경기 종료"));
 			break;
+		case ECTGamePhase::Countdown:
+			Text_Phase->SetText(NSLOCTEXT("CT", "UI_Phase_Countdown", "곧 경기가 시작됩니다"));
+			break;
 		}
 	}
 
@@ -193,7 +196,9 @@ void UCTHUDWidget::UpdateTimeDisplay()
 	}
 
 	// 카운트다운: 숫자가 바뀔 때만 갱신 + 이벤트
-	const int32 CountdownNumber = bPlaying ? GameState->GetCountdownNumber() : 0;
+	// 경기 중 라운드 전환 카운트다운과, 경기 시작 전 카운트다운 모두 같은 위젯에 보여 줍니다.
+	const bool bStartCountdown = GameState && GameState->IsStartCountdown();
+	const int32 CountdownNumber = (bPlaying || bStartCountdown) ? GameState->GetCountdownNumber() : 0;
 	if (CountdownNumber != LastCountdownNumber)
 	{
 		LastCountdownNumber = CountdownNumber;
@@ -206,6 +211,10 @@ void UCTHUDWidget::UpdateTimeDisplay()
 		if (CountdownNumber > 0)
 		{
 			BP_OnCountdownTick(CountdownNumber);
+			if (bStartCountdown)
+			{
+				BP_OnGameStartCountdownTick(CountdownNumber);
+			}
 		}
 	}
 }

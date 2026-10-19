@@ -45,6 +45,10 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnCountdownTick(int32 Number);
 
+	/** 경기 시작 전 카운트다운 숫자가 바뀔 때 (5, 4, 3, 2, 1). BP_OnCountdownTick도 함께 불립니다. */
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnGameStartCountdownTick(int32 Number);
+
 	/** 내 색 / 목표 색 / 꼬리 수 / 유령 상태가 바뀜 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnMyStateChanged(ACTPlayerState* MyPlayerState);

@@ -60,10 +60,10 @@ protected:
 
 	/** 카메라가 위아래로 돌 수 있는 각도 제한 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
-	float ViewPitchMin = -60.f;
+	float ViewPitchMin = -80.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
-	float ViewPitchMax = 30.f;
+	float ViewPitchMax = 20.f;
 
 private:
 	void CreateUI();

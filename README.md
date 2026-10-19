@@ -16,7 +16,7 @@
 | 개발 언어 | C++, 블루프린트는 설정·연결 용도 |
 | 플레이 인원 | 3~8명 — 초기 시스템 문서의 목표는 5~8명 |
 | 네트워크 | Listen Server — 방장이 서버와 플레이어 역할을 함께 수행 |
-| 조작 / 카메라 | 키보드·마우스 / 탑다운 고정 시점 (브롤스타즈 스타일) |
+| 조작 / 카메라 | 키보드·마우스 / 3인칭 자유 회전 카메라 (위에서는 넓게, 뒤에서는 가깝게) |
 | 개발 목표 | 1인 개발 기준 7주 일정 |
 | 문서상 개발 상태 | 로봇 모델링 완성, 애니메이션·UI·코드는 미구현으로 기록 |
 | UI | Common UI 사용 안 함 |
@@ -82,19 +82,20 @@
 | 입력 | 동작 | 구분 |
 |---|---|---|
 | WASD | 이동 | 제안 |
+| 마우스 이동 | 카메라 회전 | 제안 |
 | 마우스 좌클릭 | 잡기 / 왼손 | 확정 |
 | 마우스 우클릭 | 밀기 / 오른손 | 확정 |
 | Space | 점프, 공중 재점프 불가 | 확정 |
 | Shift 유지 | 최대 3초 달리기, 이후 5초 쿨타임 | 현재 규칙, 변경 가능 |
 
-### 카메라 (탑다운)
+### 카메라 (자유 회전 3인칭)
 
-- 브롤스타즈처럼 위에서 비스듬히 내려다보는 **고정 시점**입니다. 마우스로 카메라를 돌리지 않습니다.
-- 카메라는 캐릭터의 위치만 따라가고 각도는 바뀌지 않습니다. 화면 위쪽이 이동의 "앞"이 됩니다.
-- 캐릭터는 이동하는 방향으로 몸을 돌립니다.
-- 각도(기본 -55도), 거리(기본 1400cm), 시야각(기본 60도), 바라보는 방향은 `BP_CTCharacter`의 `CT|Camera`에서 조절합니다. 모두 테스트용 제안값입니다.
-- 벽이 카메라를 가리지 않도록 카메라 충돌 보정은 끕니다.
-- **확인 필요:** 잡기·밀기의 방향은 현재 캐릭터가 바라보는(이동한) 방향 기준입니다. 마우스 커서 방향으로 조준할지는 미정입니다.
+- 마우스로 카메라를 자유롭게 회전합니다. 이동은 카메라가 보는 방향 기준이고, 캐릭터는 이동하는 방향으로 몸을 돌립니다.
+- 위/아래로 보는 각도(Pitch)에 따라 거리가 바뀝니다. **위에서 내려다볼 때는 멀리(넓게), 뒤에서 볼 때는 가깝게** 보간합니다. 보간 곡선은 기본 S자(SmoothStep)이고, 곡선 에셋을 지정할 수도 있습니다.
+- 카메라가 벽에 막히면 스프링암이 플레이어 쪽으로 당겨집니다.
+- `BP_CTCharacter`의 `CT|Camera`에서 조절합니다: 뒤에서 볼 때 거리(450), 위에서 볼 때 거리(900), 기준 각도(-10 / -70), 거리 곡선, 시야각(70). 모두 테스트용 제안값입니다.
+- 위/아래 회전 한계는 `BP_CTPlayerController`의 `CT|Camera`(-80 ~ 20도)에서 조절합니다.
+- 마우스 회전 입력(`IA_Look`)을 `IMC`에 연결하고 `BP_CTCharacter`의 `Look Action`에 지정해야 동작합니다.
 
 속도 배율은 곱셈 대신 버프를 합산합니다.
 
@@ -122,7 +123,7 @@
 
 | 클래스 | 역할 |
 |---|---|
-| `ACTCharacter` | 이동, 탑다운 카메라, 점프, 달리기, 잡기·밀기 입력, 행동 몽타주 재생 |
+| `ACTCharacter` | 이동, 자유 회전 카메라, 점프, 달리기, 잡기·밀기 입력, 행동 몽타주 재생 |
 | `UCTHUDWidget` / `UCTScoreEntryWidget` / `UCTResultWidget` | WBP 부모 클래스. 시간·라운드·카운트다운, 내 색·목표 색, 꼬리 수, 달리기·밀기 게이지, 점수판, 결과 화면 |
 | `ACTTail` | 캐릭터 뒤 꼬리 액터. 주인 색 + 불빛 표시, 잡기 동작 중 닿으면 불이 꺼지고 회색으로 변함 |
 | `UCTAnimInstance` | 애니메이션 BP 부모. 이동 속도·공중·달리기·유령 상태를 AnimGraph 변수로 제공 |
@@ -151,7 +152,7 @@ Lobby → Countdown → Playing → GameOver → Result
 ## 첫 구현 범위
 
 - [ ] `CatchTheTail` 프로젝트와 기본 클래스 구성
-- [ ] 이동·점프·달리기·탑다운 카메라
+- [ ] 이동·점프·달리기·3인칭 자유 회전 카메라
 - [ ] 잡기·밀기 입력 연결
 - [ ] 입장 처리와 색·목표 색 배정
 - [ ] 남은 시간·라운드 번호·플레이어 상태 복제
@@ -192,32 +193,45 @@ AI 모드는 초기 기획의 후속 범위이며, 현재 기본 코드 요청�
 - [ ] 색 이름·아이콘과 목표 표시를 쉽게 이해할 수 있음
 - [ ] 패키징한 빌드에서 접속부터 경기 종료까지 확인함
 
-## 메인 메뉴 연결 (보류)
+## 메인 메뉴와 인트로
 
-방 만들기·참가·메뉴 복귀 기능은 코드로 먼저 만들어 두었고, UI가 준비될 때까지 `#if 0`으로 꺼 두었습니다. 빌드에는 포함되지 않습니다.
+기획 시안(메인 / 로비 / 인게임 / 결과 / 종료 확인)의 **메인 메뉴·인트로·종료 확인** 부분을 C++로 구현했습니다. 빌드(컴파일)까지 확인했고 에디터에서 실제 동작은 아직 검증하지 않았습니다. 화면(WBP)과 `L_MainMenu` 맵은 에디터에서 만들어야 합니다.
 
 | 파일 | 역할 |
 |---|---|
-| `CTGameInstance` | 방 만들기(게임 맵을 `?listen`으로 열기), IP로 참가, 메뉴로 복귀, 접속 끊김·이동 실패 처리 |
+| `CTGameInstance` | 방 만들기(게임 맵을 `?listen`으로 열기), IP로 참가, 메뉴로 복귀, 접속 끊김·이동 실패 처리, 인트로 표시 여부 기억 |
 | `CTMenuGameMode` | `L_MainMenu` 맵용 게임 모드 (캐릭터 없음) |
-| `CTMenuPlayerController` | 메뉴 위젯을 띄우고 마우스 커서를 표시 |
-| `CTMainMenuWidget` | `WBP_MainMenu`의 부모. `Button_Host`, `Button_Join`, `EditableTextBox_Address`, `Button_Quit`, `Text_Status` 이름의 위젯을 자동 연결 |
+| `CTMenuPlayerController` | 처음에는 인트로, 끝나면 메인 메뉴 위젯을 띄우고 마우스 커서를 표시. 게임에서 메뉴로 돌아오면 인트로는 건너뜀 |
+| `CTIntroWidget` | `WBP_Intro`의 부모. 서서히 나타남 → 유지 → 사라짐 후 자동 종료, 아무 키나 마우스 클릭으로 건너뛰기 (`FadeInSeconds`, `HoldSeconds`, `FadeOutSeconds`, `bAllowSkip`) |
+| `CTMainMenuWidget` | `WBP_MainMenu`의 부모. 아래 이름의 패널·버튼을 자동 연결하고 패널을 전환 |
 
-켜는 순서
+`WBP_MainMenu`에 만들 위젯 (이름을 똑같이, 모두 선택 사항)
 
-1. 위 8개 파일(`.h` / `.cpp`)의 `#if 0`을 `#if 1`로 바꾸고 다시 빌드합니다.
-2. `WBP_MainMenu`를 만들고 부모 클래스를 `CTMainMenuWidget`으로 지정합니다.
-3. `BP_CTMenuPlayerController`(부모 `CTMenuPlayerController`)를 만들고 `Main Menu Widget Class`에 `WBP_MainMenu`를 지정합니다.
-4. `BP_CTMenuGameMode`(부모 `CTMenuGameMode`)를 만들고 `Player Controller Class`에 3번을 지정합니다.
-5. `L_MainMenu` 맵을 만들고 월드 세팅의 GameMode Override에 4번을 지정합니다.
-6. `Config/DefaultEngine.ini`의 주석 처리된 `GameInstanceClass` 줄을 켭니다. 시작 맵을 `L_MainMenu`로 바꿀 때는 기존 `GameDefaultMap` 줄을 지우거나 바꾸고 주석 처리된 줄을 켭니다.
+| 구분 | 위젯 이름 |
+|---|---|
+| 패널 | `Panel_Main`, `Panel_Lobby`, `Panel_Settings`, `Panel_HowTo`, `Panel_QuitConfirm` (종료 확인은 메인 위에 뜨는 팝업) |
+| 메인 | `Button_Start`(게임 시작 = 방 만들고 시작), `Button_FindLobby`, `Button_Settings`, `Button_HowTo`, `Button_Quit` |
+| 로비 | `Button_Host`, `Button_Join`, `EditableTextBox_Address`, `Button_LobbyBack` |
+| 설정/방법 | `Button_SettingsBack`, `Button_HowToBack` |
+| 종료 확인 | `Button_QuitCancel`, `Button_QuitConfirm` |
+| 기타 | `Text_Status` (접속 실패·연결 끊김 안내) |
+
+`WBP_Intro`에는 `Text_Skip`(건너뛰기 안내)을 만들 수 있고, 로고 연출은 `BP_OnIntroStarted` 이벤트에서 애니메이션을 재생하면 됩니다.
+
+에디터에서 할 일
+
+1. `WBP_Intro`(부모 `CTIntroWidget`)와 `WBP_MainMenu`(부모 `CTMainMenuWidget`)를 만듭니다.
+2. `BP_CTMenuPlayerController`(부모 `CTMenuPlayerController`)를 만들고 `Intro Widget Class`, `Main Menu Widget Class`를 지정합니다.
+3. `BP_CTMenuGameMode`(부모 `CTMenuGameMode`)를 만들고 `Player Controller Class`에 2번을 지정합니다.
+4. `L_MainMenu` 맵을 만들고 월드 세팅의 GameMode Override에 3번을 지정합니다.
+5. `Config/DefaultEngine.ini`에서 `GameDefaultMap`/`EditorStartupMap`을 `L_MainMenu`로 바꿉니다. (`GameInstanceClass`는 이미 켜 두었습니다.)
 
 동작 방식과 한계
 
 - 방 만들기는 방장이 `TypeA` 맵을 listen 서버로 여는 방식이고, 참가는 방장의 IP(포트 생략 시 7777)로 접속합니다. 같은 네트워크이거나 포트 포워딩을 한 환경에서만 쓸 수 있습니다.
-- Steam 같은 온라인 서비스로 방을 검색하는 기능은 없습니다. (Online Subsystem 필요, 미구현)
-- 로비, Ready, 경기 시작 버튼은 아직 없습니다. 지금은 `ACTGameMode`의 테스트용 자동 시작을 씁니다.
-- 아직 에디터에서 실제 접속으로 검증하지 않았습니다. 빌드(컴파일)까지만 확인했습니다.
+- 시안의 **방 목록(방 이름·인원·대기중)** 은 Steam 같은 온라인 서비스(Online Subsystem)가 필요해서 미구현입니다. 지금 로비 패널은 IP 입력 방식입니다.
+- 시안의 로비 방 정보·Ready 목록·준비 완료, 설정(옵션 저장), 게임 방법 내용은 아직 없습니다. 패널 전환만 준비되어 있습니다. 지금은 `ACTGameMode`의 테스트용 자동 시작을 씁니다.
+- 결과 화면의 "로비로 이동 / 다시 하기"는 `UCTGameInstance::LeaveToMainMenu`를 연결하면 됩니다. 인게임 시안의 미니맵, 스킬(Q/E/R) UI는 범위 밖입니다.
 
 ## 남은 결정 사항
 

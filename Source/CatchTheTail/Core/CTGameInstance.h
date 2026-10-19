@@ -1,10 +1,4 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
-//
-// [보류 중] 메인 메뉴 / 방 만들기 / 참가 기능
-//  - UI(L_MainMenu, WBP)가 준비되면 아래 "#if 0"을 "#if 1"로 바꿔서 켜세요.
-//    (켜야 하는 파일: CTGameInstance.h/.cpp, CTMenuGameMode.h/.cpp, CTMenuPlayerController.h/.cpp, CTMainMenuWidget.h/.cpp)
-//  - 자세한 순서는 README의 "메인 메뉴 연결" 항목을 참고하세요.
-#if 0
 #pragma once
 
 #include "CoreMinimal.h"
@@ -57,6 +51,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void QuitToDesktop();
 
+	/** 인트로를 이미 보여줬는가? (게임을 켠 뒤 한 번만 보여 주려고, 메뉴로 돌아와도 유지) */
+	UFUNCTION(BlueprintPure, Category = "CT|Menu")
+	bool HasShownIntro() const { return bIntroShown; }
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
+	void MarkIntroShown() { bIntroShown = true; }
+
 	/** 메뉴가 열릴 때 보여줄 마지막 안내 문구 (없으면 빈 문구) */
 	UFUNCTION(BlueprintPure, Category = "CT|Menu")
 	FText GetPendingMessage() const { return PendingMessage; }
@@ -89,5 +90,5 @@ private:
 	bool IsInMainMenuMap() const;
 
 	FText PendingMessage;
+	bool bIntroShown = false;
 };
-#endif // 보류: 메인 메뉴 / 방 만들기

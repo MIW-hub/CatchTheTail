@@ -72,7 +72,7 @@ protected:
 
 	/** 게임 시작 때 모두가 가지고 시작하는 꼬리 수 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
-	int32 InitialTailCount = 0;
+	int32 InitialTailCount = 1;
 
 	/**
 	 * true: 지금 게임에 있는 색들 중에서 "순서상 다음 색"을 목표로 삼습니다.
@@ -91,6 +91,9 @@ protected:
 
 private:
 	/** 새 라운드 시작: 유령 부활, 색 배정, 라운드 시간 설정 */
+	/** 경기 시작 전 카운트다운을 시작(또는 다시 시작)합니다. 끝나면 StartGame이 불립니다. */
+	void BeginStartCountdown();
+
 	void StartNewRound();
 
 	/** 사용 인원 수만큼 8색에서 중복 없이 배정, 직전 색은 가능하면 피함 */

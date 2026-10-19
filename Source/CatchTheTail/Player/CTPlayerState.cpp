@@ -110,6 +110,11 @@ void ACTPlayerState::OnRep_Colors()
 
 void ACTPlayerState::OnRep_TailCount()
 {
+	// 꼬리가 늘거나 줄면 캐릭터 뒤의 꼬리 몸통 개수도 바꿉니다.
+	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
+	{
+		CTCharacter->RefreshTailVisual();
+	}
 	NotifyChanged();
 }
 

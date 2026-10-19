@@ -15,6 +15,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, Phase);
 	DOREPLIFETIME(ACTGameState, RoundNumber);
 	DOREPLIFETIME(ACTGameState, RoundEndServerTime);
+	DOREPLIFETIME(ACTGameState, StartServerTime);
 	DOREPLIFETIME(ACTGameState, GameEndServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
 	DOREPLIFETIME(ACTGameState, CountdownSeconds);
@@ -66,15 +67,29 @@ float ACTGameState::GetGameRemainingSeconds() const
 	return static_cast<float>(FMath::Max(0.0, GameEndServerTime - GetServerWorldTimeSeconds()));
 }
 
+float ACTGameState::GetStartCountdownRemainingSeconds() const
+{
+	if (Phase != ECTGamePhase::Countdown) { return 0.f; }
+	return static_cast<float>(FMath::Max(0.0, StartServerTime - GetServerWorldTimeSeconds()));
+}
+
 bool ACTGameState::IsCountdownActive() const
 {
+	// 경기 시작 전 카운트다운: 남은 시간 전체가 카운트다운입니다.
+	if (Phase == ECTGamePhase::Countdown)
+	{
+		return GetStartCountdownRemainingSeconds() > 0.f;
+	}
+
+	// 경기 중 라운드 전환 카운트다운: 끝나기 CountdownSeconds 전부터
 	const float Remaining = GetRoundRemainingSeconds();
 	return Phase == ECTGamePhase::Playing && Remaining > 0.f && Remaining <= CountdownSeconds;
 }
 
 int32 ACTGameState::GetCountdownNumber() const
 {
-	return IsCountdownActive() ? FMath::CeilToInt(GetRoundRemainingSeconds()) : 0;
+	if (!IsCountdownActive()) { return 0; }
+	return FMath::CeilToInt(Phase == ECTGamePhase::Countdown ? GetStartCountdownRemainingSeconds() : GetRoundRemainingSeconds());
 }
 
 void ACTGameState::SetPhase(ECTGamePhase NewPhase)
@@ -85,6 +100,14 @@ void ACTGameState::SetPhase(ECTGamePhase NewPhase)
 	Phase = NewPhase;
 	ForceNetUpdate();
 	OnRep_Phase();
+}
+
+void ACTGameState::SetStartCountdown(double NewStartServerTime)
+{
+	if (!HasAuthority()) { return; }
+
+	StartServerTime = NewStartServerTime;
+	ForceNetUpdate();
 }
 
 void ACTGameState::SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime)

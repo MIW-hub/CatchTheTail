@@ -16,3 +16,11 @@
 # Generated plugin build files
 /Plugins/**/Binaries/
 /Plugins/**/Intermediate/
+
+
+# Paid assets (Fab / Marketplace) - do not commit
+/Content/ThirdParty/
+
+# Per-user working folders
+/Content/Developers/
+/Content/Collections/

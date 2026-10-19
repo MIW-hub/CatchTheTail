@@ -22,15 +22,20 @@ void ACTGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
-	// 테스트용 자동 시작: 새로 접속할 때마다 타이머를 다시 맞춥니다.
+	// 접속하는 순간부터 시작 꼬리 수를 갖게 합니다. (경기 시작 전에도 꼬리가 보이도록)
+	if (ACTPlayerState* NewPlayerState = NewPlayer ? NewPlayer->GetPlayerState<ACTPlayerState>() : nullptr)
+	{
+		NewPlayerState->SetTailCount(InitialTailCount);
+	}
+
+	// 테스트용 자동 시작: 새로 접속할 때마다 카운트다운(타이머)을 다시 맞춥니다.
 	if (bAutoStartForTesting)
 	{
 		const ACTGameState* CTGameState = GetGameState<ACTGameState>();
-		if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::WaitingForPlayers)
+		const ECTGamePhase Phase = CTGameState ? CTGameState->GetPhase() : ECTGamePhase::Finished;
+		if (Phase == ECTGamePhase::WaitingForPlayers || Phase == ECTGamePhase::Countdown)
 		{
-			GetWorldTimerManager().SetTimer(
-				AutoStartTimerHandle, this, &ACTGameMode::StartGame,
-				FMath::Max(AutoStartDelaySeconds, 0.1f), false);
+			BeginStartCountdown();
 		}
 	}
 }
@@ -38,6 +43,20 @@ void ACTGameMode::PostLogin(APlayerController* NewPlayer)
 // ============================================================
 // 게임 시작 / 종료
 // ============================================================
+
+void ACTGameMode::BeginStartCountdown()
+{
+	ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState) { return; }
+
+	const float Delay = FMath::Max(AutoStartDelaySeconds, 0.1f);
+
+	// 시작 시각을 먼저 정하고 단계를 바꿔야, 클라이언트에 카운트다운 단계가 도착했을 때 남은 시간이 맞습니다.
+	CTGameState->SetStartCountdown(CTGameState->GetServerWorldTimeSeconds() + Delay);
+	CTGameState->SetPhase(ECTGamePhase::Countdown);
+
+	GetWorldTimerManager().SetTimer(AutoStartTimerHandle, this, &ACTGameMode::StartGame, Delay, false);
+}
 
 void ACTGameMode::StartGame()
 {
@@ -48,6 +67,7 @@ void ACTGameMode::StartGame()
 	}
 
 	GetWorldTimerManager().ClearTimer(AutoStartTimerHandle);
+	CTGameState->SetStartCountdown(0.0);
 
 	// 이전 경기 결과 지우기 (재시작 대비)
 	CTGameState->SetGameResult({}, false);

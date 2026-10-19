@@ -9,6 +9,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UCurveFloat;
 class UAnimMontage;
 class UMaterialInstanceDynamic;
 class ACTTail;
@@ -19,7 +20,7 @@ struct FInputActionValue;
  * 플레이어 캐릭터 (로봇).
  *
  * 기능
- *  - 이동 / 점프(공중 중복 점프 불가) / 달리기 / 탑다운 고정 카메라(브롤스타즈 스타일)
+ *  - 이동 / 점프(공중 중복 점프 불가) / 달리기 / 자유 회전 3인칭 카메라 (마우스 회전, 각도에 따라 거리 보간, 벽에 닿으면 가까워짐)
  *  - 잡기(좌클릭, 쿨타임 없음) / 밀기(우클릭, 쿨타임 1초)
  *  - 속도 "버프 합산" 방식: 최종 배율 = 1.0 + 달리기 0.5 + 추격 0.2 ... (유령은 -0.5)
  *  - 유령 상태: 이동만 가능
@@ -38,6 +39,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** 유령이면 점프 불가 */
 	virtual bool CanJumpInternal_Implementation() const override;
@@ -79,6 +81,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Combat")
 	bool CanUseActions() const;
 
+	/**
+	 * 이동, 점프, 달리기를 할 수 있는가?
+	 * 경기가 시작되고 내 색이 배정된 뒤에만 true입니다. (시작 전, 종료 후에는 움직일 수 없음)
+	 */
+	UFUNCTION(BlueprintPure, Category = "CT|State")
+	bool CanMoveNow() const;
+
 	/** 행동에 해당하는 몽타주 (없으면 nullptr) */
 	UFUNCTION(BlueprintPure, Category = "CT|Animation")
 	UAnimMontage* GetActionMontage(ECTCharacterAction Action) const;
@@ -98,6 +107,9 @@ public:
 
 	/** 내 색(AssignedColor)을 캐릭터 머티리얼의 BodyColorParameterName 파라미터에 반영합니다. (서버, 클라이언트 모두) */
 	void RefreshBodyColor();
+
+	/** 꼬리 수가 바뀌었을 때 꼬리 모양(몸통 개수)을 다시 맞춥니다. (PlayerState가 호출) */
+	void RefreshTailVisual();
 
 	/** AnimNotifyState(CT Grab Window)가 호출합니다. 구간이 시작/끝날 때 서버만 잡기 판정을 켜고 끕니다. */
 	void OnGrabNotifyBegin();
@@ -138,27 +150,46 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
 
-	// ===== 탑다운 카메라 (브롤스타즈 스타일: 고정 각도, 마우스로 돌리지 않음) =====
-	/** 카메라가 내려다보는 각도. -90이면 수직, 값이 0에 가까울수록 옆에서 봄 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "-89", ClampMax = "-10"))
-	float CameraPitch = -55.f;
+	// ===== 카메라 (마우스로 자유롭게 회전. 위에서 볼 땐 멀리, 뒤에서 볼 땐 가깝게) =====
+	/** 뒤에서 볼 때(수평에 가까울 때)의 카메라 거리(cm) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "100"))
+	float CameraDistanceBehind = 450.f;
 
-	/** 카메라가 바라보는 방향(Yaw). 맵의 "위쪽"에 맞춰 정하세요. 이동 방향 기준도 이 값입니다. */
+	/** 위에서 내려다볼 때의 카메라 거리(cm). 넓게 보이도록 더 멀리 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "100"))
+	float CameraDistanceTop = 900.f;
+
+	/** "뒤에서 보는" 기준 각도(Pitch). 이 각도 이상 위를 보면 가장 가깝습니다. (보통 -10) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "-89", ClampMax = "30"))
+	float BehindPitch = -10.f;
+
+	/** "위에서 보는" 기준 각도(Pitch). 이 각도 이상 내려다보면 가장 멉니다. (보통 -70) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "-89", ClampMax = "0"))
+	float TopPitch = -70.f;
+
+	/**
+	 * 각도 → 거리 보간 곡선 (선택). 가로축 0~1(0=뒤에서 봄, 1=위에서 봄), 세로축 0~1(0=가까움, 1=멈).
+	 * 비워 두면 부드러운 S자 곡선(SmoothStep)을 씁니다.
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
-	float CameraYaw = 0.f;
+	TObjectPtr<UCurveFloat> DistanceCurve;
 
-	/** 캐릭터에서 카메라까지의 거리(cm). 클수록 멀리 보임 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "300"))
-	float CameraDistance = 900.f;
+	/** 카메라 거리가 목표를 따라가는 속도. 클수록 빨리 따라감 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0.1"))
+	float CameraDistanceInterpSpeed = 8.f;
+
+	/** 벽에 막힌 카메라가 플레이어 쪽으로 당겨질 때, 충돌 검사에 쓰는 공의 크기(cm) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "1"))
+	float CameraProbeSize = 15.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "30", ClampMax = "120"))
-	float CameraFieldOfView = 60.f;
+	float CameraFieldOfView = 70.f;
 
 	// ===== 입력 (블루프린트에서 Input Action 에셋을 넣어 주세요) =====
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> MoveAction;
 
-	/** 탑다운 시점에서는 사용하지 않습니다. (기존 블루프린트 설정 호환을 위해 남겨 둠) */
+	/** 카메라 회전(마우스 이동) 입력. Axis2D, 마우스 Y는 Negate 필요 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> LookAction;
 
@@ -191,6 +222,31 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> PushedMontage;
 
+	/**
+	 * 달리기 몽타주. Shift를 누르고 움직이는 동안 반복 재생합니다. (비워 두면 재생하지 않음)
+	 * 몽타주에 반복할 섹션이 필요합니다. 섹션 이름을 아래 RunMontageLoopSection과 같게 하세요.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> RunMontage;
+
+	/** 달리기 몽타주에서 반복할 섹션 이름. 끝나면 스스로 다시 이어집니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	FName RunMontageLoopSection = TEXT("Default");
+
+	/** 달리기 몽타주가 원래 이동하던 속도(cm/s). 실제 속도가 빠를수록 이 값 대비 비율만큼 빨리 재생합니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "1"))
+	float RunMontageReferenceSpeed = 297.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float RunMontageMinPlayRate = 0.7f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float RunMontageMaxPlayRate = 2.f;
+
+	/** 이 속도(cm/s)보다 느리면 Shift를 눌러도 달리기 동작을 재생하지 않습니다. (제자리에서 달리기 방지) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0"))
+	float RunMontageMinSpeed = 50.f;
+
 	/** 행동 몽타주 재생 속도 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
 	float ActionMontagePlayRate = 1.f;
@@ -209,19 +265,19 @@ protected:
 	FName TailSocketName = TEXT("Hips");
 
 	/**
-	 * 꼬리 위치 (캐릭터 모델 좌표 기준, cm). 기본 자세에서 꼬리가 놓일 곳입니다.
-	 * 모델은 +Y가 앞이고 +Z가 위입니다. 기본값은 엉덩이 뒤쪽입니다.
+	 * 꼬리 시작(받침) 위치 (캐릭터 모델 좌표 기준, cm). 기본 자세에서 꼬리가 놓일 곳입니다.
+	 * 모델은 +Y가 앞이고 +Z가 위입니다. 기본값은 엉덩이 뒤쪽 바닥 근처입니다.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
-	FVector TailOffsetLocation = FVector(0.f, -45.f, 50.f);
+	FVector TailOffsetLocation = FVector(0.f, -60.f, 29.f);
 
-	/** 꼬리 회전 (캐릭터 모델 좌표 기준). 꼬리 메시는 +Z 방향으로 서 있으므로 Roll 60이면 뒤로 눕습니다. */
+	/** 꼬리 회전 (캐릭터 모델 좌표 기준). 꼬리는 +Z 방향으로 이어지므로 Roll 90이면 바닥에 눕혀 뒤로 길게 끌립니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
-	FRotator TailOffsetRotation = FRotator(0.f, 0.f, 60.f);
+	FRotator TailOffsetRotation = FRotator(0.f, 0.f, 90.f);
 
-	/** 꼬리 크기 */
+	/** 꼬리 전체 크기. 몸통이 1개 97cm라 7개면 길어지므로, 캐릭터에 맞게 줄이세요. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
-	FVector TailOffsetScale = FVector(1.f, 1.f, 1.f);
+	FVector TailOffsetScale = FVector(0.5f, 0.5f, 0.5f);
 
 	// ===== 몸 색상 (M_Player의 흰색 영역을 마스크로 칠함) =====
 	/** 머티리얼에 만든 Vector Parameter 이름 */
@@ -231,6 +287,10 @@ protected:
 	/** 색이 아직 없을 때(None) 쓸 색. 흰색이면 원본 텍스처 그대로 보입니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
 	FLinearColor NoColorTint = FLinearColor::White;
+
+	/** 꼬리를 잡혀서 유령이 되었을 때 몸 색 (회색) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	FLinearColor GhostBodyColor = FLinearColor(0.35f, 0.35f, 0.35f, 1.f);
 
 	/** 색을 칠할 메시 머티리얼 슬롯 번호. 비워 두면 모든 슬롯 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
@@ -314,11 +374,15 @@ protected:
 	float PushCooldownSeconds = 1.f;
 
 protected:
-	/** 탑다운 카메라 각도, 거리, 시야각 적용 */
+	/** 카메라 충돌, 시야각 등 처음 설정 적용 */
 	void ApplyCameraSettings();
+
+	/** 위/아래 보는 각도(Pitch)에 따라 카메라 거리를 보간 (내 화면에서만) */
+	void UpdateCameraDistance(float DeltaSeconds);
 
 	// ===== 입력 처리 (내 컴퓨터에서 실행) =====
 	void Move(const FInputActionValue& Value);
+	void Look(const FInputActionValue& Value);
 	void OnRunPressed();
 	void OnRunReleased();
 	void OnGrabPressed();
@@ -340,6 +404,9 @@ protected:
 
 	/** 잡기/밀기 몽타주 중지 (유령이 될 때) */
 	void StopAttackMontages();
+
+	/** 달리기 중이면 달리기 몽타주를 반복 재생하고, 아니면 멈춥니다. (모든 컴퓨터, 매 프레임) */
+	void UpdateRunMontage();
 
 	// ===== 꼬리 / 잡기 동작 구간 (서버) =====
 	void SpawnTail();

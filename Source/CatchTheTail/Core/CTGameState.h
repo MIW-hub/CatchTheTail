@@ -50,6 +50,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	int32 GetCountdownNumber() const;
 
+	/** 경기 시작 전 카운트다운 중인가? (Countdown 단계) */
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	bool IsStartCountdown() const { return Phase == ECTGamePhase::Countdown; }
+
+	/** 경기 시작까지 남은 초 (Countdown 단계가 아니면 0) */
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	float GetStartCountdownRemainingSeconds() const;
+
 	double GetRoundEndServerTime() const { return RoundEndServerTime; }
 	double GetGameEndServerTime() const { return GameEndServerTime; }
 
@@ -66,6 +74,9 @@ public:
 
 	// ----- 쓰기 (서버에서만 동작, GameMode가 호출) -----
 	void SetPhase(ECTGamePhase NewPhase);
+
+	/** 경기 시작 시각을 정함. SetPhase(Countdown)보다 먼저 호출하세요. */
+	void SetStartCountdown(double NewStartServerTime);
 	void SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime);
 	void SetGameInfo(double NewGameEndServerTime, float NewRoundDurationSeconds, float NewCountdownSeconds);
 
@@ -84,6 +95,10 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_RoundNumber, BlueprintReadOnly, Category = "CT|Game")
 	int32 RoundNumber = 0;
+
+	/** 경기가 시작되는 서버 시각 (Countdown 단계) */
+	UPROPERTY(Replicated)
+	double StartServerTime = 0.0;
 
 	/** 현재 라운드가 끝나는 서버 시각 */
 	UPROPERTY(Replicated)

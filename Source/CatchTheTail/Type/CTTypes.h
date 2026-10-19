@@ -30,7 +30,8 @@ enum class ECTGamePhase : uint8
 {
 	WaitingForPlayers UMETA(DisplayName = "Waiting"),
 	Playing           UMETA(DisplayName = "Playing"),
-	Finished          UMETA(DisplayName = "Finished")
+	Finished          UMETA(DisplayName = "Finished"),
+	Countdown         UMETA(DisplayName = "Countdown") // 경기 시작 전 카운트다운
 };
 
 /** 달리기 상태 (UI의 쿨타임 표시에 사용) */
