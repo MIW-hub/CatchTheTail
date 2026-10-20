@@ -7,6 +7,7 @@
 
 class UUserWidget;
 class UCTIntroWidget;
+class UCTNameEntryWidget;
 
 /**
  * 메인 메뉴 맵의 플레이어 컨트롤러.
@@ -30,8 +31,15 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	TSubclassOf<UUserWidget> MainMenuWidgetClass;
 
+	/** 이름 입력 위젯 (UCTNameEntryWidget을 부모로 만든 WBP_NameEntry). 비워 두면 이름 입력 없이 메뉴로 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
+	TSubclassOf<UCTNameEntryWidget> NameEntryWidgetClass;
+
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Menu")
 	TObjectPtr<UCTIntroWidget> IntroWidget;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Menu")
+	TObjectPtr<UCTNameEntryWidget> NameEntryWidget;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Menu")
 	TObjectPtr<UUserWidget> MainMenuWidget;
@@ -39,6 +47,15 @@ protected:
 private:
 	void ShowIntro();
 	void ShowMainMenu();
+
+	/** 저장된 이름이 없으면 이름 입력, 있으면 메인 메뉴 */
+	void ShowNameEntryOrMenu();
+
+	/** 이름 입력 화면 (이름은 처음 한 번만 정할 수 있으므로 저장된 이름이 없을 때만 열림) */
+	void ShowNameEntry();
+
+	UFUNCTION()
+	void HandleNameConfirmed();
 
 	UFUNCTION()
 	void HandleIntroFinished();

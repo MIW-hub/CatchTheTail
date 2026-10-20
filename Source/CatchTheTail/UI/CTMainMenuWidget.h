@@ -138,6 +138,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Status;
 
+	/** 저장된 내 이름을 보여 주는 글자 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PlayerName;
+
 private:
 	UFUNCTION()
 	void HandleStartClicked();

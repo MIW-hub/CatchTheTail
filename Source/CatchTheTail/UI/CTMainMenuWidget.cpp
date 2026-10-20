@@ -29,6 +29,15 @@ void UCTMainMenuWidget::NativeConstruct()
 
 	ShowPanel(ECTMenuPanel::Main);
 
+	// 저장된 내 이름을 보여 줍니다.
+	if (Text_PlayerName)
+	{
+		if (const UCTGameInstance* NameGameInstance = GetGameInstance<UCTGameInstance>())
+		{
+			Text_PlayerName->SetText(FText::FromString(NameGameInstance->GetPlayerName()));
+		}
+	}
+
 	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
 	{
 		GameInstance->OnMenuMessage.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleMessage);

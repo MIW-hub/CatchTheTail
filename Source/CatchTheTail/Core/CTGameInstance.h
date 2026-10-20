@@ -52,6 +52,42 @@ public:
 	void QuitToDesktop();
 
 	/** 인트로를 이미 보여줬는가? (게임을 켠 뒤 한 번만 보여 주려고, 메뉴로 돌아와도 유지) */
+	// ===== 플레이어 이름 (메인 메뉴 전에 입력해서 이 컴퓨터에 저장) =====
+	/** 저장된 이름. 아직 없으면 빈 문자열 */
+	UFUNCTION(BlueprintPure, Category = "CT|Profile")
+	FString GetPlayerName() const { return PlayerName; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Profile")
+	bool HasPlayerName() const { return !PlayerName.IsEmpty(); }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Profile")
+	int32 GetMinNameLength() const { return MinNameLength; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Profile")
+	int32 GetMaxNameLength() const { return MaxNameLength; }
+
+	/** 이름이 규칙에 맞는지 검사합니다. 맞지 않으면 OutError에 이유가 들어갑니다. */
+	UFUNCTION(BlueprintPure, Category = "CT|Profile")
+	bool ValidatePlayerName(const FString& Name, FText& OutError) const;
+
+	/**
+	 * 이름을 검사하고 저장합니다. 성공하면 true, 실패하면 false와 OutError.
+	 * 이름은 처음 한 번만 정할 수 있습니다. 이미 저장된 이름이 있으면 실패합니다.
+	 */
+	/** [개발용] 저장된 이름을 지웁니다. 콘솔에서 CTResetPlayerName (배포 빌드에서는 동작하지 않음) */
+	UFUNCTION(Exec)
+	void CTResetPlayerName();
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Profile")
+	bool SetPlayerName(const FString& NewName, FText& OutError);
+
+	/**
+	 * 이름을 바꿉니다. 처음 한 번만 정하는 규칙(SetPlayerName)을 거치지 않으므로,
+	 * 설정(Allow Name Change)에서 허용했을 때만 부르세요. (UCTSettingsSubsystem::ChangePlayerName이 확인함)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CT|Profile")
+	bool ChangePlayerName(const FString& NewName, FText& OutError);
+
 	UFUNCTION(BlueprintPure, Category = "CT|Menu")
 	bool HasShownIntro() const { return bIntroShown; }
 
@@ -82,12 +118,32 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu", meta = (ClampMin = "1", ClampMax = "65535"))
 	int32 DefaultPort = 7777;
 
+	/** 이름 최소 글자 수 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Profile", meta = (ClampMin = "1"))
+	int32 MinNameLength = 2;
+
+	/** 이름 최대 글자 수 (점수판에 들어가는 길이) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Profile", meta = (ClampMin = "1"))
+	int32 MaxNameLength = 12;
+
 private:
 	void HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString);
 	void HandleTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString);
 
 	/** 지금 메인 메뉴 맵에 있는가? */
 	bool IsInMainMenuMap() const;
+
+	void LoadProfile();
+	void SaveProfile() const;
+
+	/** 이름을 검사해서 저장 */
+	bool StoreValidatedName(const FString& NewName, FText& OutError);
+
+	/** 서버에 이름을 전달하는 접속 옵션. 예) "?Name=Chick" (이름이 없으면 빈 문자열) */
+	FString MakeNameOption() const;
+
+	/** 저장된 이름 */
+	FString PlayerName;
 
 	FText PendingMessage;
 	bool bIntroShown = false;

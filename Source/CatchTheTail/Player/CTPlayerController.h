@@ -10,6 +10,7 @@ class UInputMappingContext;
 class UCTHUDWidget;
 class UCTResultWidget;
 class ACTGameState;
+class UCameraShakeBase;
 
 /**
  * 플레이어 컨트롤러.
@@ -33,6 +34,13 @@ public:
 	/** 결과 화면 닫기 (게임 입력으로 복귀) */
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void HideResultScreen();
+
+	/**
+	 * 카메라 흔들림을 재생합니다. 설정에서 "화면 흔들림"을 껐으면 재생하지 않습니다.
+	 * 흔들림 연출은 PlayCameraShake 대신 이 함수를 쓰세요.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CT|Camera")
+	void PlayCTCameraShake(TSubclassOf<UCameraShakeBase> ShakeClass, float Scale = 1.f);
 
 protected:
 	virtual void BeginPlay() override;

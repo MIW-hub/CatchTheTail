@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTGameInstance.h"
+#include "CTProfileSaveGame.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -9,6 +10,9 @@
 void UCTGameInstance::Init()
 {
 	Super::Init();
+
+	// 이 컴퓨터에 저장된 프로필(이름)을 불러옵니다.
+	LoadProfile();
 
 	// 접속이 끊기거나 이동에 실패했을 때 알림을 받습니다.
 	if (GEngine)
@@ -36,6 +40,117 @@ bool UCTGameInstance::IsInMainMenuMap() const
 }
 
 // ============================================================
+// 플레이어 이름 (저장 / 검사)
+// ============================================================
+
+namespace
+{
+	const TCHAR* const CTProfileSlotName = TEXT("CTProfile");
+
+	/** 서버 접속 주소에 넣어도 안전한 글자인가? (한글, 영문, 숫자, _, -) */
+	bool IsAllowedNameChar(TCHAR Ch)
+	{
+		return FChar::IsAlnum(Ch) && Ch < 128   // 영문, 숫자
+			|| Ch == TEXT('_') || Ch == TEXT('-')
+			|| (Ch >= 0xAC00 && Ch <= 0xD7A3);   // 한글 음절
+	}
+}
+
+void UCTGameInstance::LoadProfile()
+{
+	PlayerName.Reset();
+
+	if (!UGameplayStatics::DoesSaveGameExist(CTProfileSlotName, 0)) { return; }
+
+	if (const UCTProfileSaveGame* Profile = Cast<UCTProfileSaveGame>(UGameplayStatics::LoadGameFromSlot(CTProfileSlotName, 0)))
+	{
+		// 저장된 이름도 규칙을 다시 확인합니다. (파일을 직접 고쳤거나 규칙이 바뀐 경우)
+		FText Ignored;
+		if (ValidatePlayerName(Profile->PlayerName, Ignored))
+		{
+			PlayerName = Profile->PlayerName;
+		}
+	}
+}
+
+void UCTGameInstance::SaveProfile() const
+{
+	UCTProfileSaveGame* Profile = Cast<UCTProfileSaveGame>(UGameplayStatics::CreateSaveGameObject(UCTProfileSaveGame::StaticClass()));
+	if (!Profile) { return; }
+
+	Profile->PlayerName = PlayerName;
+	UGameplayStatics::SaveGameToSlot(Profile, CTProfileSlotName, 0);
+}
+
+bool UCTGameInstance::ValidatePlayerName(const FString& Name, FText& OutError) const
+{
+	const FString Trimmed = Name.TrimStartAndEnd();
+
+	if (Trimmed.Len() < MinNameLength || Trimmed.Len() > MaxNameLength)
+	{
+		OutError = FText::Format(NSLOCTEXT("CT", "Name_Length", "이름은 {0}~{1}자로 입력하세요."),
+			FText::AsNumber(MinNameLength), FText::AsNumber(MaxNameLength));
+		return false;
+	}
+
+	for (const TCHAR Ch : Trimmed)
+	{
+		if (!IsAllowedNameChar(Ch))
+		{
+			OutError = NSLOCTEXT("CT", "Name_Chars", "한글, 영문, 숫자, _, - 만 쓸 수 있습니다. (공백과 특수문자 불가)");
+			return false;
+		}
+	}
+
+	OutError = FText::GetEmpty();
+	return true;
+}
+
+bool UCTGameInstance::SetPlayerName(const FString& NewName, FText& OutError)
+{
+	// 이름은 한 번 정하면 바꿀 수 없습니다. (바꾸려면 ChangePlayerName)
+	if (HasPlayerName())
+	{
+		OutError = NSLOCTEXT("CT", "Name_AlreadySet", "이름은 한 번만 정할 수 있습니다.");
+		return false;
+	}
+
+	return StoreValidatedName(NewName, OutError);
+}
+
+bool UCTGameInstance::ChangePlayerName(const FString& NewName, FText& OutError)
+{
+	// 바꿔도 되는지는 호출하는 쪽(설정: Allow Name Change)이 확인합니다.
+	return StoreValidatedName(NewName, OutError);
+}
+
+bool UCTGameInstance::StoreValidatedName(const FString& NewName, FText& OutError)
+{
+	if (!ValidatePlayerName(NewName, OutError))
+	{
+		return false;
+	}
+
+	PlayerName = NewName.TrimStartAndEnd();
+	SaveProfile();
+	return true;
+}
+
+void UCTGameInstance::CTResetPlayerName()
+{
+#if !UE_BUILD_SHIPPING
+	PlayerName.Reset();
+	UGameplayStatics::DeleteGameInSlot(CTProfileSlotName, 0);
+	UE_LOG(LogTemp, Log, TEXT("[CT] 저장된 이름을 지웠습니다. 다시 메뉴에 들어가면 이름을 입력합니다."));
+#endif
+}
+
+FString UCTGameInstance::MakeNameOption() const
+{
+	return HasPlayerName() ? FString::Printf(TEXT("?Name=%s"), *PlayerName) : FString();
+}
+
+// ============================================================
 // 방 만들기 / 참가 / 나가기
 // ============================================================
 
@@ -45,7 +160,8 @@ void UCTGameInstance::HostGame()
 	if (!World) { return; }
 
 	// 게임 맵을 listen 서버로 엽니다. (방장 = 서버 + 플레이어)
-	UGameplayStatics::OpenLevel(World, GameMapName, /*bAbsolute=*/true, TEXT("listen"));
+	// 저장한 이름을 접속 옵션으로 넘겨서 점수판에 내 이름이 나오게 합니다.
+	UGameplayStatics::OpenLevel(World, GameMapName, /*bAbsolute=*/true, FString(TEXT("listen")) + MakeNameOption());
 }
 
 void UCTGameInstance::JoinGame(const FString& Address)
@@ -68,7 +184,8 @@ void UCTGameInstance::JoinGame(const FString& Address)
 	APlayerController* PlayerController = GetFirstLocalPlayerController();
 	if (!PlayerController) { return; }
 
-	PlayerController->ClientTravel(FinalAddress, ETravelType::TRAVEL_Absolute);
+	// 저장한 이름을 접속 옵션으로 넘깁니다.
+	PlayerController->ClientTravel(FinalAddress + MakeNameOption(), ETravelType::TRAVEL_Absolute);
 }
 
 void UCTGameInstance::LeaveToMainMenu(FText Message)
