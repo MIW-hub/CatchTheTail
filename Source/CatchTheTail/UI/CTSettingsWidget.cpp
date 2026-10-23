@@ -5,6 +5,7 @@
 #include "../Core/CTSettingsSubsystem.h"
 #include "Components/Button.h"
 #include "Components/CheckBox.h"
+#include "Components/ComboBoxString.h"
 #include "Components/EditableTextBox.h"
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
@@ -21,6 +22,7 @@ void UCTSettingsWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	if (ComboBox_Language)     { ComboBox_Language->OnSelectionChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageChanged); }
 	if (Slider_Music)          { Slider_Music->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
@@ -37,6 +39,7 @@ void UCTSettingsWidget::NativeConstruct()
 
 void UCTSettingsWidget::NativeDestruct()
 {
+	if (ComboBox_Language)     { ComboBox_Language->OnSelectionChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleLanguageChanged); }
 	if (Slider_Music)          { Slider_Music->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
@@ -91,6 +94,7 @@ void UCTSettingsWidget::RefreshAll()
 		Panel_ChangeName->SetVisibility(Settings->CanChangePlayerName() ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
+	RefreshLanguage();
 	BuildControlRows();
 	BP_OnRefreshed();
 }
@@ -142,6 +146,38 @@ void UCTSettingsWidget::ShowNameMessage(const FText& Message)
 }
 
 // 값 변경
+
+void UCTSettingsWidget::RefreshLanguage()
+{
+	UCTSettingsSubsystem* Settings = GetSettings();
+	if (!ComboBox_Language || !Settings) { return; }
+
+	TGuardValue<bool> Guard(bRefreshing, true);
+
+	ComboBox_Language->ClearOptions();
+	for (const FString& Code : UCTSettingsSubsystem::GetSupportedLanguages())
+	{
+		ComboBox_Language->AddOption(UCTSettingsSubsystem::GetLanguageDisplayName(Code));
+	}
+	ComboBox_Language->SetSelectedOption(UCTSettingsSubsystem::GetLanguageDisplayName(Settings->GetLanguage()));
+}
+
+void UCTSettingsWidget::HandleLanguageChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
+{
+	UCTSettingsSubsystem* Settings = GetSettings();
+	if (bRefreshing || !Settings) { return; }
+
+	// 선택한 표시 이름에 해당하는 언어 코드를 찾음
+	for (const FString& Code : UCTSettingsSubsystem::GetSupportedLanguages())
+	{
+		if (UCTSettingsSubsystem::GetLanguageDisplayName(Code) == SelectedItem)
+		{
+			Settings->SetLanguage(Code);
+			RefreshAll(); // 조작 목록 등 문구를 새 언어로 다시 채움
+			return;
+		}
+	}
+}
 
 void UCTSettingsWidget::HandleMusicChanged(float Value)
 {

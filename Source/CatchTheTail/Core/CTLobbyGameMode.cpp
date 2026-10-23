@@ -2,6 +2,7 @@
 #include "CTLobbyGameMode.h"
 #include "CTGameInstance.h"
 #include "CTGameState.h"
+#include "CTMapSettings.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTLobbyPlayerController.h"
 #include "../Player/CTPlayerState.h"
@@ -54,6 +55,16 @@ void ACTLobbyGameMode::InitGameState()
 			if (GameInstance) { GameInstance->SetStoredRoomCode(RoomCode); }
 		}
 		CTGameState->SetRoomCode(RoomCode);
+
+		// 맵 선택은 방이 열려 있는 동안 유지. 처음이면 목록의 첫 맵
+		int32 MapIndex = GameInstance ? GameInstance->GetStoredMapIndex() : INDEX_NONE;
+		FCTMapInfo Ignored;
+		if (!UCTMapSettings::GetMapInfo(MapIndex, Ignored))
+		{
+			MapIndex = UCTMapSettings::GetFirstEnabledIndex();
+			if (GameInstance) { GameInstance->SetStoredMapIndex(MapIndex); }
+		}
+		CTGameState->SetSelectedMapIndex(MapIndex);
 
 		CTGameState->SetStartCountdown(0.0);
 	}
@@ -134,6 +145,29 @@ void ACTLobbyGameMode::SetPlayerReady(APlayerController* Requester, bool bReady)
 	RequesterState->SetReady(bReady);
 }
 
+bool ACTLobbyGameMode::SelectMap(APlayerController* Requester, int32 MapIndex)
+{
+	ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	const ACTPlayerState* RequesterState = Requester ? Requester->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!CTGameState || !RequesterState || !RequesterState->IsHost()) { return false; }
+
+	// 시작이 정해진 뒤에는 바꿀 수 없음
+	if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f || GetWorldTimerManager().IsTimerActive(StartTimerHandle)) { return false; }
+
+	// 목록에 있고 사용 가능한 맵만
+	FCTMapInfo Ignored;
+	if (!UCTMapSettings::GetMapInfo(MapIndex, Ignored)) { return false; }
+
+	CTGameState->SetSelectedMapIndex(MapIndex);
+	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		GameInstance->SetStoredMapIndex(MapIndex);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 맵 선택: %d"), MapIndex);
+	return true;
+}
+
 bool ACTLobbyGameMode::TryStartGame(APlayerController* Requester)
 {
 	ACTGameState* CTGameState = GetGameState<ACTGameState>();
@@ -171,7 +205,13 @@ void ACTLobbyGameMode::TravelToGameMap()
 	UWorld* World = GetWorld();
 	if (!GameInstance || !World) { return; }
 
-	const FString MapName = GameInstance->GetGameMapName().ToString();
+	// 선택한 맵. 목록이 비어 있으면 GameInstance의 기본 게임 맵
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	FString MapName = CTGameState ? UCTMapSettings::GetTravelName(CTGameState->GetSelectedMapIndex()) : FString();
+	if (MapName.IsEmpty())
+	{
+		MapName = GameInstance->GetGameMapName().ToString();
+	}
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 맵으로 이동: %s"), *MapName);
 	World->ServerTravel(MapName);
 }

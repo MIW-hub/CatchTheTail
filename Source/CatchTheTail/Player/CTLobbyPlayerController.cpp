@@ -143,6 +143,19 @@ void ACTLobbyPlayerController::ServerSetReady_Implementation(bool bReady)
 	}
 }
 
+void ACTLobbyPlayerController::RequestSelectMap(int32 MapIndex)
+{
+	ServerSelectMap(MapIndex);
+}
+
+void ACTLobbyPlayerController::ServerSelectMap_Implementation(int32 MapIndex)
+{
+	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)
+	{
+		GameMode->SelectMap(this, MapIndex);
+	}
+}
+
 void ACTLobbyPlayerController::ServerStartGame_Implementation()
 {
 	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)

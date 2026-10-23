@@ -4,8 +4,13 @@
 #include "../Core/CTGameState.h"
 #include "../Player/CTLobbyPlayerController.h"
 #include "../Player/CTPlayerState.h"
+#include "CTMapEntryWidget.h"
+#include "../Core/CTMapSettings.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
+#include "Components/Image.h"
+#include "Components/PanelWidget.h"
+#include "Components/Widget.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Framework/Application/SlateApplication.h"
@@ -23,6 +28,11 @@ void UCTLobbyWidget::NativeConstruct()
 	if (Button_CopyRoomCode)   { Button_CopyRoomCode->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleCopyRoomCodeClicked); }
 	if (Text_CopyResult)       { Text_CopyResult->SetVisibility(ESlateVisibility::Collapsed); }
 	if (Button_Leave) { Button_Leave->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleLeaveClicked); }
+
+	// 맵 선택
+	if (Button_SelectMap)       { Button_SelectMap->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleSelectMapClicked); }
+	if (Button_MapSelectClose)  { Button_MapSelectClose->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleMapSelectCloseClicked); }
+	SetMapSelectOpen(false);
 
 	// 채팅
 	if (EditableTextBox_Chat)
@@ -89,12 +99,14 @@ void UCTLobbyWidget::RefreshRoomCode()
 
 void UCTLobbyWidget::HandleToggleRoomCodeClicked()
 {
+	ReturnFocusToGame();
 	bRoomCodeVisible = !bRoomCodeVisible;
 	RefreshRoomCode();
 }
 
 void UCTLobbyWidget::HandleCopyRoomCodeClicked()
 {
+	ReturnFocusToGame();
 	const UWorld* World = GetWorld();
 	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
 	const FString Code = CTGameState ? CTGameState->GetRoomCode() : FString();
@@ -202,8 +214,10 @@ void UCTLobbyWidget::RefreshLobby()
 			const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
 			if (!CTPlayerState) { continue; }
 
-			const TCHAR* Mark = CTPlayerState->IsHost() ? TEXT("방장") : (CTPlayerState->IsReady() ? TEXT("준비") : TEXT("대기"));
-			List += FString::Printf(TEXT("%s   [%s]\n"), *CTPlayerState->GetPlayerName(), Mark);
+			const FText Mark = CTPlayerState->IsHost()
+				? NSLOCTEXT("CT", "Lobby_StateHost", "방장")
+				: (CTPlayerState->IsReady() ? NSLOCTEXT("CT", "Lobby_StateReady", "준비") : NSLOCTEXT("CT", "Lobby_StateWaiting", "대기"));
+			List += FString::Printf(TEXT("%s   [%s]\n"), *CTPlayerState->GetPlayerName(), *Mark.ToString());
 		}
 		Text_PlayerList->SetText(FText::FromString(List));
 	}
@@ -247,11 +261,140 @@ void UCTLobbyWidget::RefreshLobby()
 
 	RefreshRoomCode();
 
+	RefreshMap(bIsHost, bStarting);
+
 	BP_OnLobbyRefreshed(bIsHost, bCanStart, StartRemaining);
+}
+
+// 버튼을 누른 뒤 포커스를 게임 화면으로 돌려, 이후 Space(점프)가 버튼을 다시 누르지 않게 함
+void UCTLobbyWidget::ReturnFocusToGame()
+{
+	FSlateApplication::Get().SetAllUserFocusToGameViewport();
+}
+
+// 맵 선택
+
+void UCTLobbyWidget::RefreshMap(bool bIsHost, bool bStarting)
+{
+	const UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	if (!CTGameState) { return; }
+
+	// 선택 버튼: 방장만, 시작이 정해지면 잠금
+	if (Button_SelectMap)
+	{
+		Button_SelectMap->SetVisibility(bIsHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		Button_SelectMap->SetIsEnabled(!bStarting);
+	}
+	if (bMapSelectOpen && (!bIsHost || bStarting))
+	{
+		SetMapSelectOpen(false);
+	}
+
+	// 선택된 맵이 바뀔 때만 미리보기를 다시 그림
+	const int32 SelectedIndex = CTGameState->GetSelectedMapIndex();
+	if (SelectedIndex == LastShownMapIndex) { return; }
+	LastShownMapIndex = SelectedIndex;
+
+	FCTMapInfo Info;
+	const bool bHasMap = UCTMapSettings::GetMapInfo(SelectedIndex, Info);
+
+	if (Text_MapName)
+	{
+		Text_MapName->SetText(bHasMap ? Info.DisplayName : NSLOCTEXT("CT", "Lobby_NoMap", "맵 없음"));
+	}
+	if (Text_MapDescription)
+	{
+		Text_MapDescription->SetText(bHasMap ? Info.Description : FText::GetEmpty());
+	}
+	if (Image_MapPreview)
+	{
+		if (bHasMap && !Info.Thumbnail.IsNull())
+		{
+			Image_MapPreview->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Image_MapPreview->SetBrushFromSoftTexture(Info.Thumbnail, /*bMatchSize=*/false);
+		}
+		else
+		{
+			Image_MapPreview->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	// 선택 창이 열려 있으면 강조 표시도 갱신
+	for (UCTMapEntryWidget* Entry : MapEntries)
+	{
+		if (Entry) { Entry->SetSelected(Entry->GetMapIndex() == SelectedIndex); }
+	}
+}
+
+void UCTLobbyWidget::SetMapSelectOpen(bool bOpen)
+{
+	bMapSelectOpen = bOpen;
+
+	if (Panel_MapSelect)
+	{
+		Panel_MapSelect->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	if (bOpen)
+	{
+		RebuildMapEntries();
+	}
+}
+
+void UCTLobbyWidget::RebuildMapEntries()
+{
+	if (!Panel_MapList || !MapEntryClass) { return; }
+
+	Panel_MapList->ClearChildren();
+	MapEntries.Reset();
+
+	const UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	const int32 SelectedIndex = CTGameState ? CTGameState->GetSelectedMapIndex() : INDEX_NONE;
+
+	const int32 TotalCount = GetDefault<UCTMapSettings>()->Maps.Num();
+	for (int32 Index = 0; Index < TotalCount; ++Index)
+	{
+		FCTMapInfo Info;
+		if (!UCTMapSettings::GetMapInfo(Index, Info)) { continue; }
+
+		UCTMapEntryWidget* Entry = CreateWidget<UCTMapEntryWidget>(this, MapEntryClass);
+		if (!Entry) { continue; }
+
+		Entry->SetEntry(Index, Info, Index == SelectedIndex);
+		Entry->OnEntryClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleMapEntryClicked);
+		Panel_MapList->AddChild(Entry);
+		MapEntries.Add(Entry);
+	}
+}
+
+void UCTLobbyWidget::HandleSelectMapClicked()
+{
+	ReturnFocusToGame();
+	SetMapSelectOpen(!bMapSelectOpen);
+}
+
+void UCTLobbyWidget::HandleMapSelectCloseClicked()
+{
+	ReturnFocusToGame();
+	SetMapSelectOpen(false);
+}
+
+void UCTLobbyWidget::HandleMapEntryClicked(int32 MapIndex)
+{
+	ReturnFocusToGame();
+	if (ACTLobbyPlayerController* Controller = GetOwningPlayer<ACTLobbyPlayerController>())
+	{
+		Controller->RequestSelectMap(MapIndex);
+	}
+
+	// 고르면 창을 닫음
+	SetMapSelectOpen(false);
 }
 
 void UCTLobbyWidget::HandleReadyClicked()
 {
+	ReturnFocusToGame();
 	const ACTPlayerState* MyState = GetOwningPlayerState<ACTPlayerState>();
 	if (ACTLobbyPlayerController* Controller = GetOwningPlayer<ACTLobbyPlayerController>())
 	{
@@ -261,6 +404,7 @@ void UCTLobbyWidget::HandleReadyClicked()
 
 void UCTLobbyWidget::HandleStartClicked()
 {
+	ReturnFocusToGame();
 	if (ACTLobbyPlayerController* Controller = GetOwningPlayer<ACTLobbyPlayerController>())
 	{
 		Controller->RequestStartGame();

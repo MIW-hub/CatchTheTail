@@ -36,6 +36,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
 	void RequestStartGame();
 
+	// 맵 선택 요청 (방장만 가능). MapIndex는 프로젝트 설정 CT Maps 목록의 번호
+	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
+	void RequestSelectMap(int32 MapIndex);
+
 	// 채팅 보내기. 빈 문장은 무시, 너무 길면 잘림
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby|Chat")
 	void SendChat(const FString& Message);
@@ -103,6 +107,9 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void ServerStartGame();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSelectMap(int32 MapIndex);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSendChat(const FString& Message);

@@ -25,6 +25,11 @@ struct FCTSettingsData
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bMuteAll = false;
 
+	// 언어
+	// 문화 코드 (ko, en, ja). 비어 있으면 처음 실행으로 보고 영어
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	FString Language;
+
 	// 화면
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bFullscreen = true;

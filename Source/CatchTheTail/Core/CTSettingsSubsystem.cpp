@@ -11,6 +11,10 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "InputTriggers.h"
+#include "Misc/CommandLine.h"
+#include "Internationalization/Culture.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/TextLocalizationManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundClass.h"
 #include "Sound/SoundMix.h"
@@ -71,6 +75,7 @@ void UCTSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	LoadSettings();
+	ApplyLanguage();
 	ApplyDisplay();
 	ApplyAudio(); // 월드 없으면 생략. 맵 열릴 때 컨트롤러가 재적용
 
@@ -202,10 +207,95 @@ void UCTSettingsSubsystem::ApplyDisplay()
 	}
 }
 
+namespace
+{
+	// 지원 언어: 문화 코드와 그 언어로 쓴 이름
+	struct FCTLanguage
+	{
+		const TCHAR* Code;
+		const TCHAR* Name;
+	};
+
+	const FCTLanguage SupportedLanguages[] =
+	{
+		{ TEXT("ko"), TEXT("\uD55C\uAD6D\uC5B4") },
+		{ TEXT("en"), TEXT("English") },
+		{ TEXT("ja"), TEXT("\u65E5\u672C\u8A9E") },
+	};
+
+	bool IsSupportedLanguage(const FString& Code)
+	{
+		for (const FCTLanguage& Language : SupportedLanguages)
+		{
+			if (Code == Language.Code) { return true; }
+		}
+		return false;
+	}
+}
+
+TArray<FString> UCTSettingsSubsystem::GetSupportedLanguages()
+{
+	TArray<FString> Result;
+	for (const FCTLanguage& Language : SupportedLanguages)
+	{
+		Result.Add(Language.Code);
+	}
+	return Result;
+}
+
+FString UCTSettingsSubsystem::GetLanguageDisplayName(const FString& CultureCode)
+{
+	for (const FCTLanguage& Language : SupportedLanguages)
+	{
+		if (CultureCode == Language.Code) { return Language.Name; }
+	}
+	return CultureCode;
+}
+
+FString UCTSettingsSubsystem::GetLanguage() const
+{
+	// 실행 옵션 -CTLanguage=ja 로 언어를 강제 (테스트용)
+	FString Forced;
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTLanguage="), Forced) && IsSupportedLanguage(Forced)) { return Forced; }
+
+	if (IsSupportedLanguage(Data.Language)) { return Data.Language; }
+
+	// 저장값이 없으면(처음 실행) 영어. 컴퓨터 언어는 따르지 않음
+	return FString(TEXT("en"));
+}
+
+void UCTSettingsSubsystem::SetLanguage(const FString& CultureCode)
+{
+	if (!IsSupportedLanguage(CultureCode)) { return; }
+
+	Data.Language = CultureCode;
+	ApplyLanguage();
+	CommitChange();
+}
+
+void UCTSettingsSubsystem::ApplyLanguage()
+{
+	const FString Code = GetLanguage();
+
+#if WITH_EDITOR
+	// 에디터에서는 에디터 화면 언어는 두고 게임 문구만 바꿈
+	if (GIsEditor)
+	{
+		FTextLocalizationManager::Get().EnableGameLocalizationPreview(Code);
+		return;
+	}
+#endif
+
+	FInternationalization::Get().SetCurrentCulture(Code);
+}
+
 void UCTSettingsSubsystem::ResetToDefaults()
 {
 	// 키 포함 초기화. 컨텍스트 정리는 ApplyKeyBindingsToLocalPlayer
+	// 언어는 초기화하지 않고 유지
+	const FString KeepLanguage = Data.Language;
 	Data = FCTSettingsData();
+	Data.Language = KeepLanguage;
 
 	ApplyKeyBindingsToLocalPlayer();
 	EffectiveContexts.Empty();

@@ -1,0 +1,151 @@
+-	-	-
+Esc는 메뉴 키라서 쓸 수 없습니다.	Esc is the menu key and can't be used.	Escはメニューキーのため使用できません。
+{0} 키는 이미 다른 동작에서 쓰고 있습니다.	The {0} key is already used for another action.	{0}キーはすでに別の操作に使われています。
+{0}~{1}자, 한글 / 영문 / 숫자 / _ / -	{0}–{1} characters: Korean / English / numbers / _ / -	{0}～{1}文字、ハングル / 英字 / 数字 / _ / -
+{0}초 후 로비로 돌아갑니다	Returning to the lobby in {0}s	{0}秒後にロビーへ戻ります
+게임 시작 {0}	Game starts in {0}	ゲーム開始まで {0}
+게임이 이미 진행 중이라 입장할 수 없습니다.	The game is already in progress, so you can't join.	ゲームがすでに進行中のため参加できません。
+경기 종료	Match Over	試合終了
+곧 게임이 시작되어 입장할 수 없습니다.	The game is about to start, so you can't join.	まもなくゲームが始まるため参加できません。
+곧 경기가 시작됩니다	The match starts soon	まもなく試合が始まります
+기본 맵입니다.	The default map.	基本のマップです。
+기본 설정으로 되돌렸습니다.	Settings restored to default.	設定を初期状態に戻しました。
+노랑	Yellow	黄
+달리기	Run	走る
+달리기 가능	Run ready	走れます
+달리기 불가	Can't run	走れません
+달리는 중 {0}	Running {0}	走行中 {0}
+대기	Waiting	待機
+대시	Dash	ダッシュ
+동점! 연장전	Tie! Overtime	同点！延長戦
+라운드 {0}	Round {0}	ラウンド {0}
+맵 없음	No map	マップなし
+목표 없음	No target	ターゲットなし
+밀기	Push	押す
+방 코드 보기	Show room code	ルームコードを表示
+방 코드 숨기기	Hide room code	ルームコードを隠す
+방 코드 입장은 준비 중입니다.	Joining by room code is coming soon.	ルームコードでの参加は準備中です。
+방 코드를 입력하세요.	Enter a room code.	ルームコードを入力してください。
+방에 접속하지 못했습니다. 주소와 방장의 방 상태를 확인하세요.	Couldn't join the room. Check the address and the host's room.	ルームに接続できませんでした。アドレスとホストのルームの状態を確認してください。
+방이 가득 차서 입장할 수 없습니다.	The room is full, so you can't join.	ルームが満員のため参加できません。
+방장	Host	ホスト
+방장이 방을 닫았거나 연결이 끊어졌습니다.	The host closed the room or the connection was lost.	ホストがルームを閉じたか、接続が切れました。
+보라	Purple	紫
+복사되었습니다	Copied	コピーしました
+분홍	Pink	ピンク
+빠른 참가는 준비 중입니다.	Quick Join is coming soon.	クイック参加は準備中です。
+빨강	Red	赤
+사용할 수 없는 키입니다.	That key can't be used.	このキーは使用できません。
+스팀 연결 후 사용할 수 있습니다.	Available after connecting to Steam.	Steamに接続すると利用できます。
+승리!	Victory!	勝利！
+시점	Look	視点
+없음	None	なし
+이 동작의 키는 바꿀 수 없습니다.	The key for this action can't be changed.	この操作のキーは変更できません。
+이동	Move	移動
+이름은 {0}~{1}자로 입력하세요.	Enter a name of {0}–{1} characters.	名前は{0}～{1}文字で入力してください。
+이름은 바꿀 수 없습니다.	Your name can't be changed.	名前は変更できません。
+이름은 한 번만 정할 수 있습니다.	You can only set your name once.	名前は一度しか決められません。
+이름을 바꿨습니다.	Name changed.	名前を変更しました。
+인원 {0}/{1} · 준비 {2}명	Players {0}/{1} · {2} ready	人数 {0}/{1} · 準備OK {2}人
+잡기	Grab	つかむ
+점프	Jump	ジャンプ
+주황	Orange	オレンジ
+준비	Ready	準備OK
+준비 취소	Cancel Ready	準備解除
+초록	Green	緑
+쿨타임 {0}	Cooldown {0}	クールタイム {0}
+타입 A	Type A	タイプA
+파랑	Blue	青
+패배	Defeat	敗北
+플레이어를 기다리는 중	Waiting for players	プレイヤーを待っています
+하늘	Sky Blue	水色
+한글, 영문, 숫자, _, - 만 쓸 수 있습니다. (공백과 특수문자 불가)	Only Korean, English, numbers, _ and - are allowed. (No spaces or special characters)	ハングル、英字、数字、_、- のみ使用できます。（スペースや特殊文字は不可）
+0	0	0
+01   내 색상과 목표 색상을 확인하세요	01   Check your color and your target color	01   自分の色とターゲットの色を確認しよう
+02   목표 색상 플레이어의 꼬리를 노리세요	02   Go after the tail of the player in your target color	02   ターゲットの色のプレイヤーのしっぽを狙おう
+03   달리기와 밀치기 게이지를 확인하세요	03   Watch your run and push gauges	03   ダッシュと押すゲージを確認しよう
+04   꼬리 수와 실시간 순위를 확인하세요	04   Check your tail count and the live ranking	04   しっぽの数とリアルタイム順位を確認しよう
+0:30	0:30	0:30
+1	1	1
+5	5	5
+5:00	5:00	5:00
+80%	80%	80%
+CATCH THE TAIL	CATCH THE TAIL	CATCH THE TAIL
+Enter : 채팅 입력 / 전송	Enter : Type / send chat	Enter : チャット入力 / 送信
+MOON PARTY GAMES	MOON PARTY GAMES	MOON PARTY GAMES
+PLAYER	PLAYER	PLAYER
+W A S D	W A S D	W A S D
+게임 방법	How to Play	遊び方
+게임 시작	Start Game	ゲーム開始
+게임 종료	Quit Game	ゲーム終了
+게임을 종료할까요?	Quit the game?	ゲームを終了しますか？
+경기 결과	Match Results	試合結果
+기본값으로 초기화	Reset to defaults	初期設定に戻す
+내 꼬리	My Tail	自分のしっぽ
+내 색상	My Color	自分の色
+다음에 또 만나요!	See you next time!	またね！
+닫기	Close	閉じる
+대기 로비	Lobby	ロビー
+동작 이름	Action	操作名
+뒤로가기	Back	戻る
+라운드 1	Round 1	ラウンド 1
+라운드 시작	Round Start	ラウンド開始
+로비 나가기	Leave Lobby	ロビーを出る
+로비 채팅	Lobby Chat	ロビーチャット
+로비로 돌아가기	Back to Lobby	ロビーへ戻る
+로비에 연결하는 중	Connecting to the lobby	ロビーに接続中
+맵 선택	Select Map	マップ選択
+맵 설명	Map Description	マップ説明
+맵 이름	Map Name	マップ名
+맵 정보 확인 중	Checking map info	マップ情報を確認中
+메시지 입력 후 Enter	Type a message and press Enter	メッセージを入力してEnter
+메인 메뉴로 나가기	Exit to Main Menu	メインメニューへ
+모든 소리 끄기	Mute All	すべての音を消す
+밀치기 준비	Push Ready	押す準備OK
+방 만들기	Create Room	ルームを作る
+방 참가	Join Room	ルームに参加
+방 코드 입력	Enter room code	ルームコード入力
+방 코드를 입력한 뒤 참가 버튼을 눌러 주세요	Enter a room code, then press Join	ルームコードを入力して参加ボタンを押してください
+방을 만들거나 친구의 방 코드로 참가하세요	Create a room or join with a friend's room code	ルームを作るか、友達のルームコードで参加しよう
+배경음	Music	BGM
+변경한 설정은 자동으로 저장됩니다	Changes are saved automatically	変更した設定は自動で保存されます
+변경할 키를 누른 뒤 새 키를 입력하세요	Select the key to change, then press the new key	変更するキーを選んでから新しいキーを押してください
+복사	Copy	コピー
+빠른 참가	Quick Join	クイック参加
+사용할 이름을 입력하세요	Enter the name you'll use	使用する名前を入力してください
+새 이름 입력	Enter new name	新しい名前を入力
+색 구분 보조	Color assist	色の識別補助
+색상	Color	色
+색을 따라, 꼬리를 잡아라	Follow the colors, catch the tails	色を追って、しっぽをつかまえろ
+선택된 맵	Selected Map	選択中のマップ
+설정	Settings	設定
+소리	Sound	サウンド
+실시간 순위	Live Ranking	リアルタイム順位
+아무 키나 클릭하여 건너뛰기	Press any key to skip	どれかキーを押してスキップ
+어떤 이름으로 플레이할까요?	What name do you want to play with?	どんな名前でプレイしますか？
+유령	Ghost	ゴースト
+유령 상태 · 다음 라운드에 부활	Ghost · Respawn next round	ゴースト状態 · 次のラウンドで復活
+이 이름으로 시작	Start with this name	この名前で開始
+이름 규칙을 확인해 주세요	Please check the name rules	名前のルールを確認してください
+이름 변경	Change Name	名前変更
+이름 변경 가능 여부는 게임 설정에 따라 달라집니다	Whether you can change your name depends on the game settings	名前を変更できるかはゲーム設定によります
+잡아야 할 색상	Target Color	つかまえる色
+화면	Display	画面
+접근성	Accessibility	アクセシビリティ
+조작 방법	Controls	操作方法
+종료	Quit	終了
+참가	Join	参加
+참가 플레이어	Players	参加プレイヤー
+최고 기록 플레이어	Top Player	最高記録プレイヤー
+최종 순위	Final Ranking	最終順位
+취소	Cancel	キャンセル
+캐릭터 위 팀 표시	Team marker above character	キャラクター上のチーム表示
+플레이어 이름	Player Name	プレイヤー名
+플레이어 이름을 정해 주세요	Choose your player name	プレイヤー名を決めてください
+플레이할 맵을 선택하세요	Select a map to play	プレイするマップを選んでください
+화면 흔들림	Screen shake	画面の揺れ
+효과음	Sound effects	効果音
+a맵	Map A	マップA
+b맵	Map B	マップB
+전체 화면	Fullscreen	フルスクリーン
+언어 / Language	Language	言語 / Language

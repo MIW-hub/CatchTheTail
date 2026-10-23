@@ -159,6 +159,7 @@ void UCTGameInstance::HostGame()
 
 	// listen 서버로 열기. 이름은 접속 옵션으로 전달
 	// 새 방이니 이전 방 코드는 버림
+	StoredMapIndex = INDEX_NONE;
 	StoredRoomCode.Reset();
 
 	const FName FirstMap = LobbyMapName.IsNone() ? GameMapName : LobbyMapName;
@@ -197,6 +198,7 @@ void UCTGameInstance::LeaveToMainMenu(FText Message)
 {
 	PendingMessage = Message;
 	StoredRoomCode.Reset();
+	StoredMapIndex = INDEX_NONE;
 
 	UWorld* World = GetWorld();
 	if (!World) { return; }

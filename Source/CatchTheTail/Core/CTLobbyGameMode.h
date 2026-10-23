@@ -34,6 +34,9 @@ public:
 	// 서버. 방장의 시작 요청. 조건을 만족하면 카운트다운 후 게임 맵으로 이동. 성공 시 true
 	bool TryStartGame(APlayerController* Requester);
 
+	// 서버. 방장의 맵 선택 요청. 시작 카운트다운 중에는 변경 불가. 성공 시 true
+	bool SelectMap(APlayerController* Requester, int32 MapIndex);
+
 	// 서버. 채팅을 로비의 모든 플레이어에게 전달 (보낸 사람 포함)
 	void BroadcastChat(APlayerController* Sender, const FString& Message);
 

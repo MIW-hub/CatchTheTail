@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
+#include "Types/SlateEnums.h"
 #include "CTSettingsWidget.generated.h"
 
 class UButton;
@@ -14,6 +15,7 @@ class UEditableTextBox;
 class USlider;
 class UTextBlock;
 class UVerticalBox;
+class UComboBoxString;
 class UWidget;
 
 // 닫기 버튼
@@ -52,6 +54,10 @@ protected:
 	// 조작 한 줄 위젯 (UCTKeyBindEntryWidget 부모)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Settings")
 	TSubclassOf<UCTKeyBindEntryWidget> KeyBindEntryClass;
+
+	// 언어 선택 (한국어 / English / 日本語)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UComboBoxString> ComboBox_Language;
 
 	// 소리
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -123,6 +129,12 @@ private:
 	void ShowMessage(const FText& Message);
 	void ShowNameMessage(const FText& Message);
 	static void SetPercentText(UTextBlock* Text, float Value);
+
+	UFUNCTION()
+	void HandleLanguageChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+
+	// 언어 목록을 채우고 현재 언어를 선택
+	void RefreshLanguage();
 
 	UFUNCTION()
 	void HandleMusicChanged(float Value);

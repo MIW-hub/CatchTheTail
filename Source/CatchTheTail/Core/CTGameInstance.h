@@ -96,6 +96,10 @@ public:
 	FName GetLobbyMapName() const { return LobbyMapName; }
 
 	// 이 방의 방 코드. 게임을 하고 로비로 돌아와도 같은 코드를 유지하려고 보관 (방장 컴퓨터에서만 사용)
+	// 마지막으로 선택한 맵 번호. 로비로 돌아와도 같은 맵을 유지하려고 보관 (방장 컴퓨터에서만 사용)
+	int32 GetStoredMapIndex() const { return StoredMapIndex; }
+	void SetStoredMapIndex(int32 NewMapIndex) { StoredMapIndex = NewMapIndex; }
+
 	const FString& GetStoredRoomCode() const { return StoredRoomCode; }
 	void SetStoredRoomCode(const FString& NewRoomCode) { StoredRoomCode = NewRoomCode; }
 
@@ -152,6 +156,7 @@ private:
 	FString PlayerName;
 
 	FString StoredRoomCode;
+	int32 StoredMapIndex = INDEX_NONE;
 
 	FText PendingMessage;
 	bool bIntroShown = false;

@@ -90,6 +90,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void SetTeamMarkerEnabled(bool bEnabled);
 
+	// 언어
+	// 지원하는 문화 코드 목록 (ko, en, ja)
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	static TArray<FString> GetSupportedLanguages();
+
+	// 그 언어로 쓴 언어 이름 (ko → 한국어, en → English, ja → 日本語). 번역 대상 아님
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	static FString GetLanguageDisplayName(const FString& CultureCode);
+
+	// 지금 쓰는 언어 코드. 저장값이 없으면(처음 실행) 영어
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	FString GetLanguage() const;
+
+	// 언어 변경 (즉시 적용 + 저장)
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetLanguage(const FString& CultureCode);
+
+	// 현재 언어를 문구에 적용 (시작할 때 자동 호출)
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void ApplyLanguage();
+
 	// 키 포함 전부 기본값. 이름 유지
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ResetToDefaults();

@@ -18,6 +18,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, StartServerTime);
 	DOREPLIFETIME(ACTGameState, LobbyMinPlayers);
 	DOREPLIFETIME(ACTGameState, RoomCode);
+	DOREPLIFETIME(ACTGameState, SelectedMapIndex);
 	DOREPLIFETIME(ACTGameState, ReturnToLobbyServerTime);
 	DOREPLIFETIME(ACTGameState, GameEndServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
@@ -117,6 +118,14 @@ float ACTGameState::GetReturnToLobbyRemainingSeconds() const
 {
 	if (Phase != ECTGamePhase::Finished || ReturnToLobbyServerTime <= 0.0) { return 0.f; }
 	return static_cast<float>(FMath::Max(0.0, ReturnToLobbyServerTime - GetServerWorldTimeSeconds()));
+}
+
+void ACTGameState::SetSelectedMapIndex(int32 NewMapIndex)
+{
+	if (!HasAuthority()) { return; }
+
+	SelectedMapIndex = NewMapIndex;
+	ForceNetUpdate();
 }
 
 void ACTGameState::SetRoomCode(const FString& NewRoomCode)
