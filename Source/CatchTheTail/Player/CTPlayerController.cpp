@@ -1,7 +1,10 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTPlayerController.h"
 #include "../Core/CTSettingsSubsystem.h"
+#include "../Core/CTGameInstance.h"
+#include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
+#include "GameFramework/PlayerState.h"
 #include "../UI/CTHUDWidget.h"
 #include "../UI/CTResultWidget.h"
 #include "Blueprint/UserWidget.h"
@@ -17,8 +20,7 @@ void ACTPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 내 화면을 조작하는 컨트롤러에서만 입력을 등록합니다.
-	// (서버에 있는 다른 사람의 컨트롤러는 건너뜁니다)
+	// 로컬만 입력 등록
 	if (!IsLocalController())
 	{
 		return;
@@ -29,7 +31,7 @@ void ACTPlayerController::BeginPlay()
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
 		{
-			// 설정 창에서 바꾼 키가 있으면 그 키가 들어간 복사본을 등록합니다.
+			// 변경된 키 반영한 복사본 등록
 			UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 
 			for (UInputMappingContext* Context : DefaultMappingContexts)
@@ -43,13 +45,13 @@ void ACTPlayerController::BeginPlay()
 		}
 	}
 
-	// 맵이 바뀌면 소리 설정(볼륨)을 다시 적용합니다.
+	// 맵 변경 시 볼륨 재적용
 	if (UCTSettingsSubsystem* SoundSettings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr)
 	{
 		SoundSettings->ApplyAudio();
 	}
 
-	// 마우스 커서 숨기고 게임 입력만 받기
+	// 커서 숨김, 게임 입력만
 	bShowMouseCursor = false;
 	SetInputMode(FInputModeGameOnly());
 
@@ -57,6 +59,15 @@ void ACTPlayerController::BeginPlay()
 	{
 		PlayerCameraManager->ViewPitchMin = ViewPitchMin;
 		PlayerCameraManager->ViewPitchMax = ViewPitchMax;
+	}
+
+	// 이름을 컴퓨터 이름 대신 저장된 이름으로
+	if (const UCTGameInstance* NameGameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		if (NameGameInstance->HasPlayerName())
+		{
+			ServerSetPlayerName(NameGameInstance->GetPlayerName());
+		}
 	}
 
 	CreateUI();
@@ -75,9 +86,33 @@ void ACTPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-// ============================================================
+void ACTPlayerController::RequestReturnToLobby()
+{
+	ServerReturnToLobby();
+}
+
+void ACTPlayerController::ServerReturnToLobby_Implementation()
+{
+	if (ACTGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTGameMode>() : nullptr)
+	{
+		GameMode->RequestReturnToLobby(this);
+	}
+}
+
+void ACTPlayerController::ServerSetPlayerName_Implementation(const FString& NewName)
+{
+	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
+	if (!GameInstance || !PlayerState) { return; }
+
+	// 서버에서도 같은 규칙으로 검사
+	const FString Trimmed = NewName.TrimStartAndEnd();
+	FText Error;
+	if (!GameInstance->ValidatePlayerName(Trimmed, Error)) { return; }
+
+	PlayerState->SetPlayerName(Trimmed);
+}
+
 // UI
-// ============================================================
 
 void ACTPlayerController::CreateUI()
 {
@@ -92,7 +127,7 @@ void ACTPlayerController::CreateUI()
 
 	if (ResultWidgetClass && !ResultWidget)
 	{
-		// 결과 화면은 미리 만들어 두고 경기가 끝날 때 화면에 붙입니다.
+		// 결과 화면 미리 생성, 종료 시 표시
 		ResultWidget = CreateWidget<UCTResultWidget>(this, ResultWidgetClass);
 	}
 }
@@ -110,7 +145,7 @@ void ACTPlayerController::TryBindGameState()
 	BoundGameState = GameState;
 	GameState->OnPhaseChanged.AddUniqueDynamic(this, &ACTPlayerController::HandlePhaseChanged);
 
-	// 이미 끝난 경기에 들어온 경우도 처리
+	// 이미 끝난 경기 대응
 	HandlePhaseChanged(GameState->GetPhase());
 }
 
@@ -132,11 +167,11 @@ void ACTPlayerController::ShowResultScreen()
 
 	if (!ResultWidget->IsInViewport())
 	{
-		ResultWidget->AddToViewport(10); // HUD보다 위에
+		ResultWidget->AddToViewport(10); // HUD 위
 	}
 	ResultWidget->ShowResult();
 
-	// 결과 화면 버튼을 누를 수 있도록 마우스 커서 표시
+	// 커서 표시
 	bShowMouseCursor = true;
 	FInputModeGameAndUI InputMode;
 	InputMode.SetWidgetToFocus(ResultWidget->TakeWidget());
@@ -158,7 +193,7 @@ void ACTPlayerController::PlayCTCameraShake(TSubclassOf<UCameraShakeBase> ShakeC
 {
 	if (!ShakeClass || !IsLocalController() || !PlayerCameraManager) { return; }
 
-	// 설정에서 화면 흔들림을 껐으면 재생하지 않습니다.
+	// 설정에서 끔이면 생략
 	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 	if (Settings && !Settings->IsScreenShakeEnabled()) { return; }
 

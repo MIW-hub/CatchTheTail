@@ -5,7 +5,7 @@
 
 ACTMenuGameMode::ACTMenuGameMode()
 {
-	// 메뉴에는 캐릭터가 필요 없습니다.
+	// 메뉴에 캐릭터 불필요
 	DefaultPawnClass = nullptr;
 	HUDClass = nullptr;
 	PlayerControllerClass = ACTMenuPlayerController::StaticClass();

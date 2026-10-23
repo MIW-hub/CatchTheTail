@@ -15,7 +15,7 @@ void UCTAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
-	// 에디터 미리보기 등에서는 캐릭터가 늦게 잡힐 수 있으므로 다시 찾습니다.
+	// 에디터 미리보기에서 늦게 잡힘
 	if (!OwnerCharacter || !MovementComponent)
 	{
 		NativeInitializeAnimation();
@@ -25,7 +25,7 @@ void UCTAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		}
 	}
 
-	// ----- 이동 -----
+	// 이동
 	Velocity = OwnerCharacter->GetVelocity();
 	GroundSpeed = Velocity.Size2D();
 	bShouldMove = GroundSpeed > MoveThreshold;
@@ -37,14 +37,14 @@ void UCTAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		? FMath::Clamp(GroundSpeed / AnimReferenceSpeed, MinMovePlayRate, MaxMovePlayRate)
 		: 1.f;
 
-	// ----- 점프 / 공중 -----
+	// 점프 / 공중
 	bIsFalling = MovementComponent->IsFalling();
 	VerticalVelocity = Velocity.Z;
 	bIsJumping = bIsFalling && VerticalVelocity > 0.f;
 	bIsFallingDown = bIsFalling && VerticalVelocity <= 0.f;
 	TimeInAir = bIsFalling ? TimeInAir + DeltaSeconds : 0.f;
 
-	// ----- 캐릭터 상태 -----
+	// 캐릭터 상태
 	bIsRunning = OwnerCharacter->GetRunState() == ECTRunState::Running;
 	bIsGhost = OwnerCharacter->IsGhost();
 	bIsPlayingAction = IsAnyMontagePlaying();

@@ -11,12 +11,6 @@ class ACTPlayerState;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTPhaseChangedSignature, ECTGamePhase, NewPhase);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTRoundChangedSignature, int32, NewRoundNumber);
 
-/**
- * 모두가 같이 보는 게임 정보: 단계, 라운드 번호, 남은 시간.
- *
- * 남은 시간은 "끝나는 시각"만 복제하고, 남은 초는 각자 계산합니다.
- * (매초 복제하지 않아도 되고, 모두 같은 시간을 보게 됩니다.)
- */
 UCLASS()
 class CATCHTHETAIL_API ACTGameState : public AGameStateBase
 {
@@ -27,60 +21,88 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	// ----- 읽기 -----
+	// 읽기
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	ECTGamePhase GetPhase() const { return Phase; }
 
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	int32 GetRoundNumber() const { return RoundNumber; }
 
-	/** 현재 라운드 남은 초 */
+	// 라운드 남은 초
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	float GetRoundRemainingSeconds() const;
 
-	/** 전체 게임 남은 초 */
+	// 게임 남은 초
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	float GetGameRemainingSeconds() const;
 
-	/** 색이 바뀌기 직전 카운트다운 중인가? (기본 5초 전부터) */
+	// 색 변경 직전 카운트다운 중인가
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	bool IsCountdownActive() const;
 
-	/** 카운트다운 숫자 (5, 4, 3, 2, 1). 카운트다운이 아니면 0 */
+	// 카운트다운 숫자. 아니면 0
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	int32 GetCountdownNumber() const;
 
-	/** 경기 시작 전 카운트다운 중인가? (Countdown 단계) */
+	// 시작 전 카운트다운 중인가
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	bool IsStartCountdown() const { return Phase == ECTGamePhase::Countdown; }
 
-	/** 경기 시작까지 남은 초 (Countdown 단계가 아니면 0) */
+	// 시작까지 남은 초. 아니면 0
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	float GetStartCountdownRemainingSeconds() const;
+
+	// 로비: 시작까지 남은 초. 시작 전이면 0
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	float GetLobbyStartRemainingSeconds() const;
+
+	// 게임 종료 후: 로비로 자동 복귀까지 남은 초. 예약이 없으면 0
+	UFUNCTION(BlueprintPure, Category = "CT|Result")
+	float GetReturnToLobbyRemainingSeconds() const;
+
+	// 로비: 방 코드 (방장이 만들고 모두에게 복제). 아직 없으면 빈 문자열
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	FString GetRoomCode() const { return RoomCode; }
+
+	// 로비: 필요한 최소 인원
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	int32 GetLobbyMinPlayers() const { return LobbyMinPlayers; }
+
+	// 로비: 준비 완료한 인원 (방장 제외)
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	int32 GetLobbyReadyCount() const;
+
+	// 로비: 지금 시작할 수 있는가 (최소 인원 + 방장 제외 전원 준비)
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	bool CanStartLobby() const;
 
 	double GetRoundEndServerTime() const { return RoundEndServerTime; }
 	double GetGameEndServerTime() const { return GameEndServerTime; }
 
-	/** 경기 종료 시 승자 목록 (꼬리를 가장 많이 가진 사람들). 결과 화면용 */
+	// 승자 목록 (꼬리 최다). 결과 화면용
 	UFUNCTION(BlueprintPure, Category = "CT|Result")
 	TArray<ACTPlayerState*> GetWinners() const;
 
-	/** 승자가 2명 이상인가? (연장전 필요) */
+	// 승자 2명 이상 (연장전)
 	UFUNCTION(BlueprintPure, Category = "CT|Result")
 	bool IsTie() const { return bIsTie; }
 
 	UFUNCTION(BlueprintPure, Category = "CT|Result")
 	bool IsWinner(const APlayerState* PlayerState) const;
 
-	// ----- 쓰기 (서버에서만 동작, GameMode가 호출) -----
+	// 쓰기 (서버 전용)
 	void SetPhase(ECTGamePhase NewPhase);
 
-	/** 경기 시작 시각을 정함. SetPhase(Countdown)보다 먼저 호출하세요. */
+	// SetPhase(Countdown)보다 먼저 호출
 	void SetStartCountdown(double NewStartServerTime);
+	void SetLobbyMinPlayers(int32 NewMinPlayers);
+	void SetRoomCode(const FString& NewRoomCode);
+	// 0이면 예약 없음
+	void SetReturnToLobbyTime(double NewServerTime);
 	void SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime);
 	void SetGameInfo(double NewGameEndServerTime, float NewRoundDurationSeconds, float NewCountdownSeconds);
 
-	/** 경기 결과 저장. SetPhase(Finished)보다 먼저 호출해야 결과 화면이 바로 정확하게 나옵니다. */
+	// SetPhase(Finished)보다 먼저 호출
 	void SetGameResult(const TArray<ACTPlayerState*>& NewWinners, bool bNewIsTie);
 
 	UPROPERTY(BlueprintAssignable, Category = "CT|Game")
@@ -96,15 +118,27 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RoundNumber, BlueprintReadOnly, Category = "CT|Game")
 	int32 RoundNumber = 0;
 
-	/** 경기가 시작되는 서버 시각 (Countdown 단계) */
+	// 경기 시작 서버 시각
 	UPROPERTY(Replicated)
 	double StartServerTime = 0.0;
 
-	/** 현재 라운드가 끝나는 서버 시각 */
+	// 로비 자동 복귀 서버 시각 (0이면 없음)
+	UPROPERTY(Replicated)
+	double ReturnToLobbyServerTime = 0.0;
+
+	// 로비 방 코드
+	UPROPERTY(Replicated)
+	FString RoomCode;
+
+	// 로비 시작에 필요한 최소 인원
+	UPROPERTY(Replicated)
+	int32 LobbyMinPlayers = 3;
+
+	// 라운드 종료 서버 시각
 	UPROPERTY(Replicated)
 	double RoundEndServerTime = 0.0;
 
-	/** 전체 게임이 끝나는 서버 시각 */
+	// 게임 종료 서버 시각
 	UPROPERTY(Replicated)
 	double GameEndServerTime = 0.0;
 
@@ -114,11 +148,11 @@ protected:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|Game")
 	float CountdownSeconds = 5.f;
 
-	/** 경기 결과: 승자들 */
+	// 결과: 승자
 	UPROPERTY(Replicated)
 	TArray<TObjectPtr<ACTPlayerState>> Winners;
 
-	/** 경기 결과: 동점 여부 */
+	// 결과: 동점
 	UPROPERTY(Replicated)
 	bool bIsTie = false;
 

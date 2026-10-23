@@ -6,28 +6,24 @@
 #include "CTResultWidget.generated.h"
 
 class UCTScoreEntryWidget;
+class UButton;
 class UVerticalBox;
 
-/**
- * 경기 결과 화면. (WBP_Result의 부모. 경기가 끝나면 PlayerController가 띄웁니다)
- *
- * WBP에 만들 수 있는 위젯 (이름을 똑같이, 모두 선택 사항)
- *  - Text_ResultTitle   : "승리!" / "패배" / "동점! 연장전"
- *  - Text_Winners       : 승자 이름들
- *  - VerticalBox_Ranking: 전체 순위 (+ ScoreEntryClass 지정)
- */
 UCLASS(Abstract)
 class CATCHTHETAIL_API UCTResultWidget : public UCTUserWidget
 {
 	GENERATED_BODY()
 
 public:
-	/** GameState의 경기 결과를 읽어 화면을 채웁니다. */
+	// 경기 결과 채우기
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void ShowResult();
 
 protected:
-	/** 결과 표시가 끝난 뒤 호출 (연출, 사운드용) */
+	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	// 결과 표시 끝 (연출용)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnResultShown(bool bLocalPlayerWon, bool bIsTie);
 
@@ -40,7 +36,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText LoseText = NSLOCTEXT("CT", "UI_Result_Lose", "패배");
 
-	/** 동점 (연장전 필요) */
+	// 동점 (연장전)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText TieText = NSLOCTEXT("CT", "UI_Result_Tie", "동점! 연장전");
 
@@ -52,4 +48,23 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Ranking;
+
+	// 로비로 돌아가기 (방장에게만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_ReturnToLobby;
+
+	// 메인 메뉴로 나가기
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_LeaveToMenu;
+
+	// "N초 후 로비로 돌아갑니다" 안내
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ReturnHint;
+
+private:
+	UFUNCTION()
+	void HandleReturnToLobbyClicked();
+
+	UFUNCTION()
+	void HandleLeaveToMenuClicked();
 };

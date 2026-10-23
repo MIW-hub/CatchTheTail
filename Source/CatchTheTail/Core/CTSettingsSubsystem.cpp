@@ -29,7 +29,7 @@ namespace
 		return Config()->ControlEntries.FindByPredicate([Id](const FCTControlEntry& Entry) { return Entry.Id == Id; });
 	}
 
-	/** 행동 이름에 맞는 기본 한글 표시 이름 */
+	// Id별 기본 한글명
 	FText DisplayNameFor(const FCTControlEntry& Entry)
 	{
 		if (!Entry.DisplayName.IsEmpty())
@@ -50,7 +50,7 @@ namespace
 		return FText::FromName(Entry.Id);
 	}
 
-	/** 원본 컨텍스트에서 행동에 묶인 첫 번째 키보드/마우스 키 */
+	// 원본 컨텍스트의 첫 키보드/마우스 키
 	FKey FirstKeyboardMouseKey(const UInputMappingContext* Context, const UInputAction* Action)
 	{
 		if (!Context || !Action) { return EKeys::Invalid; }
@@ -72,9 +72,9 @@ void UCTSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	LoadSettings();
 	ApplyDisplay();
-	ApplyAudio(); // 아직 월드가 없으면 건너뜀. 맵이 열릴 때 컨트롤러가 다시 적용합니다.
+	ApplyAudio(); // 월드 없으면 생략. 맵 열릴 때 컨트롤러가 재적용
 
-	// 조작 목록 확인용 로그: 프로젝트 설정(Control Entries)이 잘 읽혔는지, 키가 보이는지
+	// 조작 목록 확인용 로그
 	UE_LOG(LogTemp, Log, TEXT("[CT] 설정 시스템 시작: 조작 항목 %d개 (프로젝트 설정)"), Config()->ControlEntries.Num());
 	for (const FCTControlRow& Row : GetControlRows())
 	{
@@ -84,9 +84,7 @@ void UCTSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
-// ============================================================
 // 저장 / 불러오기
-// ============================================================
 
 void UCTSettingsSubsystem::LoadSettings()
 {
@@ -117,9 +115,7 @@ void UCTSettingsSubsystem::CommitChange()
 	OnSettingsChanged.Broadcast();
 }
 
-// ============================================================
 // 소리 / 화면 / 접근성
-// ============================================================
 
 void UCTSettingsSubsystem::SetMusicVolume(float Volume)
 {
@@ -176,7 +172,7 @@ void UCTSettingsSubsystem::ApplyAudio()
 
 	UGameplayStatics::SetBaseSoundMix(World, Mix);
 
-	// 모두 끄기는 두 클래스의 볼륨을 0으로 만듭니다.
+	// 음소거는 두 클래스 볼륨 0
 	const float MusicVolume = Data.bMuteAll ? 0.f : Data.MusicVolume;
 	const float SfxVolume = Data.bMuteAll ? 0.f : Data.SfxVolume;
 
@@ -192,7 +188,7 @@ void UCTSettingsSubsystem::ApplyAudio()
 
 void UCTSettingsSubsystem::ApplyDisplay()
 {
-	// 에디터 플레이 창은 건드리지 않습니다.
+	// 에디터 플레이 창 제외
 	if (GIsEditor || !GEngine) { return; }
 
 	UGameUserSettings* UserSettings = GEngine->GetGameUserSettings();
@@ -208,7 +204,7 @@ void UCTSettingsSubsystem::ApplyDisplay()
 
 void UCTSettingsSubsystem::ResetToDefaults()
 {
-	// 키 설정까지 처음 상태로. (바꾼 키가 들어간 컨텍스트는 ApplyKeyBindingsToLocalPlayer가 정리)
+	// 키 포함 초기화. 컨텍스트 정리는 ApplyKeyBindingsToLocalPlayer
 	Data = FCTSettingsData();
 
 	ApplyKeyBindingsToLocalPlayer();
@@ -218,9 +214,7 @@ void UCTSettingsSubsystem::ResetToDefaults()
 	CommitChange();
 }
 
-// ============================================================
 // 조작 (키 변경)
-// ============================================================
 
 FKey UCTSettingsSubsystem::GetDefaultKey(FName ActionId) const
 {
@@ -258,14 +252,14 @@ bool UCTSettingsSubsystem::IsKeyUsedByOther(FName ActionId, FKey Key) const
 			RebindableActions.Add(Action);
 		}
 
-		// 키를 바꿀 수 있는 다른 행동은 "지금 쓰는 키"를 비교합니다.
+		// 변경 가능 행동은 현재 키 비교
 		if (Entry.Id != ActionId && GetCurrentKey(Entry.Id) == Key)
 		{
 			return true;
 		}
 	}
 
-	// 키를 바꿀 수 없는 행동(이동, 시점 등)이 쓰는 키는 원본 매핑에서 확인합니다.
+	// 변경 불가 행동(이동, 시점)의 키는 원본 매핑에서 확인
 	for (const UInputMappingContext* Context : Contexts)
 	{
 		for (const FEnhancedActionKeyMapping& Mapping : Context->GetMappings())
@@ -296,7 +290,7 @@ TArray<FCTControlRow> UCTSettingsSubsystem::GetControlRows() const
 		}
 		else if (const UInputMappingContext* Context = Entry.Context.LoadSynchronous())
 		{
-			// 안내용: 이 행동에 묶인 키보드/마우스 키를 모두 보여 줍니다. (예: 이동 = W, A, S, D)
+			// 안내용: 묶인 키보드/마우스 키 전부
 			const UInputAction* Action = Entry.Action.LoadSynchronous();
 			for (const FEnhancedActionKeyMapping& Mapping : Context->GetMappings())
 			{
@@ -340,7 +334,7 @@ bool UCTSettingsSubsystem::SetKeyBinding(FName ActionId, FKey NewKey, FText& Out
 		return false;
 	}
 
-	// 기본 키와 같으면 "바꾼 키" 기록을 지웁니다.
+	// 기본 키면 바꾼 키 기록 삭제
 	if (NewKey == GetDefaultKey(ActionId))
 	{
 		Data.KeyOverrides.Remove(ActionId);
@@ -377,13 +371,13 @@ UInputMappingContext* UCTSettingsSubsystem::GetEffectiveMappingContext(UInputMap
 		const UInputAction* Action = Entry.Action.LoadSynchronous();
 		if (!Action) { continue; }
 
-		// 원본 에셋은 건드리지 않고 복사본에 바꾼 키를 넣습니다.
+		// 원본 에셋 보존, 복사본에 적용
 		if (!Copy)
 		{
 			Copy = DuplicateObject<UInputMappingContext>(Source, this);
 		}
 
-		// 원래 매핑의 모디파이어 / 트리거(눌림 방식 등)는 그대로 가져갑니다.
+		// 기존 모디파이어/트리거 유지
 		TArray<TObjectPtr<UInputModifier>> Modifiers;
 		TArray<TObjectPtr<UInputTrigger>> Triggers;
 		for (const FEnhancedActionKeyMapping& Mapping : Copy->GetMappings())
@@ -404,7 +398,7 @@ UInputMappingContext* UCTSettingsSubsystem::GetEffectiveMappingContext(UInputMap
 
 	if (!Copy)
 	{
-		return Source; // 바꾼 키가 없으면 원본 그대로
+		return Source; // 바꾼 키 없으면 원본
 	}
 
 	EffectiveContexts.Add(Source, Copy);
@@ -430,7 +424,7 @@ void UCTSettingsSubsystem::ApplyKeyBindingsToLocalPlayer()
 	{
 		UInputMappingContext* OldCopy = EffectiveContexts.FindRef(Original);
 
-		// 게임 중(컨텍스트가 등록된 상태)일 때만 다시 등록합니다. 메뉴에서는 캐시만 비웁니다.
+		// 게임 중(컨텍스트 등록 상태)만 재등록. 메뉴에선 캐시만 비움
 		const bool bWasActive = Input &&
 			(Input->HasMappingContext(Original) || (OldCopy && Input->HasMappingContext(OldCopy)));
 
@@ -447,9 +441,7 @@ void UCTSettingsSubsystem::ApplyKeyBindingsToLocalPlayer()
 	}
 }
 
-// ============================================================
 // 개인 설정
-// ============================================================
 
 bool UCTSettingsSubsystem::CanChangePlayerName() const
 {

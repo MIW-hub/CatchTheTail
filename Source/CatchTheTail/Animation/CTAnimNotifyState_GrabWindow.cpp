@@ -7,7 +7,7 @@ void UCTAnimNotifyState_GrabWindow::NotifyBegin(USkeletalMeshComponent* MeshComp
 {
 	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
-	// 판정은 서버만 합니다. (캐릭터 쪽에서 서버가 아니면 무시)
+	// 판정은 서버만 (캐릭터에서 필터)
 	if (ACTCharacter* Character = MeshComp ? Cast<ACTCharacter>(MeshComp->GetOwner()) : nullptr)
 	{
 		Character->OnGrabNotifyBegin();

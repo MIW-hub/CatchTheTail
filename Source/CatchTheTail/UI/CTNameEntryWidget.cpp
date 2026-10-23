@@ -19,7 +19,7 @@ void UCTNameEntryWidget::NativeConstruct()
 		EditableTextBox_Name->OnTextCommitted.AddUniqueDynamic(this, &UCTNameEntryWidget::HandleTextCommitted);
 		EditableTextBox_Name->OnTextChanged.AddUniqueDynamic(this, &UCTNameEntryWidget::HandleTextChanged);
 
-		// 바로 입력할 수 있게 포커스를 줍니다.
+		// 바로 입력 포커스
 		EditableTextBox_Name->SetKeyboardFocus();
 	}
 
@@ -78,7 +78,7 @@ void UCTNameEntryWidget::HandleConfirmClicked()
 
 void UCTNameEntryWidget::HandleTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
 {
-	// Enter로 확인합니다. (포커스를 잃어서 생기는 커밋은 무시)
+	// Enter 확인 (포커스 해제 커밋 무시)
 	if (CommitMethod == ETextCommit::OnEnter)
 	{
 		ConfirmName();
@@ -89,7 +89,7 @@ void UCTNameEntryWidget::HandleTextChanged(const FText& Text)
 {
 	ClearError();
 
-	// 최대 글자 수를 넘으면 잘라 냅니다.
+	// 최대 글자 수로 자르기
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 	if (!GameInstance || !EditableTextBox_Name) { return; }
 

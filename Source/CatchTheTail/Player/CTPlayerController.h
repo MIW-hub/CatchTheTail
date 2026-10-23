@@ -12,12 +12,6 @@ class UCTResultWidget;
 class ACTGameState;
 class UCameraShakeBase;
 
-/**
- * 플레이어 컨트롤러.
- * 하는 일
- *  - Enhanced Input의 "키 설정(Mapping Context)"을 등록합니다. (실제 입력 처리는 ACTCharacter)
- *  - 내 화면의 UI를 만듭니다: 게임 중 HUD, 경기가 끝나면 결과 화면
- */
 UCLASS()
 class CATCHTHETAIL_API ACTPlayerController : public APlayerController
 {
@@ -27,18 +21,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|UI")
 	UCTHUDWidget* GetHUDWidget() const { return HUDWidget; }
 
-	/** 결과 화면 열기 (마우스 커서 표시) */
+	// 결과 화면 열기
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void ShowResultScreen();
 
-	/** 결과 화면 닫기 (게임 입력으로 복귀) */
+	// 게임이 끝난 뒤 대기 로비로 돌아가기 요청 (방장만 가능)
+	UFUNCTION(BlueprintCallable, Category = "CT|Game")
+	void RequestReturnToLobby();
+
+	// 결과 화면 닫기
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void HideResultScreen();
 
-	/**
-	 * 카메라 흔들림을 재생합니다. 설정에서 "화면 흔들림"을 껐으면 재생하지 않습니다.
-	 * 흔들림 연출은 PlayCameraShake 대신 이 함수를 쓰세요.
-	 */
+	// 카메라 흔들림 (설정 반영), PlayCameraShake 대체
 	UFUNCTION(BlueprintCallable, Category = "CT|Camera")
 	void PlayCTCameraShake(TSubclassOf<UCameraShakeBase> ShakeClass, float Scale = 1.f);
 
@@ -46,7 +41,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// ===== UI (블루프린트에서 WBP를 넣어 주세요. 비워 두면 만들지 않음) =====
+	// 화면에 띄울 UI 생성. 로비 컨트롤러가 교체
+	virtual void CreateUI();
+
+	// UI
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	TSubclassOf<UCTHUDWidget> HUDWidgetClass;
 
@@ -59,14 +57,14 @@ protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
 	TObjectPtr<UCTResultWidget> ResultWidget;
 
-	/** 등록할 키 설정들 (블루프린트에서 IMC_Default 등을 넣어 주세요) */
+	// 등록할 IMC 목록
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TArray<TObjectPtr<UInputMappingContext>> DefaultMappingContexts;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	int32 MappingPriority = 0;
 
-	/** 카메라가 위아래로 돌 수 있는 각도 제한 */
+	// 카메라 상하 각도 제한
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
 	float ViewPitchMin = -80.f;
 
@@ -74,9 +72,14 @@ protected:
 	float ViewPitchMax = 20.f;
 
 private:
-	void CreateUI();
+	UFUNCTION(Server, Reliable)
+	void ServerReturnToLobby();
 
-	/** 클라이언트에서는 GameState가 늦게 도착하므로 찾을 때까지 다시 시도합니다. */
+	// 엔진은 접속 시 OS 닉네임(컴퓨터 이름)을 Name 옵션으로 덮어쓰므로, 저장된 이름을 서버에 직접 알림
+	UFUNCTION(Server, Reliable)
+	void ServerSetPlayerName(const FString& NewName);
+
+	// GameState 늦게 오므로 재시도
 	void TryBindGameState();
 
 	UFUNCTION()

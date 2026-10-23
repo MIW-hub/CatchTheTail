@@ -14,7 +14,7 @@
 
 namespace
 {
-	/** 꼬리 조각은 이동을 방해하거나 다른 것과 부딪히지 않는 연출용입니다. */
+	// 연출 전용, 충돌/이동 영향 없음
 	void SetupPartComponent(USkeletalMeshComponent* Part)
 	{
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -26,10 +26,10 @@ namespace
 ACTTail::ACTTail()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	PrimaryActorTick.bStartWithTickEnabled = false; // 불이 바뀌거나 몸통이 붙는 동안에만 켭니다.
+	PrimaryActorTick.bStartWithTickEnabled = false; // 변화 중에만 켬
 
 	bReplicates = true;
-	SetReplicatingMovement(false); // 위치는 캐릭터에 붙어서 따라갑니다.
+	SetReplicatingMovement(false); // 캐릭터에 붙어 따라감
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
@@ -41,9 +41,9 @@ ACTTail::ACTTail()
 	CapMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CapMesh"));
 	CapMesh->SetupAttachment(Root);
 	SetupPartComponent(CapMesh);
-	CapMesh->SetVisibility(false); // 몸통이 생기면 보임
+	CapMesh->SetVisibility(false); // 몸통 생기면 표시
 
-	// 기본 메시. (블루프린트에서 다른 메시로 바꿀 수 있습니다)
+	// 기본 메시, BP에서 교체 가능
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> BaseFinder(TEXT("/Game/Character/Socket/tail_03.tail_03"));
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> BodyFinder(TEXT("/Game/Character/Socket/tail_02.tail_02"));
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> CapFinder(TEXT("/Game/Character/Socket/tail_01.tail_01"));
@@ -64,7 +64,7 @@ void ACTTail::ApplyMeshAssets()
 	if (bMeshAssetsApplied) { return; }
 	bMeshAssetsApplied = true;
 
-	// 블루프린트에서 바꾼 메시를 반영합니다. (생성자 시점에는 아직 BP 값이 적용되기 전)
+	// BP 값은 생성자 이후 적용
 	BaseMesh->SetSkeletalMeshAsset(BaseAsset);
 	CapMesh->SetSkeletalMeshAsset(CapAsset);
 }
@@ -82,7 +82,13 @@ void ACTTail::OnRep_AttachmentReplication()
 {
 	Super::OnRep_AttachmentReplication();
 
-	// 클라이언트에서 캐릭터에 붙은 뒤에야 주인의 색과 꼬리 수를 알 수 있습니다.
+	// 복제 스케일이 소수 2자리로 양자화돼 0이 되므로 주인이 오프셋 재계산
+	if (ACTCharacter* OwnerCharacter = GetTailOwnerCharacter())
+	{
+		OwnerCharacter->ApplyTailOffset();
+	}
+
+	// 부착 후에야 주인 색/꼬리 수 확인 가능
 	RefreshVisual();
 }
 
@@ -93,14 +99,12 @@ ACTCharacter* ACTTail::GetTailOwnerCharacter() const
 
 FVector ACTTail::GetTouchLocation() const
 {
-	// 몸통이 있으면 맨 끝 캡, 없으면 받침이 "꼬리 끝"입니다.
+	// 끝: 캡, 없으면 받침
 	const USkeletalMeshComponent* Tip = BodyMeshes.Num() > 0 ? CapMesh.Get() : BaseMesh.Get();
 	return Tip->Bounds.Origin;
 }
 
-// ============================================================
 // 잡힘 상태
-// ============================================================
 
 void ACTTail::SetCaught(bool bNewCaught)
 {
@@ -109,12 +113,12 @@ void ACTTail::SetCaught(bool bNewCaught)
 
 	bCaught = bNewCaught;
 	ForceNetUpdate();
-	OnRep_Caught(); // 서버(방장) 화면에도 같은 연출
+	OnRep_Caught(); // 서버에도 같은 연출
 }
 
 void ACTTail::OnRep_Caught()
 {
-	// 켜짐 ↔ 꺼짐 전환을 서서히 보여 줍니다.
+	// 켜짐↔꺼짐 서서히 전환
 	if (LightFadeSeconds > 0.f)
 	{
 		SetActorTickEnabled(true);
@@ -143,7 +147,7 @@ void ACTTail::Tick(float DeltaSeconds)
 		bBusy = true;
 	}
 
-	// 새 몸통이 작게 시작해서 커지는 연출
+	// 새 몸통 성장 연출
 	for (int32 Index = 0; Index < BodyMeshes.Num(); ++Index)
 	{
 		if (BodyPop[Index] >= 1.f) { continue; }
@@ -159,9 +163,7 @@ void ACTTail::Tick(float DeltaSeconds)
 	}
 }
 
-// ============================================================
 // 닿음 판정 (서버)
-// ============================================================
 
 bool ACTTail::TryTouch(ACTCharacter* Toucher)
 {
@@ -170,10 +172,10 @@ bool ACTTail::TryTouch(ACTCharacter* Toucher)
 	ACTCharacter* OwnerCharacter = GetTailOwnerCharacter();
 	if (!OwnerCharacter || OwnerCharacter == Toucher) { return false; }
 
-	// 잡기 동작 중일 때만 닿을 수 있습니다.
+	// 잡기 동작 중에만 접촉
 	if (!Toucher->IsGrabActive()) { return false; }
 
-	// 닿았는지: 꼬리 끝과 손을 뻗은 캐릭터 사이 거리
+	// 꼬리 끝~캐릭터 거리
 	const float Reach = TouchRadius + Toucher->GetCapsuleComponent()->GetScaledCapsuleRadius();
 	if (FVector::Dist(Toucher->GetActorLocation(), GetTouchLocation()) > Reach) { return false; }
 
@@ -182,14 +184,11 @@ bool ACTTail::TryTouch(ACTCharacter* Toucher)
 	ACTGameMode* CTGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTGameMode>() : nullptr;
 	if (!GrabberState || !VictimState || !CTGameMode) { return false; }
 
-	// 목표 색인지, 유령인지, 게임 중인지는 GameMode가 확인합니다.
-	// 성공하면 주인이 유령이 되고, 캐릭터가 이 꼬리의 SetCaught(true)를 호출합니다.
+	// 목표 색/유령/게임 중은 GameMode 확인
 	return CTGameMode->HandleTailGrabbed(GrabberState, VictimState);
 }
 
-// ============================================================
 // 몸통 쌓기
-// ============================================================
 
 USkeletalMeshComponent* ACTTail::AddBodySegment()
 {
@@ -203,7 +202,7 @@ USkeletalMeshComponent* ACTTail::AddBodySegment()
 
 void ACTTail::RefreshSegments()
 {
-	// 주인의 꼬리 수 (복제된 PlayerState 값)
+	// 주인 꼬리 수 (PlayerState 복제값)
 	int32 TargetCount = 0;
 	if (const ACTCharacter* OwnerCharacter = GetTailOwnerCharacter())
 	{
@@ -216,7 +215,7 @@ void ACTTail::RefreshSegments()
 	const int32 OldCount = BodyMeshes.Num();
 	if (TargetCount == OldCount) { return; }
 
-	// 늘리기: 새 몸통은 작게 시작해서 커집니다.
+	// 증가: 새 몸통 성장
 	while (BodyMeshes.Num() < TargetCount)
 	{
 		USkeletalMeshComponent* Segment = AddBodySegment();
@@ -233,7 +232,7 @@ void ACTTail::RefreshSegments()
 		}
 	}
 
-	// 줄이기: 맨 끝 몸통부터 없앱니다.
+	// 감소: 끝 몸통부터
 	while (BodyMeshes.Num() > TargetCount)
 	{
 		if (USkeletalMeshComponent* Last = BodyMeshes.Pop())
@@ -243,13 +242,13 @@ void ACTTail::RefreshSegments()
 		BodyPop.Pop();
 	}
 
-	// 몸통은 꼬리 방향(+Z)으로 SegmentSpacing씩 이어 붙입니다.
+	// 몸통은 +Z로 SegmentSpacing씩
 	for (int32 Index = 0; Index < BodyMeshes.Num(); ++Index)
 	{
 		BodyMeshes[Index]->SetRelativeLocation(FVector(0.f, 0.f, Index * SegmentSpacing));
 	}
 
-	// 캡은 맨 끝 몸통 위에. (몸통이 없으면 숨김. 캡 메시는 첫 몸통의 윗면에 맞게 만들어져 있음)
+	// 캡은 끝 몸통 위, 몸통 없으면 숨김 (캡 메시는 첫 몸통 윗면 기준)
 	const bool bHasBody = BodyMeshes.Num() > 0;
 	CapMesh->SetVisibility(bHasBody);
 	if (bHasBody)
@@ -261,9 +260,7 @@ void ACTTail::RefreshSegments()
 	BP_OnSegmentCountChanged(BodyMeshes.Num());
 }
 
-// ============================================================
 // 겉모습
-// ============================================================
 
 void ACTTail::RebuildMaterials()
 {
@@ -290,7 +287,7 @@ void ACTTail::RebuildMaterials()
 		}
 	};
 
-	// 이 꼬리 액터의 모든 메시(받침, 몸통, 캡, 블루프린트에서 직접 추가한 메시)에 같은 색을 적용합니다.
+	// 모든 메시에 같은 색 적용 (BP 추가분 포함)
 	TInlineComponentArray<UMeshComponent*> MeshComponents;
 	GetComponents(MeshComponents);
 	for (UMeshComponent* Part : MeshComponents)
@@ -303,7 +300,7 @@ void ACTTail::RefreshVisual()
 {
 	ApplyMeshAssets();
 
-	// 주인의 색을 가져옵니다.
+	// 주인 색
 	LitColor = NoOwnerColor;
 	if (const ACTCharacter* OwnerCharacter = GetTailOwnerCharacter())
 	{
@@ -326,7 +323,7 @@ void ACTTail::RefreshVisual()
 
 void ACTTail::ApplyLook()
 {
-	// LightAmount 1 = 주인 색 + 불빛, 0 = 회색 + 불빛 없음
+	// LightAmount 1=주인색+불빛, 0=회색
 	const FLinearColor Color = FMath::Lerp(CaughtColor, LitColor, LightAmount);
 	const float Emissive = LitEmissiveStrength * LightAmount;
 

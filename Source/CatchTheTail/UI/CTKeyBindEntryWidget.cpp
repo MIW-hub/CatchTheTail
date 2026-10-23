@@ -11,7 +11,7 @@ void UCTKeyBindEntryWidget::NativeConstruct()
 
 	if (KeySelector)
 	{
-		KeySelector->SetAllowModifierKeys(false); // Shift+X 같은 조합은 받지 않습니다.
+		KeySelector->SetAllowModifierKeys(false); // 조합키 불가
 		KeySelector->OnKeySelected.AddUniqueDynamic(this, &UCTKeyBindEntryWidget::HandleKeySelected);
 	}
 }
@@ -37,7 +37,7 @@ void UCTKeyBindEntryWidget::Setup(const FCTControlRow& Row)
 		Text_ActionName->SetText(Row.DisplayName);
 	}
 
-	// 키를 바꿀 수 있으면 선택기, 아니면 키 안내 글자를 보여 줍니다.
+	// 변경 가능이면 선택기, 아니면 글자
 	if (KeySelector)
 	{
 		KeySelector->SetVisibility(bRebindable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -76,6 +76,6 @@ void UCTKeyBindEntryWidget::HandleKeySelected(FInputChord SelectedKey)
 {
 	if (!bRebindable) { return; }
 
-	// 설정 창이 키를 바꿔도 되는지 확인하고, 거절되면 ShowKey로 이전 키를 되돌립니다.
+	// 거절되면 ShowKey로 되돌림
 	OnKeyRebound.Broadcast(ActionId, SelectedKey.Key);
 }

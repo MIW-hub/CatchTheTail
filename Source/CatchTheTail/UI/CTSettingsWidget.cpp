@@ -51,9 +51,7 @@ void UCTSettingsWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-// ============================================================
 // 화면 채우기
-// ============================================================
 
 void UCTSettingsWidget::SetPercentText(UTextBlock* Text, float Value)
 {
@@ -68,7 +66,7 @@ void UCTSettingsWidget::RefreshAll()
 	UCTSettingsSubsystem* Settings = GetSettings();
 	if (!Settings) { return; }
 
-	// 값을 채우는 동안 생기는 변경 알림이 다시 저장되지 않도록 막습니다.
+	// 채우는 중 변경 알림 저장 방지
 	TGuardValue<bool> Guard(bRefreshing, true);
 
 	if (Slider_Music)         { Slider_Music->SetValue(Settings->GetMusicVolume()); }
@@ -82,7 +80,7 @@ void UCTSettingsWidget::RefreshAll()
 	if (CheckBox_TeamColors)  { CheckBox_TeamColors->SetIsChecked(Settings->IsTeamColorAssistEnabled()); }
 	if (CheckBox_TeamMarker)  { CheckBox_TeamMarker->SetIsChecked(Settings->IsTeamMarkerEnabled()); }
 
-	// 개인 설정: 이름은 항상 보여 주고, 바꿀 수 있는 설정일 때만 변경 영역을 보여 줍니다.
+	// 변경 영역은 바꿀 수 있을 때만 표시
 	if (Text_PlayerName)
 	{
 		const UCTGameInstance* GameInstance = Cast<UCTGameInstance>(GetGameInstance());
@@ -143,9 +141,7 @@ void UCTSettingsWidget::ShowNameMessage(const FText& Message)
 	}
 }
 
-// ============================================================
-// 값 변경 (바꾸면 바로 적용하고 저장)
-// ============================================================
+// 값 변경
 
 void UCTSettingsWidget::HandleMusicChanged(float Value)
 {
@@ -203,7 +199,7 @@ void UCTSettingsWidget::HandleKeyRebound(FName ActionId, FKey NewKey)
 		return;
 	}
 
-	// 거절되면 이유를 보여 주고, 목록을 다시 그려서 키 표시를 원래대로 돌립니다.
+	// 거절 시 이유 표시, 목록 다시 그려 키 복원
 	ShowMessage(Error);
 	BuildControlRows();
 }

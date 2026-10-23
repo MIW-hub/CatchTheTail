@@ -53,7 +53,7 @@ void UCTUserWidget::ApplyColorToWidgets(ECTColor Color, UTextBlock* NameText, UI
 
 		IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-		// 아이콘을 지정하지 않았으면 기본 이미지(사각형)에 색만 입힙니다.
+		// 아이콘 없으면 기본 사각형에 색만
 		if (UTexture2D* Icon = GetColorIcon(Color))
 		{
 			IconImage->SetBrushFromTexture(Icon);
@@ -64,7 +64,7 @@ void UCTUserWidget::ApplyColorToWidgets(ECTColor Color, UTextBlock* NameText, UI
 
 FText UCTUserWidget::FormatTime(float Seconds)
 {
-	// 0.2초 남았을 때 "0:00"이 아니라 "0:01"로 보이도록 올림합니다.
+	// 올림 (0.2초 -> 0:01)
 	const int32 TotalSeconds = FMath::Max(0, FMath::CeilToInt(Seconds));
 	return FText::FromString(FString::Printf(TEXT("%d:%02d"), TotalSeconds / 60, TotalSeconds % 60));
 }

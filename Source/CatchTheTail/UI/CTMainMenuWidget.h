@@ -8,9 +8,10 @@
 class UButton;
 class UEditableTextBox;
 class UTextBlock;
+class UCTSettingsWidget;
 class UWidget;
 
-/** 메인 메뉴가 보여 주는 화면(패널) */
+// 메뉴 패널
 UENUM(BlueprintType)
 enum class ECTMenuPanel : uint8
 {
@@ -21,44 +22,13 @@ enum class ECTMenuPanel : uint8
 	QuitConfirm	UMETA(DisplayName = "QuitConfirm"),
 };
 
-/**
- * 메인 메뉴 화면. (WBP_MainMenu의 부모. L_MainMenu 맵에서 ACTMenuPlayerController가 띄웁니다)
- *
- * 화면 구성 (기획 시안: 메인 / 로비 / 설정 / 게임 방법 / 종료 확인)
- *  - 아래 이름의 패널 위젯 중 만든 것만 쓰입니다. 한 번에 하나만 보이고, 메인 패널이 처음에 보입니다.
- *    Panel_Main, Panel_Lobby, Panel_Settings, Panel_HowTo, Panel_QuitConfirm
- *  - 패널이 없는 항목은 건너뜁니다. (예: Panel_QuitConfirm이 없으면 종료 버튼이 바로 종료)
- *  - 종료 확인(Panel_QuitConfirm)은 메인 화면 위에 겹쳐 뜨는 팝업입니다.
- *
- * WBP에 만들 수 있는 버튼 (이름을 똑같이, 모두 선택 사항)
- *  메인 패널
- *   - Button_Start      : 게임 시작 (방을 만들고 바로 시작)
- *   - Button_FindLobby  : 로비 찾기 (로비 패널로 이동)
- *   - Button_Settings   : 설정
- *   - Button_HowTo      : 게임 방법
- *   - Button_Quit       : 게임 종료 (종료 확인 팝업을 띄움)
- *  로비 패널
- *   - Button_Host              : 방 만들기
- *   - Button_Join              : 방 참가
- *   - EditableTextBox_Address  : 참가할 방장의 주소 (예: 192.168.0.10 또는 192.168.0.10:7777)
- *   - Button_LobbyBack         : 뒤로가기
- *  설정 / 게임 방법 패널
- *   - Button_SettingsBack, Button_HowToBack : 뒤로가기
- *  종료 확인 팝업
- *   - Button_QuitCancel  : 취소
- *   - Button_QuitConfirm : 게임 종료
- *  기타
- *   - Text_Status : 접속 실패, 연결 끊김 등의 안내 문구
- *
- * 방 만들기/참가/종료는 UCTGameInstance가 처리합니다. 이 위젯은 연결과 화면 전환만 합니다.
- */
 UCLASS(Abstract)
 class CATCHTHETAIL_API UCTMainMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
-	/** 보여 줄 패널을 바꿉니다. (만들지 않은 패널은 무시) */
+	// 패널 전환
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void ShowPanel(ECTMenuPanel Panel);
 
@@ -69,15 +39,26 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
-	/** 안내 문구가 표시될 때 호출 (연출, 사운드용) */
+	// 안내 문구 표시
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Menu")
 	void BP_OnMessageShown(const FText& Message);
 
-	/** 패널이 바뀔 때 호출 (전환 애니메이션용) */
+	// 패널 전환 연출
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Menu")
 	void BP_OnPanelChanged(ECTMenuPanel NewPanel);
 
-	// ----- 패널 -----
+	/**
+	 * 설정 패널에 자동으로 넣을 설정 화면 (WBP_CTSettingsWidget).
+	 * Panel_Settings가 패널(Canvas, Overlay, Box 등)이면 코드가 이 위젯을 만들어 그 안에 넣고, 닫기 버튼을 메인 메뉴로 연결합니다.
+	 * 이미 Panel_Settings 안에 직접 배치해 두었다면 비워 두세요.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
+	TSubclassOf<UCTSettingsWidget> SettingsWidgetClass;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Menu")
+	TObjectPtr<UCTSettingsWidget> SettingsWidget;
+
+	// 패널
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Panel_Main;
 
@@ -93,7 +74,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Panel_QuitConfirm;
 
-	// ----- 메인 패널 -----
+	// 메인 패널
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Start;
 
@@ -109,20 +90,21 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Quit;
 
-	// ----- 로비 패널 -----
+	// 방 코드 입장 (온라인 기능이 막혀 있으면 비활성)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UEditableTextBox> EditableTextBox_RoomCode;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_JoinByCode;
+
+	// 로비 패널
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Host;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> Button_Join;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UEditableTextBox> EditableTextBox_Address;
-
-	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_LobbyBack;
 
-	// ----- 설정 / 게임 방법 / 종료 확인 -----
+	// 설정 / 게임 방법 / 종료 확인
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_SettingsBack;
 
@@ -138,11 +120,20 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Status;
 
-	/** 저장된 내 이름을 보여 주는 글자 */
+	// 저장된 이름
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_PlayerName;
 
 private:
+	// 설정 화면을 만들어 Panel_Settings에 넣음
+	void CreateSettingsWidget();
+
+	// 온라인 기능을 쓸 수 없으면 관련 버튼을 막고 이유를 툴팁으로 표시
+	void ApplyOnlineAvailability();
+
+	UFUNCTION()
+	void HandleJoinByCodeClicked();
+
 	UFUNCTION()
 	void HandleStartClicked();
 
@@ -162,9 +153,6 @@ private:
 	void HandleHostClicked();
 
 	UFUNCTION()
-	void HandleJoinClicked();
-
-	UFUNCTION()
 	void HandleBackClicked();
 
 	UFUNCTION()
@@ -175,7 +163,7 @@ private:
 
 	void ShowMessage(const FText& Message);
 
-	/** 패널 하나를 켜고 끕니다. (nullptr이면 무시) */
+	// 패널 켜고 끄기
 	static void SetPanelVisible(UWidget* Panel, bool bVisible);
 
 	ECTMenuPanel CurrentPanel = ECTMenuPanel::Main;

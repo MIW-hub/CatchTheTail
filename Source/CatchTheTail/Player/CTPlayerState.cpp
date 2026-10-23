@@ -5,7 +5,7 @@
 
 namespace
 {
-	// 사업계획서 2-1 색상 코드
+	// 사업계획서 2-1 색상
 	FColor GetColorRGB(ECTColor InColor)
 	{
 		switch (InColor)
@@ -25,7 +25,7 @@ namespace
 
 ACTPlayerState::ACTPlayerState()
 {
-	// PlayerState는 기본 갱신 주기가 느리므로 높여 줍니다. (유령/점수가 빨리 보이도록)
+	// 기본 갱신 주기 느려서 상향
 	SetNetUpdateFrequency(10.f);
 }
 
@@ -37,6 +37,8 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ACTPlayerState, TargetColor);
 	DOREPLIFETIME(ACTPlayerState, TailCount);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
+	DOREPLIFETIME(ACTPlayerState, bReady);
+	DOREPLIFETIME(ACTPlayerState, bIsHost);
 }
 
 FLinearColor ACTPlayerState::GetLinearColorOf(ECTColor InColor)
@@ -68,7 +70,7 @@ void ACTPlayerState::SetColors(ECTColor NewAssignedColor, ECTColor NewTargetColo
 	AssignedColor = NewAssignedColor;
 	TargetColor = NewTargetColor;
 	ForceNetUpdate();
-	OnRep_Colors(); // 서버(방장)에서도 알림이 가도록 직접 호출
+	OnRep_Colors(); // 서버에서도 직접 호출
 }
 
 void ACTPlayerState::SetTailCount(int32 NewTailCount)
@@ -98,9 +100,34 @@ void ACTPlayerState::SetIsGhost(bool bNewIsGhost)
 	OnRep_IsGhost();
 }
 
+void ACTPlayerState::SetReady(bool bNewReady)
+{
+	if (!HasAuthority()) { return; }
+	if (bReady == bNewReady) { return; }
+
+	bReady = bNewReady;
+	ForceNetUpdate();
+	OnRep_Lobby();
+}
+
+void ACTPlayerState::SetIsHost(bool bNewIsHost)
+{
+	if (!HasAuthority()) { return; }
+	if (bIsHost == bNewIsHost) { return; }
+
+	bIsHost = bNewIsHost;
+	ForceNetUpdate();
+	OnRep_Lobby();
+}
+
+void ACTPlayerState::OnRep_Lobby()
+{
+	NotifyChanged();
+}
+
 void ACTPlayerState::OnRep_Colors()
 {
-	// 캐릭터 몸 색을 바꿉니다.
+	// 캐릭터 몸 색 반영
 	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
 	{
 		CTCharacter->RefreshBodyColor();
@@ -110,7 +137,7 @@ void ACTPlayerState::OnRep_Colors()
 
 void ACTPlayerState::OnRep_TailCount()
 {
-	// 꼬리가 늘거나 줄면 캐릭터 뒤의 꼬리 몸통 개수도 바꿉니다.
+	// 꼬리 몸통 수 반영
 	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
 	{
 		CTCharacter->RefreshTailVisual();
@@ -131,7 +158,7 @@ void ACTPlayerState::NotifyChanged()
 
 void ACTPlayerState::NotifyPawnGhostState()
 {
-	// 이 플레이어의 캐릭터에게 "유령 상태가 바뀌었다"고 알려 줍니다.
+	// 캐릭터에 유령 상태 통지
 	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
 	{
 		CTCharacter->OnGhostStateChanged(bIsGhost);

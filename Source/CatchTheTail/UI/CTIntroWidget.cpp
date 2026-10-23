@@ -6,7 +6,7 @@ void UCTIntroWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 키 입력을 받으려면 포커스가 가능해야 합니다.
+	// 키 입력용 포커스
 	SetIsFocusable(true);
 
 	ElapsedSeconds = 0.f;

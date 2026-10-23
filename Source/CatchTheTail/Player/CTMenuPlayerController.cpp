@@ -10,10 +10,10 @@ void ACTMenuPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 내 화면을 조작하는 컨트롤러에서만 UI를 만듭니다.
+	// 로컬 컨트롤러만 UI
 	if (!IsLocalController()) { return; }
 
-	// 저장한 소리 설정을 이 맵에 적용합니다.
+	// 저장된 소리 설정 적용
 	if (UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr)
 	{
 		Settings->ApplyAudio();
@@ -91,7 +91,7 @@ void ACTMenuPlayerController::ShowNameEntryOrMenu()
 {
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 
-	// 저장된 이름이 없으면 먼저 이름을 입력받습니다. (이름 입력 위젯이 없으면 건너뜀)
+	// 이름 없으면 먼저 입력 (위젯 없으면 생략)
 	if (NameEntryWidgetClass && GameInstance && !GameInstance->HasPlayerName())
 	{
 		ShowNameEntry();
@@ -106,7 +106,7 @@ void ACTMenuPlayerController::ShowNameEntry()
 {
 	if (!NameEntryWidgetClass) { return; }
 
-	// 메인 메뉴가 떠 있으면 내리고, 이름을 저장하면 다시 올립니다.
+	// 메뉴 내렸다가 이름 저장 후 복귀
 	if (MainMenuWidget)
 	{
 		MainMenuWidget->RemoveFromParent();
@@ -157,7 +157,7 @@ void ACTMenuPlayerController::ShowWidgetWithUIInput(UUserWidget* Widget)
 {
 	Widget->AddToViewport();
 
-	// 버튼과 입력창을 쓸 수 있도록 마우스 커서를 보이고 UI 입력 모드로 바꿉니다.
+	// 커서 표시 + UI 입력 모드
 	bShowMouseCursor = true;
 	FInputModeUIOnly InputMode;
 	InputMode.SetWidgetToFocus(Widget->TakeWidget());

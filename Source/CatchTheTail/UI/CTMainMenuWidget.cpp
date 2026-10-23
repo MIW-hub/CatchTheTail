@@ -1,6 +1,9 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTMainMenuWidget.h"
 #include "../Core/CTGameInstance.h"
+#include "CTSettingsWidget.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/PanelWidget.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
@@ -17,19 +20,21 @@ void UCTMainMenuWidget::NativeConstruct()
 	if (Button_HowTo)       { Button_HowTo->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleHowToClicked); }
 	if (Button_Quit)        { Button_Quit->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleQuitClicked); }
 	if (Button_Host)        { Button_Host->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleHostClicked); }
-	if (Button_Join)        { Button_Join->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleJoinClicked); }
+	if (Button_JoinByCode)  { Button_JoinByCode->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleJoinByCodeClicked); }
 	if (Button_QuitConfirm) { Button_QuitConfirm->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleQuitConfirmClicked); }
 
-	// 뒤로가기/취소 버튼은 모두 메인 패널로 돌아갑니다.
+	// 뒤로가기/취소는 메인으로
 	UButton* BackButtons[] = { Button_LobbyBack, Button_SettingsBack, Button_HowToBack, Button_QuitCancel };
 	for (UButton* BackButton : BackButtons)
 	{
 		if (BackButton) { BackButton->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleBackClicked); }
 	}
 
+	CreateSettingsWidget();
 	ShowPanel(ECTMenuPanel::Main);
+	ApplyOnlineAvailability();
 
-	// 저장된 내 이름을 보여 줍니다.
+	// 저장된 이름 표시
 	if (Text_PlayerName)
 	{
 		if (const UCTGameInstance* NameGameInstance = GetGameInstance<UCTGameInstance>())
@@ -42,7 +47,7 @@ void UCTMainMenuWidget::NativeConstruct()
 	{
 		GameInstance->OnMenuMessage.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleMessage);
 
-		// 게임 중 연결이 끊겨서 메뉴로 돌아온 경우 안내 문구를 보여 줍니다.
+		// 연결 끊김 안내
 		const FText Pending = GameInstance->GetPendingMessage();
 		if (!Pending.IsEmpty())
 		{
@@ -62,9 +67,29 @@ void UCTMainMenuWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-// ============================================================
+// 설정 화면
+
+void UCTMainMenuWidget::CreateSettingsWidget()
+{
+	if (SettingsWidget || !SettingsWidgetClass) { return; }
+
+	UPanelWidget* Container = Cast<UPanelWidget>(Panel_Settings);
+	if (!Container)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 설정 화면을 넣을 Panel_Settings가 없거나 패널 위젯이 아닙니다."));
+		return;
+	}
+
+	SettingsWidget = CreateWidget<UCTSettingsWidget>(this, SettingsWidgetClass);
+	if (!SettingsWidget) { return; }
+
+	Container->AddChild(SettingsWidget);
+
+	// 설정 화면의 닫기 버튼 = 메인 메뉴로 돌아가기
+	SettingsWidget->OnCloseRequested.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleBackClicked);
+}
+
 // 패널 전환
-// ============================================================
 
 void UCTMainMenuWidget::SetPanelVisible(UWidget* Panel, bool bVisible)
 {
@@ -76,7 +101,7 @@ void UCTMainMenuWidget::SetPanelVisible(UWidget* Panel, bool bVisible)
 
 void UCTMainMenuWidget::ShowPanel(ECTMenuPanel Panel)
 {
-	// 만들지 않은 패널로는 이동하지 않습니다. (메인은 항상 허용)
+	// 없는 패널은 무시 (메인 제외)
 	UWidget* Target = nullptr;
 	switch (Panel)
 	{
@@ -90,7 +115,7 @@ void UCTMainMenuWidget::ShowPanel(ECTMenuPanel Panel)
 
 	CurrentPanel = Panel;
 
-	// 종료 확인은 메인 화면 위에 겹쳐 뜨는 팝업이라 메인 패널을 끄지 않습니다.
+	// 팝업이라 메인 패널 유지
 	SetPanelVisible(Panel_Main, Panel == ECTMenuPanel::Main || Panel == ECTMenuPanel::QuitConfirm);
 	SetPanelVisible(Panel_Lobby, Panel == ECTMenuPanel::Lobby);
 	SetPanelVisible(Panel_Settings, Panel == ECTMenuPanel::Settings);
@@ -100,14 +125,39 @@ void UCTMainMenuWidget::ShowPanel(ECTMenuPanel Panel)
 	BP_OnPanelChanged(Panel);
 }
 
-// ============================================================
+void UCTMainMenuWidget::ApplyOnlineAvailability()
+{
+	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
+
+	const bool bAvailable = GameInstance && GameInstance->IsOnlineSessionAvailable();
+	const FText Reason = bAvailable ? FText::GetEmpty() : NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
+
+	UWidget* Blocked[] = { Button_Start, Button_JoinByCode, EditableTextBox_RoomCode };
+	for (UWidget* Widget : Blocked)
+	{
+		if (!Widget) { continue; }
+		Widget->SetIsEnabled(bAvailable);
+		Widget->SetToolTipText(Reason);
+	}
+}
+
+void UCTMainMenuWidget::HandleJoinByCodeClicked()
+{
+	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		GameInstance->JoinByRoomCode(EditableTextBox_RoomCode ? EditableTextBox_RoomCode->GetText().ToString() : FString());
+	}
+}
+
 // 버튼
-// ============================================================
 
 void UCTMainMenuWidget::HandleStartClicked()
 {
-	// 게임 시작 = 방을 만들고 바로 들어갑니다. (로비/Ready는 아직 없음)
-	HandleHostClicked();
+	// 빠른 참가: 열린 방에 무작위 입장 (온라인 기능이 막혀 있으면 안내만)
+	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		GameInstance->QuickJoin();
+	}
 }
 
 void UCTMainMenuWidget::HandleFindLobbyClicked()
@@ -148,15 +198,6 @@ void UCTMainMenuWidget::HandleHostClicked()
 	{
 		GameInstance->HostGame();
 	}
-}
-
-void UCTMainMenuWidget::HandleJoinClicked()
-{
-	UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
-	if (!GameInstance) { return; }
-
-	const FString Address = EditableTextBox_Address ? EditableTextBox_Address->GetText().ToString() : FString();
-	GameInstance->JoinGame(Address);
 }
 
 void UCTMainMenuWidget::HandleQuitConfirmClicked()

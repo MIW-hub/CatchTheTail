@@ -1,5 +1,7 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTGameInstance.h"
+#include "HAL/PlatformTime.h"
+#include "../Type/CTTypes.h"
 #include "CTProfileSaveGame.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -11,10 +13,10 @@ void UCTGameInstance::Init()
 {
 	Super::Init();
 
-	// 이 컴퓨터에 저장된 프로필(이름)을 불러옵니다.
+	// 저장된 프로필 로드
 	LoadProfile();
 
-	// 접속이 끊기거나 이동에 실패했을 때 알림을 받습니다.
+	// 접속 끊김/이동 실패 알림
 	if (GEngine)
 	{
 		GEngine->OnNetworkFailure().AddUObject(this, &UCTGameInstance::HandleNetworkFailure);
@@ -39,15 +41,13 @@ bool UCTGameInstance::IsInMainMenuMap() const
 	return World && UGameplayStatics::GetCurrentLevelName(World, /*bRemovePrefixString=*/true) == MainMenuMapName.ToString();
 }
 
-// ============================================================
-// 플레이어 이름 (저장 / 검사)
-// ============================================================
+// 플레이어 이름
 
 namespace
 {
 	const TCHAR* const CTProfileSlotName = TEXT("CTProfile");
 
-	/** 서버 접속 주소에 넣어도 안전한 글자인가? (한글, 영문, 숫자, _, -) */
+	// 접속 주소에 안전한 글자인가
 	bool IsAllowedNameChar(TCHAR Ch)
 	{
 		return FChar::IsAlnum(Ch) && Ch < 128   // 영문, 숫자
@@ -64,7 +64,7 @@ void UCTGameInstance::LoadProfile()
 
 	if (const UCTProfileSaveGame* Profile = Cast<UCTProfileSaveGame>(UGameplayStatics::LoadGameFromSlot(CTProfileSlotName, 0)))
 	{
-		// 저장된 이름도 규칙을 다시 확인합니다. (파일을 직접 고쳤거나 규칙이 바뀐 경우)
+		// 규칙 재검사 (파일 수정/규칙 변경 대비)
 		FText Ignored;
 		if (ValidatePlayerName(Profile->PlayerName, Ignored))
 		{
@@ -108,7 +108,7 @@ bool UCTGameInstance::ValidatePlayerName(const FString& Name, FText& OutError) c
 
 bool UCTGameInstance::SetPlayerName(const FString& NewName, FText& OutError)
 {
-	// 이름은 한 번 정하면 바꿀 수 없습니다. (바꾸려면 ChangePlayerName)
+	// 최초 1회만. 변경은 ChangePlayerName
 	if (HasPlayerName())
 	{
 		OutError = NSLOCTEXT("CT", "Name_AlreadySet", "이름은 한 번만 정할 수 있습니다.");
@@ -120,7 +120,7 @@ bool UCTGameInstance::SetPlayerName(const FString& NewName, FText& OutError)
 
 bool UCTGameInstance::ChangePlayerName(const FString& NewName, FText& OutError)
 {
-	// 바꿔도 되는지는 호출하는 쪽(설정: Allow Name Change)이 확인합니다.
+	// 허용 여부는 호출 측(Allow Name Change)이 확인
 	return StoreValidatedName(NewName, OutError);
 }
 
@@ -150,52 +150,58 @@ FString UCTGameInstance::MakeNameOption() const
 	return HasPlayerName() ? FString::Printf(TEXT("?Name=%s"), *PlayerName) : FString();
 }
 
-// ============================================================
 // 방 만들기 / 참가 / 나가기
-// ============================================================
 
 void UCTGameInstance::HostGame()
 {
 	UWorld* World = GetWorld();
 	if (!World) { return; }
 
-	// 게임 맵을 listen 서버로 엽니다. (방장 = 서버 + 플레이어)
-	// 저장한 이름을 접속 옵션으로 넘겨서 점수판에 내 이름이 나오게 합니다.
-	UGameplayStatics::OpenLevel(World, GameMapName, /*bAbsolute=*/true, FString(TEXT("listen")) + MakeNameOption());
+	// listen 서버로 열기. 이름은 접속 옵션으로 전달
+	// 새 방이니 이전 방 코드는 버림
+	StoredRoomCode.Reset();
+
+	const FName FirstMap = LobbyMapName.IsNone() ? GameMapName : LobbyMapName;
+	UGameplayStatics::OpenLevel(World, FirstMap, /*bAbsolute=*/true, FString(TEXT("listen")) + MakeNameOption());
 }
 
-void UCTGameInstance::JoinGame(const FString& Address)
+void UCTGameInstance::QuickJoin()
 {
-	FString FinalAddress = Address.TrimStartAndEnd();
-	if (FinalAddress.IsEmpty())
+	const FText Message = bOnlineSessionAvailable
+		? NSLOCTEXT("CT", "Menu_QuickJoinPending", "빠른 참가는 준비 중입니다.")
+		: NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
+	PendingMessage = Message;
+	OnMenuMessage.Broadcast(Message);
+}
+
+void UCTGameInstance::JoinByRoomCode(const FString& RoomCode)
+{
+	FText Message;
+	if (!bOnlineSessionAvailable)
 	{
-		const FText Message = NSLOCTEXT("CT", "Menu_EmptyAddress", "방장의 주소를 입력하세요.");
-		PendingMessage = Message;
-		OnMenuMessage.Broadcast(Message);
-		return;
+		Message = NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
 	}
-
-	// 포트를 안 적었으면 기본 포트를 붙입니다.
-	if (!FinalAddress.Contains(TEXT(":")))
+	else if (RoomCode.TrimStartAndEnd().IsEmpty())
 	{
-		FinalAddress += FString::Printf(TEXT(":%d"), DefaultPort);
+		Message = NSLOCTEXT("CT", "Menu_EmptyRoomCode", "방 코드를 입력하세요.");
 	}
-
-	APlayerController* PlayerController = GetFirstLocalPlayerController();
-	if (!PlayerController) { return; }
-
-	// 저장한 이름을 접속 옵션으로 넘깁니다.
-	PlayerController->ClientTravel(FinalAddress + MakeNameOption(), ETravelType::TRAVEL_Absolute);
+	else
+	{
+		Message = NSLOCTEXT("CT", "Menu_RoomCodePending", "방 코드 입장은 준비 중입니다.");
+	}
+	PendingMessage = Message;
+	OnMenuMessage.Broadcast(Message);
 }
 
 void UCTGameInstance::LeaveToMainMenu(FText Message)
 {
 	PendingMessage = Message;
+	StoredRoomCode.Reset();
 
 	UWorld* World = GetWorld();
 	if (!World) { return; }
 
-	// 방장이면 방이 닫히고, 클라이언트면 방장과의 연결이 끊깁니다.
+	// 방장이면 방 닫힘, 클라이언트면 연결 끊김
 	UGameplayStatics::OpenLevel(World, MainMenuMapName, /*bAbsolute=*/true);
 }
 
@@ -204,20 +210,56 @@ void UCTGameInstance::QuitToDesktop()
 	UKismetSystemLibrary::QuitGame(this, GetFirstLocalPlayerController(), EQuitPreference::Quit, /*bIgnorePlatformRestrictions=*/false);
 }
 
-// ============================================================
 // 오류 처리
-// ============================================================
 
 void UCTGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
 {
-	// 이미 메뉴에 있으면 별도 처리가 필요 없습니다. (참가 실패 문구는 아래 HandleTravelFailure)
+	// 방 입장 중 실패 (방장이 거절했거나 응답이 없음). 이유를 메뉴에 안내
+	if (FailureType == ENetworkFailure::PendingConnectionFailure)
+	{
+		const FText Message = MakeJoinFailureMessage(ErrorString);
+		LastJoinRejectTime = FPlatformTime::Seconds();
+		PendingMessage = Message;
+		OnMenuMessage.Broadcast(Message);
+		return;
+	}
+
+	// 메뉴면 처리 불필요
 	if (IsInMainMenuMap()) { return; }
 
-	LeaveToMainMenu(NSLOCTEXT("CT", "Menu_Disconnected", "방장과의 연결이 끊어졌습니다."));
+	// 방장(서버) 쪽 오류는 무시. 참가자만 방장과의 연결이 끊긴 것으로 처리
+	const UWorld* FailedWorld = World ? World : GetWorld();
+	if (!FailedWorld || FailedWorld->GetNetMode() != NM_Client) { return; }
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 방장과의 연결 끊김: %s"), *ErrorString);
+	LeaveToMainMenu(NSLOCTEXT("CT", "Menu_Disconnected", "방장이 방을 닫았거나 연결이 끊어졌습니다."));
+}
+
+FText UCTGameInstance::MakeJoinFailureMessage(const FString& ErrorString) const
+{
+	if (ErrorString.Contains(CTJoinReject::GameInProgress))
+	{
+		return NSLOCTEXT("CT", "Menu_JoinInProgress", "게임이 이미 진행 중이라 입장할 수 없습니다.");
+	}
+	if (ErrorString.Contains(CTJoinReject::LobbyStarting))
+	{
+		return NSLOCTEXT("CT", "Menu_JoinStarting", "곧 게임이 시작되어 입장할 수 없습니다.");
+	}
+
+	// 엔진 기본 인원 초과 메시지 (Server full 등)
+	if (ErrorString.Contains(TEXT("full"), ESearchCase::IgnoreCase) || ErrorString.Contains(TEXT("MaxedOut"), ESearchCase::IgnoreCase))
+	{
+		return NSLOCTEXT("CT", "Menu_JoinFull", "방이 가득 차서 입장할 수 없습니다.");
+	}
+
+	return NSLOCTEXT("CT", "Menu_JoinFailed", "방에 접속하지 못했습니다. 주소와 방장의 방 상태를 확인하세요.");
 }
 
 void UCTGameInstance::HandleTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString)
 {
+	// 방금 거절 사유를 이미 안내했으면 일반 안내로 덮어쓰지 않음
+	if (FPlatformTime::Seconds() - LastJoinRejectTime < 3.0) { return; }
+
 	const FText Message = NSLOCTEXT("CT", "Menu_JoinFailed", "방에 접속하지 못했습니다. 주소와 방장의 방 상태를 확인하세요.");
 	PendingMessage = Message;
 	OnMenuMessage.Broadcast(Message);

@@ -10,11 +10,11 @@ UCTTongueComponent::UCTTongueComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 
-	// 이동을 방해하거나 다른 것과 부딪히지 않는 연출용 메시
+	// 연출용, 충돌 없음
 	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
 
-	// 기본 혀 메시. (블루프린트에서 다른 메시로 바꿀 수 있습니다)
+	// 기본 혀 메시
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> TongueAsset(TEXT("/Game/Character/Socket/TONGUE.TONGUE"));
 	if (TongueAsset.Succeeded())
 	{
@@ -47,7 +47,7 @@ void UCTTongueComponent::CompensateAttachBone()
 		return;
 	}
 
-	// 소켓 본의 기준 자세(컴포넌트 공간) = 자식 → 부모 순으로 곱함
+	// 소켓 본 기준 자세 (자식 -> 부모 순 곱)
 	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
 	FTransform BoneComponentTransform = FTransform::Identity;
 	for (int32 Index = BoneIndex; Index != INDEX_NONE; Index = RefSkeleton.GetParentIndex(Index))
@@ -55,7 +55,7 @@ void UCTTongueComponent::CompensateAttachBone()
 		BoneComponentTransform = BoneComponentTransform * RefPose[Index];
 	}
 
-	// 혀 메시는 캐릭터와 같은 모델 좌표로 만들어져 있으므로, 붙은 본의 기준 자세를 되돌려 줍니다.
+	// 혀 메시가 캐릭터와 같은 모델 좌표라 역변환
 	SetRelativeTransform(BoneComponentTransform.Inverse());
 }
 
@@ -69,7 +69,7 @@ bool UCTTongueComponent::InitializeChain()
 	const int32 BoneCount = RefSkeleton.GetNum();
 	if (BoneCount < 2) { return false; }
 
-	// 컴포넌트 공간 기준 자세 (부모가 항상 자식보다 앞 번호)
+	// 컴포넌트 공간 기준 자세 (부모 인덱스가 앞)
 	TArray<FTransform> ComponentPose;
 	ComponentPose.SetNum(BoneCount);
 	for (int32 Index = 0; Index < BoneCount; ++Index)
@@ -80,7 +80,7 @@ bool UCTTongueComponent::InitializeChain()
 
 	ChainBones.Reset();
 	RefComponentRotations.Reset();
-	for (int32 Index = 1; Index < BoneCount; ++Index) // 0번(루트)은 그대로 둡니다.
+	for (int32 Index = 1; Index < BoneCount; ++Index) // 0번 루트 제외
 	{
 		ChainBones.Add(RefSkeleton.GetBoneName(Index));
 		RefComponentRotations.Add(ComponentPose[Index].GetRotation());
@@ -94,12 +94,12 @@ void UCTTongueComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// 화면이 없는 전용 서버에서는 연출이 필요 없습니다.
+	// 전용 서버는 연출 불필요
 	if (GetNetMode() == NM_DedicatedServer) { return; }
 
 	if (!bChainInitialized && !InitializeChain()) { return; }
 
-	// 이동 속도에 따라 흔들림 세기를 부드럽게 따라갑니다.
+	// 속도 -> 흔들림 세기
 	const AActor* OwnerActor = GetOwner();
 	const float Speed = OwnerActor ? OwnerActor->GetVelocity().Size() : 0.f;
 	const float TargetAlpha = FMath::Clamp(Speed / FMath::Max(FullWaveSpeed, 1.f), 0.f, 1.f);
@@ -107,7 +107,7 @@ void UCTTongueComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 
 	const float Frequency = FMath::Lerp(IdleFrequency, MoveFrequency, SmoothedAlpha);
 	const float AmplitudeDegrees = FMath::Lerp(IdleAmplitudeDegrees, MoveAmplitudeDegrees, SmoothedAlpha);
-	Phase = FMath::Fmod(Phase + UE_TWO_PI * Frequency * DeltaTime, UE_TWO_PI); // 주파수가 바뀌어도 끊기지 않게 누적
+	Phase = FMath::Fmod(Phase + UE_TWO_PI * Frequency * DeltaTime, UE_TWO_PI); // 주파수 변경에도 연속되게 누적
 
 	FVector Axis = WaveAxis.GetSafeNormal();
 	if (Axis.IsNearlyZero())
@@ -115,7 +115,7 @@ void UCTTongueComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 		Axis = FVector::UpVector;
 	}
 
-	// 루트 쪽 본부터 차례로 회전. 부모가 먼저 바뀌므로 자식은 그 위치를 따라갑니다.
+	// 루트부터 순서대로 회전
 	const int32 ChainLength = ChainBones.Num();
 	for (int32 Index = 0; Index < ChainLength; ++Index)
 	{

@@ -31,14 +31,14 @@ namespace CTBuffNames
 
 ACTCharacter::ACTCharacter()
 {
-	PrimaryActorTick.bCanEverTick = true; // 내 화면의 카메라 거리 보간에만 사용
+	PrimaryActorTick.bCanEverTick = true; // 로컬 카메라 보간용
 
-	// 카메라 방향으로 몸을 돌리지 않고, "움직이는 방향"으로 몸을 돌립니다. (3인칭 방식)
+	// 이동 방향으로 회전 (3인칭)
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// 공중에서 또 점프하는 것을 막습니다. (점프 최대 횟수 1)
+	// 공중 점프 방지
 	JumpMaxCount = 1;
 
 	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
@@ -49,17 +49,16 @@ ACTCharacter::ACTCharacter()
 	MoveComp->MaxWalkSpeed = BaseWalkSpeed;
 	MoveComp->BrakingDecelerationWalking = 2000.f;
 
-	// 서버의 캐릭터 메시도 화면 밖에서 몽타주(잡기 노티파이)를 계속 진행해야 합니다.
+	// 서버 메시도 몽타주 진행 (잡기 노티파이)
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
 
-	// 3인칭 자유 카메라: 마우스로 회전하고, 벽에 막히면 스프링암이 플레이어 쪽으로 당겨집니다.
-	// 거리는 위/아래 보는 각도에 따라 Tick에서 보간합니다. (UpdateCameraDistance)
+	// 3인칭 카메라, 거리는 Tick 보간
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	CameraBoom->SocketOffset = FVector(0.f, 0.f, 60.f);
-	CameraBoom->bUsePawnControlRotation = true; // 마우스로 카메라 회전
-	CameraBoom->bDoCollisionTest = true;        // 벽에 닿으면 카메라가 플레이어 쪽으로 가까워짐
+	CameraBoom->bUsePawnControlRotation = true; // null
+	CameraBoom->bDoCollisionTest = true;        // 벽 충돌 시 당김
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->ProbeChannel = ECC_Camera;
 	CameraBoom->bEnableCameraLag = true;
@@ -69,7 +68,7 @@ ACTCharacter::ACTCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// 혀: 메시의 Head 본에 붙입니다. (메시와 위치 보정은 컴포넌트가 처리)
+	// 혀: Head 본에 부착
 	TongueMesh = CreateDefaultSubobject<UCTTongueComponent>(TEXT("TongueMesh"));
 	TongueMesh->SetupAttachment(GetMesh(), TEXT("Head"));
 }
@@ -119,13 +118,12 @@ void ACTCharacter::PossessedBy(AController* NewController)
 
 bool ACTCharacter::CanJumpInternal_Implementation() const
 {
-	// 유령은 점프할 수 없습니다.
 	if (IsGhost())
 	{
 		return false;
 	}
 
-	// 경기 시작 전(색 배정 전)에는 점프할 수 없습니다.
+	// 색 배정 전 점프 불가
 	if (!CanMoveNow())
 	{
 		return false;
@@ -138,17 +136,16 @@ void ACTCharacter::OnRep_PlayerState()
 	Super::OnRep_PlayerState();
 
 	RefreshBodyColor();
+	RefreshTailVisual();
 
-	// PlayerState의 유령 알림이 캐릭터보다 먼저 와서 놓쳤을 수 있으므로 여기서 한 번 더 맞춥니다.
+	// 유령 알림 선행 시 누락 보정
 	if (IsGhost())
 	{
 		OnGhostStateChanged(true);
 	}
 }
 
-// ============================================================
 // 상태 읽기
-// ============================================================
 
 bool ACTCharacter::IsGhost() const
 {
@@ -158,7 +155,7 @@ bool ACTCharacter::IsGhost() const
 
 float ACTCharacter::GetSpeedMultiplier() const
 {
-	// 버프 합산: 1.0(기본) + 달리기 0.5 + 추격 0.2 = 1.7
+	// 1.0 + 달리기 0.5 + 추격 0.2
 	float Multiplier = 1.f;
 	for (const FCTSpeedBuff& Buff : SpeedBuffs)
 	{
@@ -200,9 +197,12 @@ float ACTCharacter::GetPushReadyPercent() const
 bool ACTCharacter::CanMoveNow() const
 {
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	// 대기 로비는 자유롭게 돌아다닐 수 있음
+	if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::Lobby) { return true; }
+
 	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
 
-	// 색이 배정되기 전에는 움직일 수 없습니다. (경기 시작 직후 색이 정해지는 동안 대기)
+	// 색 배정 전 이동 불가
 	const ACTPlayerState* CTPlayerState = GetPlayerState<ACTPlayerState>();
 	return CTPlayerState && CTPlayerState->GetAssignedColor() != ECTColor::None;
 }
@@ -227,9 +227,7 @@ UAnimMontage* ACTCharacter::GetActionMontage(ECTCharacterAction Action) const
 	}
 }
 
-// ============================================================
 // 속도 버프
-// ============================================================
 
 void ACTCharacter::AddSpeedBuff(FName BuffId, float Value)
 {
@@ -266,8 +264,7 @@ void ACTCharacter::RemoveSpeedBuff(FName BuffId)
 
 void ACTCharacter::RecalculateMaxWalkSpeed()
 {
-	// 참고: 서버와 클라이언트가 같은 값을 써야 끊김(보정)이 적습니다.
-	// 그래서 버프 목록을 복제하고, 양쪽에서 같은 계산을 합니다.
+	// 버프 목록 복제, 양쪽 계산
 	GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed * GetSpeedMultiplier();
 }
 
@@ -284,8 +281,7 @@ void ACTCharacter::RefreshChaseBuff()
 	const bool bShouldHaveChaseBuff =
 		CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing && !IsGhost();
 
-	// 지금은 "게임 중이고 유령이 아니면 항상" 추격 버프를 켭니다.
-	// (나중에 "목표가 가까울 때만" 같은 조건이 필요하면 이 함수만 바꾸면 됩니다)
+	// 게임 중 + 유령 아님 → 추격 ON
 	if (bShouldHaveChaseBuff)
 	{
 		AddSpeedBuff(CTBuffNames::Chase, ChaseBuffValue);
@@ -311,7 +307,7 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 		}
 		RefreshChaseBuff();
 
-		// 잡혀서 유령이 되면 꼬리 불이 꺼지고 회색이 됩니다. 부활하면 다시 켜집니다.
+		// 유령: 꼬리 불 끔+회색, 부활 시 복구
 		if (OwnedTail)
 		{
 			OwnedTail->SetCaught(bNewIsGhost);
@@ -325,19 +321,17 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 	if (bNewIsGhost)
 	{
 		StopJumping();
-		// 잡힘 몽타주는 그대로 두고, 하던 잡기/밀기 동작만 멈춥니다.
+		// 잡힘 몽타주 유지, 잡기/밀기만 중단
 		StopAttackMontages();
 	}
 
-	// 잡히면 몸이 회색으로, 부활하면 다시 내 색으로
+	// 유령 회색, 부활 시 원래 색
 	RefreshBodyColor();
 
 	BP_OnGhostStateChanged(bNewIsGhost);
 }
 
-// ============================================================
 // 입력 연결
-// ============================================================
 
 void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -383,11 +377,53 @@ void ACTCharacter::ApplyCameraSettings()
 {
 	if (!CameraBoom || !FollowCamera) { return; }
 
-	// BP에서 바꾼 값을 반영합니다. (생성자 시점에는 아직 BP 값이 적용되기 전)
+	// BP 값은 생성자 이후 적용
 	CameraBoom->bDoCollisionTest = true;
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	FollowCamera->SetFieldOfView(CameraFieldOfView);
+}
+
+void ACTCharacter::UpdateCameraClip()
+{
+	if (CameraHideDistance <= 0.f || !FollowCamera)
+	{
+		if (bHiddenFromOwnCamera) { SetHiddenFromOwnCamera(false); }
+		return;
+	}
+
+	// 숨긴 상태에서는 더 멀어져야 다시 보이게 해서 경계에서 깜빡이지 않게 합니다.
+	const float Distance = FVector::Dist(FollowCamera->GetComponentLocation(), GetActorLocation());
+	const float Threshold = bHiddenFromOwnCamera ? CameraHideDistance + CameraHideHysteresis : CameraHideDistance;
+	const bool bShouldHide = Distance < Threshold;
+
+	if (bShouldHide != bHiddenFromOwnCamera)
+	{
+		SetHiddenFromOwnCamera(bShouldHide);
+	}
+}
+
+void ACTCharacter::SetHiddenFromOwnCamera(bool bNewHidden)
+{
+	bHiddenFromOwnCamera = bNewHidden;
+
+	// OwnerNoSee: 이 캐릭터를 조종하는 내 화면에서만 안 보입니다. (다른 사람 화면은 그대로)
+	auto Apply = [bNewHidden](AActor* Actor)
+	{
+		if (!Actor) { return; }
+
+		TInlineComponentArray<UPrimitiveComponent*> Primitives;
+		Actor->GetComponents(Primitives);
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			Primitive->SetOwnerNoSee(bNewHidden);
+		}
+	};
+
+	Apply(this);      // 몸, 혀
+	Apply(OwnedTail); // 꼬리 (스폰할 때 이 캐릭터를 Owner로 지정했음)
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 카메라 %s: 내 캐릭터 %s"), bNewHidden ? TEXT("가까움") : TEXT("멀어짐"), bNewHidden ? TEXT("숨김") : TEXT("보임"));
 }
 
 void ACTCharacter::Tick(float DeltaSeconds)
@@ -396,7 +432,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 
 	UpdateRunMontage();
 
-	// 카메라는 내 화면에서만 필요합니다. (서버에 있는 다른 사람의 캐릭터는 건너뜀)
+	// 로컬 전용
 	if (IsLocallyControlled())
 	{
 		UpdateCameraDistance(DeltaSeconds);
@@ -407,30 +443,33 @@ void ACTCharacter::UpdateCameraDistance(float DeltaSeconds)
 {
 	if (!CameraBoom || !Controller) { return; }
 
-	// 위/아래로 보는 각도. 0 근처 = 수평(뒤에서 봄), 음수가 클수록 = 위에서 내려다봄
+	// 0 근처=수평, 음수 클수록 위에서 봄
 	const float Pitch = FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
 
-	// BehindPitch → 0, TopPitch → 1 (범위 밖은 0~1로 고정)
+	// BehindPitch→0, TopPitch→1
 	const float Range = BehindPitch - TopPitch;
 	float Alpha = Range > KINDA_SMALL_NUMBER ? FMath::Clamp((BehindPitch - Pitch) / Range, 0.f, 1.f) : 0.f;
 
-	// 곡선이 있으면 곡선으로, 없으면 부드러운 S자 곡선으로 보간
+	// 곡선 없으면 SmoothStep
 	Alpha = DistanceCurve ? FMath::Clamp(DistanceCurve->GetFloatValue(Alpha), 0.f, 1.f) : FMath::SmoothStep(0.f, 1.f, Alpha);
 
 	const float TargetLength = FMath::Lerp(CameraDistanceBehind, CameraDistanceTop, Alpha);
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetLength, DeltaSeconds, CameraDistanceInterpSpeed);
+
+	// 벽에 붙어 카메라가 몸 가까이 오면 내 캐릭터를 숨깁니다.
+	UpdateCameraClip();
 }
 
 void ACTCharacter::Move(const FInputActionValue& Value)
 {
 	const FVector2D MoveValue = Value.Get<FVector2D>();
 
-	// 경기가 시작되고 색이 배정될 때까지 움직일 수 없습니다. (카메라 회전은 가능)
+	// 색 배정 전 이동 불가, 회전은 가능
 	if (!CanMoveNow()) { return; }
 
 	if (Controller)
 	{
-		// 카메라가 보는 방향 기준으로 앞/옆을 계산합니다. (유령도 이동 가능)
+		// 카메라 기준 방향 (유령도 이동)
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
 		const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
@@ -463,7 +502,7 @@ void ACTCharacter::OnGrabPressed()
 {
 	if (!CanUseActions()) { return; }
 
-	// 서버 응답을 기다리지 않고 바로 손을 뻗어서 조작감이 늦지 않게 합니다.
+	// 서버 응답 전 선재생
 	PlayActionMontage(ECTCharacterAction::Grab);
 	ServerGrab();
 }
@@ -472,7 +511,7 @@ void ACTCharacter::OnPushPressed()
 {
 	if (!CanUseActions()) { return; }
 
-	// 쿨타임 중에는 서버도 거절하므로 동작을 재생하지 않습니다.
+	// 쿨타임 중 서버 거절
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Now - LocalLastPushTime < PushCooldownSeconds) { return; }
 	LocalLastPushTime = Now;
@@ -481,9 +520,7 @@ void ACTCharacter::OnPushPressed()
 	ServerPush();
 }
 
-// ============================================================
 // 달리기 (서버)
-// ============================================================
 
 void ACTCharacter::ServerSetRunInput_Implementation(bool bPressed)
 {
@@ -559,9 +596,7 @@ void ACTCharacter::OnRunCooldownEnded()
 	RunStateEndTime = 0.0;
 }
 
-// ============================================================
 // 잡기 / 밀기 (서버)
-// ============================================================
 
 void ACTCharacter::ServerGrab_Implementation()
 {
@@ -574,7 +609,7 @@ void ACTCharacter::ServerGrab_Implementation()
 	if (MyPlayerState->IsGhost()) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
-	// 이미 잡기 동작 중이면 새로 시작하지 않습니다. (버튼 연타로 구간이 계속 늘어나는 것 방지)
+	// 동작 중이면 재시작 안 함 (연타 방지)
 	const double Now = World->GetTimeSeconds();
 	if (bGrabActive || Now < GrabLockEndTime || GetWorldTimerManager().IsTimerActive(GrabWindowStartTimerHandle)) { return; }
 
@@ -582,11 +617,10 @@ void ACTCharacter::ServerGrab_Implementation()
 
 	if (bRequireTailTouch)
 	{
-		// 꼬리 터치 방식: 잡기 동작 구간 동안 상대 꼬리에 닿으면 잡힙니다.
-		// 성공 여부는 아직 모르므로 bSuccess는 false로 보내고, 잡힌 사람 쪽에 Caught 연출이 나옵니다.
+		// 꼬리 터치 방식, 성공 여부 미정이라 false
 		if (bUseMontageGrabWindow && HasGrabWindowNotify())
 		{
-			// 몽타주의 CT Grab Window 구간에서 판정이 켜지고 꺼집니다. (아래 MulticastPlayAction이 서버에서도 몽타주를 재생)
+			// Grab Window 구간 동안 판정
 			GrabLockEndTime = Now + GrabMontage->GetPlayLength() / FMath::Max(ActionMontagePlayRate, 0.1f);
 		}
 		else if (GrabWindowDelaySeconds > 0.f)
@@ -605,7 +639,7 @@ void ACTCharacter::ServerGrab_Implementation()
 		bSuccess = TryGrabByCone();
 	}
 
-	// 손을 뻗는 연출은 잡기에 성공하든 못하든 재생합니다.
+	// 연출은 성공 여부와 무관
 	MulticastPlayAction(ECTCharacterAction::Grab, bSuccess);
 }
 
@@ -620,7 +654,7 @@ bool ACTCharacter::TryGrabByCone()
 	const ECTColor MyTargetColor = MyPlayerState->GetTargetColor();
 	if (MyTargetColor == ECTColor::None) { return false; }
 
-	// 정해진 목표 색을 가진 사람만 잡을 수 있습니다.
+	// 목표 색만
 	for (APlayerState* OtherState : CTGameState->PlayerArray)
 	{
 		ACTPlayerState* OtherPlayerState = Cast<ACTPlayerState>(OtherState);
@@ -633,16 +667,14 @@ bool ACTCharacter::TryGrabByCone()
 
 		if (IsInFrontCone(OtherCharacter, GrabDistance, GrabHalfAngleDegrees))
 		{
-			// 잡힌 사람의 반응 연출은 GameMode가 성공 처리와 함께 재생합니다.
+			// 잡힘 연출은 GameMode가 처리
 			return CTGameMode->HandleTailGrabbed(MyPlayerState, OtherPlayerState);
 		}
 	}
 	return false;
 }
 
-// ============================================================
 // 꼬리 / 잡기 동작 구간 (서버)
-// ============================================================
 
 void ACTCharacter::SpawnTail()
 {
@@ -657,36 +689,42 @@ void ACTCharacter::SpawnTail()
 	{
 		OwnedTail->AttachToComponent(
 			GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TailSocketName);
-
-		// 붙은 본의 기준 자세(컴포넌트 공간)를 구해서, 기본 자세에서 TailOffset 위치에 놓이도록 상대 변환을 정합니다.
-		// 이후 본이 움직이면 꼬리가 그대로 따라갑니다.
-		const USkeletalMesh* MeshAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
-		const int32 BoneIndex = MeshAsset ? MeshAsset->GetRefSkeleton().FindBoneIndex(TailSocketName) : INDEX_NONE;
-		if (BoneIndex != INDEX_NONE)
-		{
-			const FReferenceSkeleton& RefSkeleton = MeshAsset->GetRefSkeleton();
-			const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
-			FTransform BoneComponentTransform = FTransform::Identity;
-			for (int32 Index = BoneIndex; Index != INDEX_NONE; Index = RefSkeleton.GetParentIndex(Index))
-			{
-				BoneComponentTransform = BoneComponentTransform * RefPose[Index];
-			}
-
-			const FTransform Offset(TailOffsetRotation, TailOffsetLocation, TailOffsetScale);
-			OwnedTail->SetActorRelativeTransform(Offset * BoneComponentTransform.Inverse());
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[CT] 꼬리를 붙일 본 '%s'을(를) 캐릭터 메시에서 찾지 못했습니다."), *TailSocketName.ToString());
-		}
+		ApplyTailOffset();
 		OwnedTail->RefreshVisual();
 	}
 }
 
+void ACTCharacter::ApplyTailOffset()
+{
+	if (!OwnedTail) { return; }
+
+	// 본 기준 자세 보정, 기본 자세에서 TailOffset에 위치
+	const USkeletalMesh* MeshAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
+	const int32 BoneIndex = MeshAsset ? MeshAsset->GetRefSkeleton().FindBoneIndex(TailSocketName) : INDEX_NONE;
+	if (BoneIndex == INDEX_NONE)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 꼬리를 붙일 본 '%s'을(를) 캐릭터 메시에서 찾지 못했습니다."), *TailSocketName.ToString());
+		return;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = MeshAsset->GetRefSkeleton();
+	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+	FTransform BoneComponentTransform = FTransform::Identity;
+	for (int32 Index = BoneIndex; Index != INDEX_NONE; Index = RefSkeleton.GetParentIndex(Index))
+	{
+		BoneComponentTransform = BoneComponentTransform * RefPose[Index];
+	}
+
+	const FTransform Offset(TailOffsetRotation, TailOffsetLocation, TailOffsetScale);
+	OwnedTail->SetActorRelativeTransform(Offset * BoneComponentTransform.Inverse());
+}
+
 void ACTCharacter::OnRep_OwnedTail()
 {
-	// 클라이언트: 꼬리가 도착하면 현재 색을 바로 입혀 줍니다.
+	// 복제 스케일이 소수 2자리로 양자화돼 오프셋 직접 재계산
+	ApplyTailOffset();
 	RefreshBodyColor();
+	RefreshTailVisual();
 }
 
 void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -716,7 +754,7 @@ void ACTCharacter::StartGrabWindow(float Duration)
 	GrabWindowEndTime = GetWorld()->GetTimeSeconds() + Duration;
 
 	GetWorldTimerManager().SetTimer(GrabWindowTickTimerHandle, this, &ACTCharacter::TickGrabWindow, 0.03f, true);
-	TickGrabWindow(); // 시작하자마자 이미 닿아 있는 꼬리도 확인
+	TickGrabWindow(); // 이미 닿은 꼬리 즉시 확인
 }
 
 bool ACTCharacter::HasGrabWindowNotify() const
@@ -735,10 +773,10 @@ bool ACTCharacter::HasGrabWindowNotify() const
 
 void ACTCharacter::OnGrabNotifyBegin()
 {
-	// 몽타주는 모든 컴퓨터에서 재생되지만, 판정은 서버만 합니다.
+	// 몽타주는 전원, 판정은 서버만
 	if (!HasAuthority() || !bRequireTailTouch || !CanUseActions()) { return; }
 
-	// 구간의 끝은 OnGrabNotifyEnd가 알려 줍니다. 최대 시간은 안전장치입니다.
+	// 끝은 OnGrabNotifyEnd, 최대 시간은 안전장치
 	StartGrabWindow(GrabWindowMaxSeconds);
 }
 
@@ -768,7 +806,7 @@ void ACTCharacter::TickGrabWindow()
 		return;
 	}
 
-	// 닿은 꼬리가 있으면 잡기를 시도합니다. 한 번 성공하면 동작 구간을 끝냅니다.
+	// 닿으면 시도, 성공 시 구간 종료
 	for (TActorIterator<ACTTail> It(World); It; ++It)
 	{
 		if (It->TryTouch(this))
@@ -789,14 +827,14 @@ void ACTCharacter::ServerPush_Implementation()
 	if (MyPlayerState->IsGhost()) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
-	// 밀기 쿨타임 확인
+	// 쿨타임 확인
 	const double Now = World->GetTimeSeconds();
 	if (Now - LastPushTime < PushCooldownSeconds) { return; }
 	LastPushTime = Now;
 
 	MulticastPlayAction(ECTCharacterAction::Push, true);
 
-	// 정면 부채꼴 안의 모든 상대를 밉니다. (유령은 밀 수 없음)
+	// 정면 부채꼴 전원 밀기 (유령 제외)
 	for (APlayerState* OtherState : CTGameState->PlayerArray)
 	{
 		ACTCharacter* OtherCharacter = OtherState ? Cast<ACTCharacter>(OtherState->GetPawn()) : nullptr;
@@ -814,13 +852,11 @@ void ACTCharacter::ServerPush_Implementation()
 	}
 }
 
-// ============================================================
 // 애니메이션
-// ============================================================
 
 void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action, bool bSuccess)
 {
-	// 내가 누른 잡기/밀기는 OnGrabPressed / OnPushPressed에서 이미 재생했습니다.
+	// 본인 잡기/밀기는 입력 시 이미 재생
 	const bool bAlreadyPlayedLocally =
 		IsLocallyControlled() &&
 		(Action == ECTCharacterAction::Grab || Action == ECTCharacterAction::Push);
@@ -843,13 +879,13 @@ void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 
 void ACTCharacter::UpdateRunMontage()
 {
-	// 화면이 없는 전용 서버에서는 연출이 필요 없습니다.
+	// 전용 서버는 연출 불필요
 	if (!RunMontage || GetNetMode() == NM_DedicatedServer) { return; }
 
 	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	if (!AnimInstance) { return; }
 
-	// 달리기 중 + 이동 중 + 땅 위일 때만 재생합니다. (공중에서는 점프 동작을 보여 줌)
+	// 달리기+이동+지상만, 공중은 점프 모션
 	const bool bWantRunMontage =
 		RunState == ECTRunState::Running &&
 		!IsGhost() &&
@@ -862,17 +898,17 @@ void ACTCharacter::UpdateRunMontage()
 	{
 		if (!bPlaying)
 		{
-			// 잡기/밀기 같은 다른 몽타주가 재생 중이면 끝날 때까지 기다립니다.
+			// 다른 몽타주 끝날 때까지 대기
 			const UAnimMontage* Active = AnimInstance->GetCurrentActiveMontage();
 			if (Active && Active != RunMontage) { return; }
 
 			PlayAnimMontage(RunMontage, 1.f, RunMontageLoopSection);
 
-			// 섹션이 끝나면 스스로 이어지게 해서 반복합니다.
+			// 섹션 종료 시 자동 반복
 			AnimInstance->Montage_SetNextSection(RunMontageLoopSection, RunMontageLoopSection, RunMontage);
 		}
 
-		// 실제 이동 속도에 맞춰 재생 속도를 조절 (발 미끄러짐 줄이기)
+		// 실속도에 재생 속도 맞춤 (발 미끄러짐)
 		const float Rate = FMath::Clamp(GetVelocity().Size2D() / RunMontageReferenceSpeed, RunMontageMinPlayRate, RunMontageMaxPlayRate);
 		AnimInstance->Montage_SetPlayRate(RunMontage, Rate);
 	}
@@ -896,9 +932,7 @@ void ACTCharacter::StopAttackMontages()
 	}
 }
 
-// ============================================================
 // 도우미
-// ============================================================
 
 double ACTCharacter::GetServerTime() const
 {
@@ -917,11 +951,11 @@ bool ACTCharacter::IsInFrontCone(const AActor* Other, float MaxDistance, float H
 	if (!Other) { return false; }
 
 	FVector ToOther = Other->GetActorLocation() - GetActorLocation();
-	ToOther.Z = 0.f; // 높이는 무시하고 바닥 기준으로만 계산
+	ToOther.Z = 0.f; // 높이 무시
 
 	const float Distance = ToOther.Size();
 	if (Distance > MaxDistance) { return false; }
-	if (Distance < KINDA_SMALL_NUMBER) { return true; } // 거의 겹쳐 있으면 성공
+	if (Distance < KINDA_SMALL_NUMBER) { return true; } // 거의 겹침 → 성공
 
 	FVector Forward = GetActorForwardVector();
 	Forward.Z = 0.f;
@@ -931,9 +965,7 @@ bool ACTCharacter::IsInFrontCone(const AActor* Other, float MaxDistance, float H
 	return CosAngle >= FMath::Cos(FMath::DegreesToRadians(HalfAngleDegrees));
 }
 
-// ============================================================
 // 몸 색상
-// ============================================================
 
 void ACTCharacter::RefreshTailVisual()
 {
@@ -948,7 +980,7 @@ void ACTCharacter::RefreshBodyColor()
 	USkeletalMeshComponent* MeshComp = GetMesh();
 	if (!MeshComp) { return; }
 
-	// 슬롯마다 동적 머티리얼을 한 번만 만들어 재사용합니다.
+	// 슬롯당 MID 1회 생성
 	const int32 SlotCount = MeshComp->GetNumMaterials();
 	if (BodyMaterials.Num() != SlotCount)
 	{
@@ -966,7 +998,7 @@ void ACTCharacter::RefreshBodyColor()
 	const ECTColor Color = CTPlayerState ? CTPlayerState->GetAssignedColor() : ECTColor::None;
 	const bool bIsGhost = CTPlayerState && CTPlayerState->IsGhost();
 
-	// 꼬리를 잡힌 유령은 회색, 색이 없으면 기본 색, 아니면 내 색
+	// 잡힌 유령 회색, 색 없으면 기본색
 	const FLinearColor Tint = bIsGhost ? GhostBodyColor
 		: (Color == ECTColor::None ? NoColorTint : ACTPlayerState::GetLinearColorOf(Color));
 
@@ -978,7 +1010,7 @@ void ACTCharacter::RefreshBodyColor()
 		}
 	}
 
-	// 꼬리도 같은 색을 쓰므로 함께 갱신합니다.
+	// 꼬리도 같은 색
 	if (OwnedTail)
 	{
 		OwnedTail->RefreshVisual();

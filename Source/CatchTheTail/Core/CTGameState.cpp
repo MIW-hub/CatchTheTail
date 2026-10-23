@@ -16,6 +16,9 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, RoundNumber);
 	DOREPLIFETIME(ACTGameState, RoundEndServerTime);
 	DOREPLIFETIME(ACTGameState, StartServerTime);
+	DOREPLIFETIME(ACTGameState, LobbyMinPlayers);
+	DOREPLIFETIME(ACTGameState, RoomCode);
+	DOREPLIFETIME(ACTGameState, ReturnToLobbyServerTime);
 	DOREPLIFETIME(ACTGameState, GameEndServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
 	DOREPLIFETIME(ACTGameState, CountdownSeconds);
@@ -28,7 +31,7 @@ TArray<ACTPlayerState*> ACTGameState::GetWinners() const
 	TArray<ACTPlayerState*> Result;
 	for (ACTPlayerState* Winner : Winners)
 	{
-		// 클라이언트에서는 아직 도착하지 않은 PlayerState가 nullptr일 수 있습니다.
+		// 클라에서 PlayerState 미도착 시 nullptr
 		if (Winner)
 		{
 			Result.Add(Winner);
@@ -75,13 +78,13 @@ float ACTGameState::GetStartCountdownRemainingSeconds() const
 
 bool ACTGameState::IsCountdownActive() const
 {
-	// 경기 시작 전 카운트다운: 남은 시간 전체가 카운트다운입니다.
+	// 시작 전 카운트다운은 남은 시간 전부
 	if (Phase == ECTGamePhase::Countdown)
 	{
 		return GetStartCountdownRemainingSeconds() > 0.f;
 	}
 
-	// 경기 중 라운드 전환 카운트다운: 끝나기 CountdownSeconds 전부터
+	// 라운드 전환 카운트다운. 종료 CountdownSeconds 전부터
 	const float Remaining = GetRoundRemainingSeconds();
 	return Phase == ECTGamePhase::Playing && Remaining > 0.f && Remaining <= CountdownSeconds;
 }
@@ -100,6 +103,67 @@ void ACTGameState::SetPhase(ECTGamePhase NewPhase)
 	Phase = NewPhase;
 	ForceNetUpdate();
 	OnRep_Phase();
+}
+
+void ACTGameState::SetReturnToLobbyTime(double NewServerTime)
+{
+	if (!HasAuthority()) { return; }
+
+	ReturnToLobbyServerTime = NewServerTime;
+	ForceNetUpdate();
+}
+
+float ACTGameState::GetReturnToLobbyRemainingSeconds() const
+{
+	if (Phase != ECTGamePhase::Finished || ReturnToLobbyServerTime <= 0.0) { return 0.f; }
+	return static_cast<float>(FMath::Max(0.0, ReturnToLobbyServerTime - GetServerWorldTimeSeconds()));
+}
+
+void ACTGameState::SetRoomCode(const FString& NewRoomCode)
+{
+	if (!HasAuthority()) { return; }
+
+	RoomCode = NewRoomCode;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetLobbyMinPlayers(int32 NewMinPlayers)
+{
+	if (!HasAuthority()) { return; }
+
+	LobbyMinPlayers = FMath::Max(1, NewMinPlayers);
+	ForceNetUpdate();
+}
+
+float ACTGameState::GetLobbyStartRemainingSeconds() const
+{
+	if (Phase != ECTGamePhase::Lobby || StartServerTime <= 0.0) { return 0.f; }
+	return static_cast<float>(FMath::Max(0.0, StartServerTime - GetServerWorldTimeSeconds()));
+}
+
+int32 ACTGameState::GetLobbyReadyCount() const
+{
+	int32 Count = 0;
+	for (const APlayerState* PlayerState : PlayerArray)
+	{
+		const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
+		if (CTPlayerState && !CTPlayerState->IsHost() && CTPlayerState->IsReady()) { ++Count; }
+	}
+	return Count;
+}
+
+bool ACTGameState::CanStartLobby() const
+{
+	int32 PlayerCount = 0;
+	for (const APlayerState* PlayerState : PlayerArray)
+	{
+		const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
+		if (!CTPlayerState || CTPlayerState->IsOnlyASpectator()) { continue; }
+
+		++PlayerCount;
+		if (!CTPlayerState->IsHost() && !CTPlayerState->IsReady()) { return false; }
+	}
+	return PlayerCount >= LobbyMinPlayers;
 }
 
 void ACTGameState::SetStartCountdown(double NewStartServerTime)

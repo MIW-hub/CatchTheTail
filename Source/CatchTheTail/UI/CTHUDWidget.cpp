@@ -61,9 +61,7 @@ void UCTHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	}
 }
 
-// ============================================================
 // 연결
-// ============================================================
 
 void UCTHUDWidget::TryBindGameState()
 {
@@ -76,7 +74,7 @@ void UCTHUDWidget::TryBindGameState()
 	GameState->OnPhaseChanged.AddUniqueDynamic(this, &UCTHUDWidget::HandlePhaseChanged);
 	GameState->OnRoundChanged.AddUniqueDynamic(this, &UCTHUDWidget::HandleRoundChanged);
 
-	// 연결하기 전에 이미 바뀐 값도 화면에 반영합니다.
+	// 연결 전 값도 반영
 	HandlePhaseChanged(GameState->GetPhase());
 	bScoreboardDirty = true;
 }
@@ -171,9 +169,7 @@ void UCTHUDWidget::HandleAnyPlayerStateChanged(ACTPlayerState* ChangedPlayerStat
 	bScoreboardDirty = true;
 }
 
-// ============================================================
 // 갱신
-// ============================================================
 
 void UCTHUDWidget::UpdateTimeDisplay()
 {
@@ -195,8 +191,7 @@ void UCTHUDWidget::UpdateTimeDisplay()
 			: FText::GetEmpty());
 	}
 
-	// 카운트다운: 숫자가 바뀔 때만 갱신 + 이벤트
-	// 경기 중 라운드 전환 카운트다운과, 경기 시작 전 카운트다운 모두 같은 위젯에 보여 줍니다.
+	// 카운트다운 숫자 변할 때만 갱신
 	const bool bStartCountdown = GameState && GameState->IsStartCountdown();
 	const int32 CountdownNumber = (bPlaying || bStartCountdown) ? GameState->GetCountdownNumber() : 0;
 	if (CountdownNumber != LastCountdownNumber)
@@ -285,7 +280,7 @@ void UCTHUDWidget::RefreshMyState()
 
 	if (!MyPlayerState) { return; }
 
-	// 꼬리 수 변화 이벤트 (처음 연결할 때는 변화로 치지 않음)
+	// 꼬리 수 변화 이벤트 (첫 연결 제외)
 	if (LastTailCount != INDEX_NONE && LastTailCount != TailCount)
 	{
 		BP_OnMyTailCountChanged(TailCount, TailCount - LastTailCount);
@@ -303,14 +298,14 @@ void UCTHUDWidget::RefreshMyState()
 
 void UCTHUDWidget::SyncScoreboardPlayers()
 {
-	// 이름 변경처럼 알림이 없는 값도 반영되도록 주기적으로 다시 그립니다.
+	// 알림 없는 값(이름 등) 주기 갱신
 	bScoreboardDirty = true;
 
 	if (!VerticalBox_Scoreboard || !ScoreEntryClass) { return; }
 
 	const TArray<ACTPlayerState*> Players = GetSortedPlayers(BoundGameState.Get());
 
-	// 나간 플레이어의 줄 제거
+	// 나간 플레이어 줄 제거
 	for (int32 Index = ScoreEntries.Num() - 1; Index >= 0; --Index)
 	{
 		UCTScoreEntryWidget* Entry = ScoreEntries[Index];
@@ -324,7 +319,7 @@ void UCTHUDWidget::SyncScoreboardPlayers()
 		}
 	}
 
-	// 새로 들어온 플레이어의 줄 추가
+	// 새 플레이어 줄 추가
 	for (ACTPlayerState* PlayerState : Players)
 	{
 		const bool bHasEntry = ScoreEntries.ContainsByPredicate(
@@ -342,7 +337,7 @@ void UCTHUDWidget::SyncScoreboardPlayers()
 		BoundScorePlayerStates.AddUnique(PlayerState);
 	}
 
-	// 사라진 PlayerState는 목록에서 정리
+	// 사라진 PlayerState 정리
 	BoundScorePlayerStates.RemoveAll([](const TWeakObjectPtr<ACTPlayerState>& PlayerState) { return !PlayerState.IsValid(); });
 }
 
@@ -352,7 +347,7 @@ void UCTHUDWidget::RefreshScoreboard()
 
 	if (!VerticalBox_Scoreboard) { return; }
 
-	// 꼬리 수 순으로 정렬
+	// 꼬리 수 순 정렬
 	TArray<UCTScoreEntryWidget*> SortedEntries;
 	for (UCTScoreEntryWidget* Entry : ScoreEntries)
 	{
@@ -372,7 +367,7 @@ void UCTHUDWidget::RefreshScoreboard()
 		return PlayerA->GetPlayerName() < PlayerB->GetPlayerName();
 	});
 
-	// 순서가 바뀌었을 때만 다시 배치 (매번 다시 넣으면 위젯 애니메이션이 끊김)
+	// 순서 바뀔 때만 재배치 (애니메이션 끊김)
 	bool bOrderChanged = VerticalBox_Scoreboard->GetChildrenCount() != SortedEntries.Num();
 	for (int32 Index = 0; !bOrderChanged && Index < SortedEntries.Num(); ++Index)
 	{
@@ -387,7 +382,7 @@ void UCTHUDWidget::RefreshScoreboard()
 		}
 	}
 
-	// 순위 계산 (동점이면 같은 순위) 후 갱신
+	// 동점은 같은 순위
 	const ACTPlayerState* MyPlayerState = BoundMyPlayerState.Get();
 	int32 Rank = 0;
 	int32 PreviousTailCount = INDEX_NONE;

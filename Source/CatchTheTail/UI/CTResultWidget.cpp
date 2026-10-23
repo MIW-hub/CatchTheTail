@@ -2,9 +2,64 @@
 #include "CTResultWidget.h"
 #include "CTScoreEntryWidget.h"
 #include "../Core/CTGameState.h"
+#include "../Core/CTGameInstance.h"
 #include "../Player/CTPlayerState.h"
+#include "../Player/CTPlayerController.h"
+#include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+
+void UCTResultWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	if (Button_ReturnToLobby) { Button_ReturnToLobby->OnClicked.AddUniqueDynamic(this, &UCTResultWidget::HandleReturnToLobbyClicked); }
+	if (Button_LeaveToMenu)   { Button_LeaveToMenu->OnClicked.AddUniqueDynamic(this, &UCTResultWidget::HandleLeaveToMenuClicked); }
+}
+
+void UCTResultWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// 로비로 돌아가기: 방장에게만 버튼, 모두에게 남은 시간 안내
+	const ACTGameState* GameState = GetCTGameState();
+	const ACTPlayerState* MyPlayerState = GetOwningCTPlayerState();
+
+	if (Button_ReturnToLobby)
+	{
+		Button_ReturnToLobby->SetVisibility((MyPlayerState && MyPlayerState->IsHost()) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+
+	if (Text_ReturnHint)
+	{
+		const float Remaining = GameState ? GameState->GetReturnToLobbyRemainingSeconds() : 0.f;
+		if (Remaining > 0.f)
+		{
+			Text_ReturnHint->SetText(FText::Format(NSLOCTEXT("CT", "UI_Result_ReturnHint", "{0}초 후 로비로 돌아갑니다"), FMath::CeilToInt(Remaining)));
+			Text_ReturnHint->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			Text_ReturnHint->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+void UCTResultWidget::HandleReturnToLobbyClicked()
+{
+	if (ACTPlayerController* Controller = GetOwningPlayer<ACTPlayerController>())
+	{
+		Controller->RequestReturnToLobby();
+	}
+}
+
+void UCTResultWidget::HandleLeaveToMenuClicked()
+{
+	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		GameInstance->LeaveToMainMenu(FText::GetEmpty());
+	}
+}
 
 void UCTResultWidget::ShowResult()
 {
@@ -18,7 +73,7 @@ void UCTResultWidget::ShowResult()
 
 	if (Text_ResultTitle)
 	{
-		// 동점은 "연장전에 가는 사람"이 따로 있으므로, 내가 승자 목록에 없으면 패배로 표시합니다.
+		// 승자 목록에 없으면 패배 (동점은 연장전 대상 별도)
 		const FText& Title = (bIsTie && bLocalPlayerWon) ? TieText : (bLocalPlayerWon ? WinText : LoseText);
 		Text_ResultTitle->SetText(Title);
 	}
