@@ -1,5 +1,7 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTPlayerState.h"
+#include "../Core/CTGameState.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "CTCharacter.h"
 #include "Net/UnrealNetwork.h"
 
@@ -137,6 +139,20 @@ void ACTPlayerState::OnRep_Colors()
 
 void ACTPlayerState::OnRep_TailCount()
 {
+	// 게임 중 내 꼬리가 늘어나면 소리
+	if (TailCount > LastTailCountForSound && IsLocalPlayerForSound())
+	{
+		const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+		if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing)
+		{
+			if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+			{
+				Audio->PlaySfx(ECTSfx::TailGained);
+			}
+		}
+	}
+	LastTailCountForSound = TailCount;
+
 	// 꼬리 몸통 수 반영
 	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
 	{
@@ -151,6 +167,12 @@ void ACTPlayerState::OnRep_IsGhost()
 	NotifyChanged();
 }
 
+bool ACTPlayerState::IsLocalPlayerForSound() const
+{
+	const APawn* ControlledPawn = GetPawn();
+	return ControlledPawn && ControlledPawn->IsLocallyControlled();
+}
+
 void ACTPlayerState::NotifyChanged()
 {
 	OnPlayerStateChanged.Broadcast(this);
@@ -158,6 +180,16 @@ void ACTPlayerState::NotifyChanged()
 
 void ACTPlayerState::NotifyPawnGhostState()
 {
+	// 유령이었다가 부활하면 소리
+	if (!bIsGhost && bLastGhostForSound && IsLocalPlayerForSound())
+	{
+		if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+		{
+			Audio->PlaySfx(ECTSfx::GhostRespawn);
+		}
+	}
+	bLastGhostForSound = bIsGhost;
+
 	// 캐릭터에 유령 상태 통지
 	if (ACTCharacter* CTCharacter = Cast<ACTCharacter>(GetPawn()))
 	{

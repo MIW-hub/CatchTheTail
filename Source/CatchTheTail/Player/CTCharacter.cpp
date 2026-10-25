@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTCharacter.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "CTPlayerState.h"
@@ -426,11 +427,67 @@ void ACTCharacter::SetHiddenFromOwnCamera(bool bNewHidden)
 	UE_LOG(LogTemp, Log, TEXT("[CT] 카메라 %s: 내 캐릭터 %s"), bNewHidden ? TEXT("가까움") : TEXT("멀어짐"), bNewHidden ? TEXT("숨김") : TEXT("보임"));
 }
 
+void ACTCharacter::UpdateMovementSounds(float DeltaSeconds)
+{
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr;
+	if (!Move || !Audio) { return; }
+
+	const bool bOnGround = Move->IsMovingOnGround();
+	const FVector Velocity = GetVelocity();
+
+	// 점프: 땅에서 떨어지면서 위로 올라갈 때
+	if (bWasOnGroundForSound && !bOnGround && Velocity.Z > 150.f && !IsGhost())
+	{
+		Audio->PlaySfxAtLocation(ECTSfx::Jump, GetActorLocation());
+	}
+
+	// 착지: 공중에서 땅에 닿을 때 (충분히 빠르게 떨어졌을 때만)
+	if (!bOnGround)
+	{
+		LastFallSpeedForSound = FMath::Max(LastFallSpeedForSound, -Velocity.Z);
+	}
+	else if (!bWasOnGroundForSound)
+	{
+		if (LastFallSpeedForSound >= LandMinFallSpeed && !IsGhost())
+		{
+			Audio->PlaySfxAtLocation(ECTSfx::Land, GetActorLocation());
+		}
+		LastFallSpeedForSound = 0.f;
+		FootstepDistanceAccum = 0.f;
+	}
+	bWasOnGroundForSound = bOnGround;
+
+	// 발소리: 땅 위에서 일정 거리를 움직일 때마다
+	const float Speed = Velocity.Size2D();
+	if (!bUseDistanceFootsteps)
+	{
+		// 발소리는 애니메이션 노티파이가 담당
+	}
+	else if (bOnGround && Speed >= MinFootstepSpeed && !IsGhost())
+	{
+		FootstepDistanceAccum += Speed * DeltaSeconds;
+		if (FootstepDistanceAccum >= FootstepDistance)
+		{
+			FootstepDistanceAccum = 0.f;
+			Audio->PlaySfxAtLocation(ECTSfx::Footstep, GetActorLocation(), FootstepVolume, FMath::FRandRange(0.92f, 1.08f));
+		}
+	}
+	else if (!bOnGround || Speed < MinFootstepSpeed)
+	{
+		// 멈추면 다음 걸음은 바로 나도록 절반쯤 채워 둠
+		FootstepDistanceAccum = FootstepDistance * 0.5f;
+	}
+}
+
 void ACTCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
 	UpdateRunMontage();
+	UpdateMovementSounds(DeltaSeconds);
 
 	// 로컬 전용
 	if (IsLocallyControlled())
@@ -864,6 +921,13 @@ void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action,
 	if (!bAlreadyPlayedLocally)
 	{
 		PlayActionMontage(Action);
+	}
+
+	// 동작 소리: 밀기, 꼬리를 잡힘 (캐릭터 위치에서 들림)
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		if (Action == ECTCharacterAction::Push) { Audio->PlaySfxAtLocation(ECTSfx::Push, GetActorLocation()); }
+		else if (Action == ECTCharacterAction::Caught) { Audio->PlaySfxAtLocation(ECTSfx::TailLost, GetActorLocation()); }
 	}
 
 	BP_OnAction(Action, bSuccess);

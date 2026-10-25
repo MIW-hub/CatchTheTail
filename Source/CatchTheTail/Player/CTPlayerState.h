@@ -96,5 +96,12 @@ protected:
 
 private:
 	void NotifyChanged();
+
+	// 소리용 이전 값 (늘어났는지, 유령에서 돌아왔는지 판단)
+	int32 LastTailCountForSound = 0;
+	bool bLastGhostForSound = false;
+
+	// 이 PlayerState가 이 컴퓨터에서 조종하는 플레이어인가
+	bool IsLocalPlayerForSound() const;
 	void NotifyPawnGhostState();
 };

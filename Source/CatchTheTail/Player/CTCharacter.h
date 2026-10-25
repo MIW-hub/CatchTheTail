@@ -363,6 +363,9 @@ protected:
 	void UpdateCameraDistance(float DeltaSeconds);
 
 	/** 카메라가 너무 가까우면 내 캐릭터를 내 화면에서만 숨기고, 멀어지면 다시 보이게 합니다. */
+	// 걷기, 점프, 착지 소리. 모든 컴퓨터에서 각자 재생 (위치 소리라 가까울수록 크게 들림)
+	void UpdateMovementSounds(float DeltaSeconds);
+
 	void UpdateCameraClip();
 	void SetHiddenFromOwnCamera(bool bNewHidden);
 
@@ -445,6 +448,30 @@ private:
 	double RunStateEndTime = 0.0;
 
 	FTimerHandle RunTimerHandle;
+
+	// 발소리 사이 이동 거리(cm). 빠르게 달릴수록 소리 간격이 짧아집니다
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "10", AllowPrivateAccess = "true"))
+	float FootstepDistance = 190.f;
+
+	// 이 속도(cm/s)보다 느리면 발소리 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float MinFootstepSpeed = 80.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float FootstepVolume = 0.55f;
+
+	// 이 낙하 속도(cm/s) 이상일 때만 착지 소리 (작은 턱에서는 안 남)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float LandMinFallSpeed = 300.f;
+
+	// true면 이동 거리로 발소리를 냄. 기본은 꺼짐 - 발소리는 애니메이션의 "CT Footstep" 노티파이로 냅니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (AllowPrivateAccess = "true"))
+	bool bUseDistanceFootsteps = false;
+
+	// 발소리 이동 거리 누적
+	float FootstepDistanceAccum = 0.f;
+	bool bWasOnGroundForSound = true;
+	float LastFallSpeedForSound = 0.f;
 
 	// 지금 카메라가 가까워서 내 캐릭터를 숨긴 상태인가 (내 컴퓨터)
 	bool bHiddenFromOwnCamera = false;

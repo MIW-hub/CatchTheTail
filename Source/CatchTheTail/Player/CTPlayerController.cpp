@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTPlayerController.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTSettingsSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "../Core/CTGameMode.h"
@@ -70,6 +71,12 @@ void ACTPlayerController::BeginPlay()
 		}
 	}
 
+	// 배경음
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlayMusic(GetLevelMusic());
+	}
+
 	CreateUI();
 	TryBindGameState();
 }
@@ -81,6 +88,7 @@ void ACTPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (ACTGameState* GameState = BoundGameState.Get())
 	{
 		GameState->OnPhaseChanged.RemoveDynamic(this, &ACTPlayerController::HandlePhaseChanged);
+		GameState->OnRoundChanged.RemoveDynamic(this, &ACTPlayerController::HandleRoundChanged);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -144,9 +152,48 @@ void ACTPlayerController::TryBindGameState()
 
 	BoundGameState = GameState;
 	GameState->OnPhaseChanged.AddUniqueDynamic(this, &ACTPlayerController::HandlePhaseChanged);
+	GameState->OnRoundChanged.AddUniqueDynamic(this, &ACTPlayerController::HandleRoundChanged);
 
 	// 이미 끝난 경기 대응
 	HandlePhaseChanged(GameState->GetPhase());
+}
+
+void ACTPlayerController::HandleRoundChanged(int32 NewRoundNumber)
+{
+	if (!IsLocalController() || NewRoundNumber <= 0) { return; }
+
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlaySfx(ECTSfx::RoundStart);
+	}
+}
+
+void ACTPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	if (!IsLocalController()) { return; }
+
+	// 카운트다운 숫자(시작 전 / 라운드 전환 / 로비 시작)가 바뀔 때마다 한 번 소리
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	int32 Number = 0;
+	if (CTGameState)
+	{
+		if (CTGameState->IsStartCountdown()) { Number = FMath::CeilToInt(CTGameState->GetStartCountdownRemainingSeconds()); }
+		else if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f) { Number = FMath::CeilToInt(CTGameState->GetLobbyStartRemainingSeconds()); }
+		else if (CTGameState->IsCountdownActive()) { Number = CTGameState->GetCountdownNumber(); }
+	}
+
+	if (Number != LastCountdownSoundNumber)
+	{
+		LastCountdownSoundNumber = Number;
+		if (Number > 0)
+		{
+			if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+			{
+				Audio->PlaySfx(ECTSfx::CountdownTick);
+			}
+		}
+	}
 }
 
 void ACTPlayerController::HandlePhaseChanged(ECTGamePhase NewPhase)
@@ -164,6 +211,16 @@ void ACTPlayerController::HandlePhaseChanged(ECTGamePhase NewPhase)
 void ACTPlayerController::ShowResultScreen()
 {
 	if (!ResultWidget) { return; }
+
+	// 내가 승자면 승리 소리
+	const ACTGameState* ResultGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	if (ResultGameState && ResultGameState->IsWinner(PlayerState))
+	{
+		if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+		{
+			Audio->PlaySfx(ECTSfx::Victory);
+		}
+	}
 
 	if (!ResultWidget->IsInViewport())
 	{

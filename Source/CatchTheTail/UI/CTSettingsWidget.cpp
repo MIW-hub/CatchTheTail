@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTSettingsWidget.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "CTKeyBindEntryWidget.h"
 #include "../Core/CTGameInstance.h"
 #include "../Core/CTSettingsSubsystem.h"
@@ -21,6 +22,9 @@ UCTSettingsSubsystem* UCTSettingsWidget::GetSettings() const
 void UCTSettingsWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 버튼 소리 (올림 / 누름)
+	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (ComboBox_Language)     { ComboBox_Language->OnSelectionChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageChanged); }
 	if (Slider_Music)          { Slider_Music->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }

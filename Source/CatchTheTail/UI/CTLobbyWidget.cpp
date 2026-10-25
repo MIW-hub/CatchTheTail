@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTLobbyWidget.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTLobbyPlayerController.h"
@@ -21,6 +22,9 @@
 void UCTLobbyWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 버튼 소리 (올림 / 누름)
+	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (Button_Ready) { Button_Ready->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleReadyClicked); }
 	if (Button_Start) { Button_Start->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleStartClicked); }

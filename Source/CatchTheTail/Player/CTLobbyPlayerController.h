@@ -62,6 +62,7 @@ public:
 protected:
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
+	virtual ECTMusic GetLevelMusic() const override { return ECTMusic::Menu; }
 	virtual void ClientRestart_Implementation(APawn* NewPawn) override;
 	virtual void CreateUI() override;
 

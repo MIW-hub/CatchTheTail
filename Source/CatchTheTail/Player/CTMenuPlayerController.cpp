@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTMenuPlayerController.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "../Core/CTSettingsSubsystem.h"
 #include "../UI/CTIntroWidget.h"
@@ -12,6 +13,12 @@ void ACTMenuPlayerController::BeginPlay()
 
 	// 로컬 컨트롤러만 UI
 	if (!IsLocalController()) { return; }
+
+	// 메뉴 배경음
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlayMusic(ECTMusic::Menu);
+	}
 
 	// 저장된 소리 설정 적용
 	if (UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr)

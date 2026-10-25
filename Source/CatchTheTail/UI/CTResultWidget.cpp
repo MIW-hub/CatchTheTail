@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTResultWidget.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "CTScoreEntryWidget.h"
 #include "../Core/CTGameState.h"
 #include "../Core/CTGameInstance.h"
@@ -12,6 +13,9 @@
 void UCTResultWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 버튼 소리 (올림 / 누름)
+	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (Button_ReturnToLobby) { Button_ReturnToLobby->OnClicked.AddUniqueDynamic(this, &UCTResultWidget::HandleReturnToLobbyClicked); }
 	if (Button_LeaveToMenu)   { Button_LeaveToMenu->OnClicked.AddUniqueDynamic(this, &UCTResultWidget::HandleLeaveToMenuClicked); }

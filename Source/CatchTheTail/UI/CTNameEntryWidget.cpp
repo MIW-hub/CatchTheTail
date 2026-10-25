@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTNameEntryWidget.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
@@ -8,6 +9,9 @@
 void UCTNameEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 버튼 소리 (올림 / 누름)
+	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (Button_Confirm)
 	{

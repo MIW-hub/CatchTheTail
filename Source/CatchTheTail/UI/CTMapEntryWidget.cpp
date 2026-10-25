@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTMapEntryWidget.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -9,6 +10,9 @@
 void UCTMapEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 버튼 소리 (올림 / 누름)
+	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (Button_Entry)
 	{

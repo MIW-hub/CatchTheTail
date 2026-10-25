@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "../Type/CTTypes.h"
+#include "../Core/CTAudioSettings.h"
 #include "CTPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -41,6 +42,12 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	// 이 레벨에서 재생할 배경음. 로비 컨트롤러가 교체
+	virtual ECTMusic GetLevelMusic() const { return ECTMusic::Game; }
+
+	// 카운트다운 숫자가 바뀔 때 소리
+	virtual void PlayerTick(float DeltaTime) override;
+
 	// 화면에 띄울 UI 생성. 로비 컨트롤러가 교체
 	virtual void CreateUI();
 
@@ -72,6 +79,12 @@ protected:
 	float ViewPitchMax = 20.f;
 
 private:
+	UFUNCTION()
+	void HandleRoundChanged(int32 NewRoundNumber);
+
+	// 마지막으로 소리를 낸 카운트다운 숫자
+	int32 LastCountdownSoundNumber = 0;
+
 	UFUNCTION(Server, Reliable)
 	void ServerReturnToLobby();
 
