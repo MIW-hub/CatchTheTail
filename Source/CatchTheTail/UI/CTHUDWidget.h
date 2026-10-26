@@ -6,7 +6,7 @@
 #include "CTHUDWidget.generated.h"
 
 class UCTScoreEntryWidget;
-class UProgressBar;
+class UMaterialInstanceDynamic;
 class UVerticalBox;
 class UWidget;
 
@@ -57,6 +57,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0.05"))
 	float ScoreboardSyncInterval = 0.25f;
 
+	// 화면에 보여줄 최대 순위 줄 수. 0이면 전부 (전체 순위는 결과 화면)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0"))
+	int32 MaxScoreboardEntries = 4;
+
 	// 위젯 (WBP 같은 이름 자동 연결)
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Phase;
@@ -76,11 +80,19 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Countdown;
 
+	// 나를 잡으러 오는 사람 (나를 목표로 가진 사람)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_HunterColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_Hunter;
+
+	// 나
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MyColor;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UImage> Image_MyColor;
+	TObjectPtr<UImage> Image_My;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_TargetColor;
@@ -94,14 +106,42 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Widget_Ghost;
 
+	/**
+	 * 스킬 슬롯 (달리기 / 잡기 / 밀기)
+	 * Image_CoolTime, _1, _2 : 달리기, 잡기, 밀기 슬롯 위에 덮는 쿨다운 이미지.
+	 *                          브러시를 M_CT_CooldownRadial 머티리얼로 두면 시계 방향으로 걷히고,
+	 *                          일반 이미지면 쿨타임 동안만 어둡게 표시됩니다.
+	 * Text_RunCooldown, Text_GrabCooldown, Text_PushCooldown : 남은 시간(초). 쿨타임이 아닐 때는 비어 있습니다.
+	 */
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UProgressBar> ProgressBar_Run;
+	TObjectPtr<UImage> Image_CoolTime;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> Text_RunState;
+	TObjectPtr<UTextBlock> Text_RunCooldown;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UProgressBar> ProgressBar_Push;
+	TObjectPtr<UImage> Image_CoolTime_1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_GrabCooldown;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_CoolTime_2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PushCooldown;
+
+	// 쿨다운 머티리얼의 0~1 파라미터 이름 (남은 비율)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FName CooldownProgressParameter = TEXT("Progress");
+
+	// 달리는 중 남은 시간 글자색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor RunActiveTextColor = FLinearColor(0.1f, 0.8f, 1.f, 1.f);
+
+	// 쿨타임 남은 시간 글자색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor CooldownTextColor = FLinearColor::White;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Scoreboard;
@@ -126,8 +166,21 @@ private:
 
 	// 갱신
 	void UpdateTimeDisplay();
-	void UpdateActionGauges();
+	void UpdateSkillSlots();
 	void RefreshMyState();
+	void RefreshHunter(bool bForce);
+
+	// 슬롯 하나 갱신. Remaining/Total 이 쿨타임, bRunning 이면 달리는 중 표시, bAvailable false 면 사용 불가(어둡게)
+	void UpdateSkillSlot(UImage* Overlay, UTextBlock* Text, float Remaining, float Total, bool bRunning, bool bAvailable);
+
+	UMaterialInstanceDynamic* GetOverlayMaterial(UImage* Overlay);
+
+	// 쿨다운 이미지별 동적 머티리얼
+	UPROPERTY(Transient)
+	TMap<TObjectPtr<UImage>, TObjectPtr<UMaterialInstanceDynamic>> OverlayMaterials;
+
+	ECTColor LastHunterColor = ECTColor::None;
+	bool bHunterInitialized = false;
 	void SyncScoreboardPlayers();
 	void RefreshScoreboard();
 

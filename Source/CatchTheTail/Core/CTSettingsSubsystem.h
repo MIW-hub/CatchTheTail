@@ -103,9 +103,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	FString GetLanguage() const;
 
-	// 언어 변경 (즉시 적용 + 저장)
+	// 언어 변경 (즉시 적용 + 저장). bConfirm 이 false면 미리보기라서 "골랐음" 표시는 하지 않음
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
-	void SetLanguage(const FString& CultureCode);
+	void SetLanguage(const FString& CultureCode, bool bConfirm = true);
+
+	// 언어 선택 화면을 이미 거쳤는가 (직접 골랐거나 -CTLanguage 로 정함)
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	bool HasChosenLanguage() const;
+
+	// 지금 언어로 확정 (선택 화면의 확인)
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void ConfirmLanguage();
 
 	// 현재 언어를 문구에 적용 (시작할 때 자동 호출)
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")

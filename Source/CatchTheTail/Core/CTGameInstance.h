@@ -11,6 +11,9 @@ class UNetDriver;
 // 메뉴 안내 문구 변경
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTMenuMessageSignature, FText, Message);
 
+// 플레이어 이름이 바뀜 (설정 창 등)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCTPlayerNameChangedSignature);
+
 UCLASS()
 class CATCHTHETAIL_API UCTGameInstance : public UGameInstance
 {
@@ -78,6 +81,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CT|Menu")
 	FCTMenuMessageSignature OnMenuMessage;
+
+	// 이름이 저장될 때마다 호출. 화면의 이름 표시를 갱신할 때 씁니다.
+	UPROPERTY(BlueprintAssignable, Category = "CT|Menu")
+	FCTPlayerNameChangedSignature OnPlayerNameChanged;
 
 	// 스팀 등 온라인 세션 기능을 쓸 수 있는가. 빠른 참가, 방 코드 입장이 이 값에 따라 막힙니다.
 	UFUNCTION(BlueprintPure, Category = "CT|Online")

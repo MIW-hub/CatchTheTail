@@ -6,7 +6,7 @@ use Encode qw(decode encode);
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
 
-# 사용법: perl ApplyTranslations.pl <프로젝트루트>  (ToolsPDATELOCALIZATION.BAT ʰ� ͘�̶�)
+# usage: perl ApplyTranslations.pl <project root>  (called from ToolsPDATELOCALIZATION.BAT)
 my $root = $ARGV[0] or die "root";
 my $dir  = "$root/Content/Localization/Game";
 my $tsv  = "$root/Config/Localization/Game_Translations.tsv";

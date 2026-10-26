@@ -133,6 +133,7 @@ bool UCTGameInstance::StoreValidatedName(const FString& NewName, FText& OutError
 
 	PlayerName = NewName.TrimStartAndEnd();
 	SaveProfile();
+	OnPlayerNameChanged.Broadcast();
 	return true;
 }
 

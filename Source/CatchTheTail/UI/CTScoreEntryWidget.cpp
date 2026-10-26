@@ -9,7 +9,7 @@ void UCTScoreEntryWidget::SetEntryPlayerState(ACTPlayerState* InPlayerState)
 	EntryPlayerState = InPlayerState;
 }
 
-void UCTScoreEntryWidget::RefreshEntry(int32 Rank, bool bIsLocalPlayer)
+void UCTScoreEntryWidget::RefreshEntry(int32 Rank, bool bIsLocalPlayer, bool bAllowCrown)
 {
 	ACTPlayerState* PlayerState = EntryPlayerState.Get();
 	if (!PlayerState) { return; }
@@ -29,6 +29,10 @@ void UCTScoreEntryWidget::RefreshEntry(int32 Rank, bool bIsLocalPlayer)
 	if (Text_TailCount)
 	{
 		Text_TailCount->SetText(FText::AsNumber(PlayerState->GetTailCount()));
+	}
+	if (Image_Crown)
+	{
+		Image_Crown->SetVisibility((bAllowCrown && Rank == 1) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	if (Widget_GhostMark)
 	{

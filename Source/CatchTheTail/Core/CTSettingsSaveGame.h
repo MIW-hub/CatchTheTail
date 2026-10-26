@@ -30,6 +30,10 @@ struct FCTSettingsData
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	FString Language;
 
+	// 언어 선택 화면에서 직접 고른 적이 있는가. false면 처음 한 번 언어 선택 화면을 보여줌
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	bool bLanguageChosen = false;
+
 	// 화면
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bFullscreen = true;

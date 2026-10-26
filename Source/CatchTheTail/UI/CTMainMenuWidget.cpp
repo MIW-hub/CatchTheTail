@@ -43,17 +43,12 @@ void UCTMainMenuWidget::NativeConstruct()
 	ApplyOnlineAvailability();
 
 	// 저장된 이름 표시
-	if (Text_PlayerName)
-	{
-		if (const UCTGameInstance* NameGameInstance = GetGameInstance<UCTGameInstance>())
-		{
-			Text_PlayerName->SetText(FText::FromString(NameGameInstance->GetPlayerName()));
-		}
-	}
+	RefreshPlayerName();
 
 	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
 	{
 		GameInstance->OnMenuMessage.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleMessage);
+		GameInstance->OnPlayerNameChanged.AddUniqueDynamic(this, &UCTMainMenuWidget::HandlePlayerNameChanged);
 
 		// 연결 끊김 안내
 		const FText Pending = GameInstance->GetPendingMessage();
@@ -65,11 +60,27 @@ void UCTMainMenuWidget::NativeConstruct()
 	}
 }
 
+void UCTMainMenuWidget::HandlePlayerNameChanged()
+{
+	RefreshPlayerName();
+}
+
+void UCTMainMenuWidget::RefreshPlayerName()
+{
+	if (!Text_PlayerName) { return; }
+
+	if (const UCTGameInstance* NameGameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		Text_PlayerName->SetText(FText::FromString(NameGameInstance->GetPlayerName()));
+	}
+}
+
 void UCTMainMenuWidget::NativeDestruct()
 {
 	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
 	{
 		GameInstance->OnMenuMessage.RemoveDynamic(this, &UCTMainMenuWidget::HandleMessage);
+		GameInstance->OnPlayerNameChanged.RemoveDynamic(this, &UCTMainMenuWidget::HandlePlayerNameChanged);
 	}
 
 	Super::NativeDestruct();

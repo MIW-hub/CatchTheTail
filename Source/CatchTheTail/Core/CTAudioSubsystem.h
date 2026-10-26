@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Audio")
 	void StopMusic();
 
+	// 설정의 배경음 볼륨(음소거 포함)을 지금 나오는 배경음에 바로 적용. 설정이 바뀔 때 설정 시스템이 부릅니다.
+	UFUNCTION(BlueprintCallable, Category = "CT|Audio")
+	void RefreshMusicVolume();
+
 	/**
 	 * 위젯 안의 버튼과 체크박스에 소리를 붙입니다. (올림 / 누름)
 	 * 이름에 Back, Close, Cancel, Leave가 들어간 버튼은 "뒤로가기" 소리, 나머지는 "확인" 소리입니다.
@@ -45,6 +49,9 @@ public:
 	static void ApplyUISounds(UUserWidget* Widget);
 
 private:
+	// 설정에서 읽은 배경음 볼륨 (음소거면 0)
+	float GetSettingsMusicVolume() const;
+
 	// 배경음이 끝나면 다시 시작 (반복 보강)
 	UFUNCTION()
 	void HandleMusicFinished();

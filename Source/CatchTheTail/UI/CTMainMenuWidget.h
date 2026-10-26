@@ -161,6 +161,12 @@ private:
 	UFUNCTION()
 	void HandleMessage(FText Message);
 
+	// 이름이 바뀌면 오른쪽 위 이름 표시 갱신
+	UFUNCTION()
+	void HandlePlayerNameChanged();
+
+	void RefreshPlayerName();
+
 	void ShowMessage(const FText& Message);
 
 	// 패널 켜고 끄기

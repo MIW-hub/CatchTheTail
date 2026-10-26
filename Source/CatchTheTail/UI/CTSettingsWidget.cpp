@@ -27,6 +27,9 @@ void UCTSettingsWidget::NativeConstruct()
 	UCTAudioSubsystem::ApplyUISounds(this);
 
 	if (ComboBox_Language)     { ComboBox_Language->OnSelectionChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageChanged); }
+	if (Button_LanguageKo)     { Button_LanguageKo->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageKoClicked); }
+	if (Button_LanguageEn)     { Button_LanguageEn->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageEnClicked); }
+	if (Button_LanguageJa)     { Button_LanguageJa->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleLanguageJaClicked); }
 	if (Slider_Music)          { Slider_Music->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
@@ -35,15 +38,20 @@ void UCTSettingsWidget::NativeConstruct()
 	if (CheckBox_TeamColors)   { CheckBox_TeamColors->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleTeamColorsChanged); }
 	if (CheckBox_TeamMarker)   { CheckBox_TeamMarker->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleTeamMarkerChanged); }
 	if (Button_ChangeName)     { Button_ChangeName->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleChangeNameClicked); }
+	if (Button_ChangeNameOpen) { Button_ChangeNameOpen->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleChangeNameOpenClicked); }
 	if (Button_Reset)          { Button_Reset->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleResetClicked); }
 	if (Button_Close)          { Button_Close->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleCloseClicked); }
 
+	SetNameChangeOpen(false); // 이름 입력 칸은 버튼을 눌러야 펼쳐짐
 	RefreshAll();
 }
 
 void UCTSettingsWidget::NativeDestruct()
 {
 	if (ComboBox_Language)     { ComboBox_Language->OnSelectionChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleLanguageChanged); }
+	if (Button_LanguageKo)     { Button_LanguageKo->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleLanguageKoClicked); }
+	if (Button_LanguageEn)     { Button_LanguageEn->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleLanguageEnClicked); }
+	if (Button_LanguageJa)     { Button_LanguageJa->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleLanguageJaClicked); }
 	if (Slider_Music)          { Slider_Music->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
@@ -52,6 +60,7 @@ void UCTSettingsWidget::NativeDestruct()
 	if (CheckBox_TeamColors)   { CheckBox_TeamColors->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleTeamColorsChanged); }
 	if (CheckBox_TeamMarker)   { CheckBox_TeamMarker->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleTeamMarkerChanged); }
 	if (Button_ChangeName)     { Button_ChangeName->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleChangeNameClicked); }
+	if (Button_ChangeNameOpen) { Button_ChangeNameOpen->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleChangeNameOpenClicked); }
 	if (Button_Reset)          { Button_Reset->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleResetClicked); }
 	if (Button_Close)          { Button_Close->OnClicked.RemoveDynamic(this, &UCTSettingsWidget::HandleCloseClicked); }
 
@@ -154,16 +163,34 @@ void UCTSettingsWidget::ShowNameMessage(const FText& Message)
 void UCTSettingsWidget::RefreshLanguage()
 {
 	UCTSettingsSubsystem* Settings = GetSettings();
-	if (!ComboBox_Language || !Settings) { return; }
+	if (!Settings) { return; }
+
+	// 언어 버튼: 지금 언어만 또렷하게
+	const FString CurrentLanguage = Settings->GetLanguage();
+	auto Mark = [this, &CurrentLanguage](UButton* Button, const TCHAR* Code)
+	{
+		if (Button) { Button->SetRenderOpacity(CurrentLanguage == Code ? 1.f : UnselectedLanguageOpacity); }
+	};
+	Mark(Button_LanguageKo, TEXT("ko"));
+	Mark(Button_LanguageEn, TEXT("en"));
+	Mark(Button_LanguageJa, TEXT("ja"));
+
+	if (!ComboBox_Language) { return; }
 
 	TGuardValue<bool> Guard(bRefreshing, true);
 
 	ComboBox_Language->ClearOptions();
+	const FString Current = Settings->GetLanguage();
+	int32 CurrentIndex = 0;
+	int32 Index = 0;
 	for (const FString& Code : UCTSettingsSubsystem::GetSupportedLanguages())
 	{
 		ComboBox_Language->AddOption(UCTSettingsSubsystem::GetLanguageDisplayName(Code));
+		if (Code == Current) { CurrentIndex = Index; }
+		++Index;
 	}
-	ComboBox_Language->SetSelectedOption(UCTSettingsSubsystem::GetLanguageDisplayName(Settings->GetLanguage()));
+	// 이름이 아니라 순서로 골라서, 지금 쓰는 언어가 확실히 선택된 상태로 보이게 함
+	ComboBox_Language->SetSelectedIndex(CurrentIndex);
 }
 
 void UCTSettingsWidget::HandleLanguageChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
@@ -180,6 +207,20 @@ void UCTSettingsWidget::HandleLanguageChanged(FString SelectedItem, ESelectInfo:
 			RefreshAll(); // 조작 목록 등 문구를 새 언어로 다시 채움
 			return;
 		}
+	}
+}
+
+void UCTSettingsWidget::HandleLanguageKoClicked() { ChooseLanguage(TEXT("ko")); }
+void UCTSettingsWidget::HandleLanguageEnClicked() { ChooseLanguage(TEXT("en")); }
+void UCTSettingsWidget::HandleLanguageJaClicked() { ChooseLanguage(TEXT("ja")); }
+
+void UCTSettingsWidget::ChooseLanguage(const FString& CultureCode)
+{
+	if (bRefreshing) { return; }
+	if (UCTSettingsSubsystem* Settings = GetSettings())
+	{
+		Settings->SetLanguage(CultureCode);
+		RefreshAll(); // 조작 안내 등 문구를 새 언어로 다시 채움
 	}
 }
 
@@ -260,7 +301,27 @@ void UCTSettingsWidget::HandleChangeNameClicked()
 
 	ShowNameMessage(NSLOCTEXT("CT", "Settings_NameChanged", "이름을 바꿨습니다."));
 	if (EditableTextBox_NewName) { EditableTextBox_NewName->SetText(FText::GetEmpty()); }
+	SetNameChangeOpen(false);
 	RefreshAll();
+}
+
+void UCTSettingsWidget::HandleChangeNameOpenClicked()
+{
+	// 누를 때마다 펼침/접힘
+	SetNameChangeOpen(!Row_NameChange || Row_NameChange->GetVisibility() == ESlateVisibility::Collapsed);
+}
+
+void UCTSettingsWidget::SetNameChangeOpen(bool bOpen)
+{
+	if (Row_NameChange)
+	{
+		Row_NameChange->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (bOpen)
+	{
+		ShowNameMessage(FText::GetEmpty());
+		if (EditableTextBox_NewName) { EditableTextBox_NewName->SetKeyboardFocus(); }
+	}
 }
 
 void UCTSettingsWidget::ResetSettings()

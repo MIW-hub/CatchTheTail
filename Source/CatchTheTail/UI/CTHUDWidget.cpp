@@ -4,8 +4,9 @@
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTPlayerState.h"
-#include "Components/ProgressBar.h"
+#include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/VerticalBox.h"
 #include "Components/Widget.h"
 
@@ -26,6 +27,7 @@ void UCTHUDWidget::NativeConstruct()
 
 	SetShown(Widget_Countdown, false);
 	SetShown(Widget_Ghost, false);
+	UpdateSkillSlots();
 
 	TryBindGameState();
 	TryBindMyPlayerState();
@@ -46,7 +48,7 @@ void UCTHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	TryBindMyPlayerState();
 
 	UpdateTimeDisplay();
-	UpdateActionGauges();
+	UpdateSkillSlots();
 
 	ScoreboardSyncAccumulator += InDeltaTime;
 	if (ScoreboardSyncAccumulator >= ScoreboardSyncInterval)
@@ -167,6 +169,7 @@ void UCTHUDWidget::HandleMyPlayerStateChanged(ACTPlayerState* ChangedPlayerState
 void UCTHUDWidget::HandleAnyPlayerStateChanged(ACTPlayerState* ChangedPlayerState)
 {
 	bScoreboardDirty = true;
+	RefreshHunter(/*bForce=*/false);
 }
 
 // 갱신
@@ -214,50 +217,109 @@ void UCTHUDWidget::UpdateTimeDisplay()
 	}
 }
 
-void UCTHUDWidget::UpdateActionGauges()
+UMaterialInstanceDynamic* UCTHUDWidget::GetOverlayMaterial(UImage* Overlay)
+{
+	if (!Overlay) { return nullptr; }
+
+	if (const TObjectPtr<UMaterialInstanceDynamic>* Found = OverlayMaterials.Find(Overlay))
+	{
+		return Found->Get();
+	}
+
+	// 브러시가 머티리얼일 때만 만들어짐 (일반 이미지면 nullptr)
+	UMaterialInstanceDynamic* Material = Overlay->GetDynamicMaterial();
+	OverlayMaterials.Add(Overlay, Material);
+	return Material;
+}
+
+void UCTHUDWidget::UpdateSkillSlot(UImage* Overlay, UTextBlock* Text, float Remaining, float Total, bool bRunning, bool bAvailable)
+{
+	const bool bCoolingDown = !bRunning && bAvailable && Remaining > KINDA_SMALL_NUMBER && Total > 0.f;
+
+	if (Overlay)
+	{
+		// 쿨타임 중에는 남은 비율만큼, 사용 불가는 전부 덮음
+		const bool bShowOverlay = bCoolingDown || (!bRunning && !bAvailable);
+		const float Progress = bCoolingDown ? FMath::Clamp(Remaining / Total, 0.f, 1.f) : 1.f;
+
+		if (UMaterialInstanceDynamic* Material = GetOverlayMaterial(Overlay))
+		{
+			Material->SetScalarParameterValue(CooldownProgressParameter, Progress);
+		}
+		SetShown(Overlay, bShowOverlay);
+	}
+
+	if (Text)
+	{
+		if (bRunning || bCoolingDown)
+		{
+			// 10초 미만은 소수점 한 자리
+			FNumberFormattingOptions Format;
+			Format.MinimumFractionalDigits = Remaining < 10.f ? 1 : 0;
+			Format.MaximumFractionalDigits = Remaining < 10.f ? 1 : 0;
+			Text->SetText(FText::AsNumber(Remaining, &Format));
+			Text->SetColorAndOpacity(FSlateColor(bRunning ? RunActiveTextColor : CooldownTextColor));
+			SetShown(Text, true);
+		}
+		else
+		{
+			Text->SetText(FText::GetEmpty());
+			SetShown(Text, false);
+		}
+	}
+}
+
+void UCTHUDWidget::UpdateSkillSlots()
 {
 	const ACTCharacter* MyCharacter = GetOwningCTCharacter();
 
-	if (ProgressBar_Run)
-	{
-		ProgressBar_Run->SetPercent(MyCharacter ? MyCharacter->GetRunGaugePercent() : 0.f);
-	}
-	if (ProgressBar_Push)
-	{
-		ProgressBar_Push->SetPercent(MyCharacter ? MyCharacter->GetPushReadyPercent() : 0.f);
-	}
-	if (Text_RunState)
-	{
-		FText RunText = FText::GetEmpty();
-		if (MyCharacter)
-		{
-			FNumberFormattingOptions OneDecimal;
-			OneDecimal.MinimumFractionalDigits = 1;
-			OneDecimal.MaximumFractionalDigits = 1;
-			const FText Remaining = FText::AsNumber(MyCharacter->GetRunStateRemainingSeconds(), &OneDecimal);
+	const bool bCanAct = MyCharacter && MyCharacter->CanUseActions();
+	const bool bCanRun = bCanAct && MyCharacter->CanMoveNow();
 
-			if (MyCharacter->IsGhost())
+	// 달리기: 달리는 중에는 남은 달리기 시간, 쿨타임이면 남은 쿨타임
+	const ECTRunState RunState = MyCharacter ? MyCharacter->GetRunState() : ECTRunState::Idle;
+	const float RunRemaining = MyCharacter ? MyCharacter->GetRunStateRemainingSeconds() : 0.f;
+	UpdateSkillSlot(Image_CoolTime, Text_RunCooldown,
+		RunState == ECTRunState::Idle ? 0.f : RunRemaining,
+		MyCharacter ? MyCharacter->GetRunCooldownSeconds() : 0.f,
+		bCanRun && RunState == ECTRunState::Running,
+		bCanRun);
+
+	UpdateSkillSlot(Image_CoolTime_1, Text_GrabCooldown,
+		MyCharacter ? MyCharacter->GetGrabCooldownRemainingSeconds() : 0.f,
+		MyCharacter ? MyCharacter->GetGrabCooldownSeconds() : 0.f,
+		false, bCanAct);
+
+	UpdateSkillSlot(Image_CoolTime_2, Text_PushCooldown,
+		MyCharacter ? MyCharacter->GetPushCooldownRemainingSeconds() : 0.f,
+		MyCharacter ? MyCharacter->GetPushCooldownSeconds() : 0.f,
+		false, bCanAct);
+}
+
+void UCTHUDWidget::RefreshHunter(bool bForce)
+{
+	const ACTPlayerState* MyPlayerState = BoundMyPlayerState.Get();
+	const ECTColor MyColor = MyPlayerState ? MyPlayerState->GetAssignedColor() : ECTColor::None;
+
+	// 나를 목표로 가진 사람의 색
+	ECTColor HunterColor = ECTColor::None;
+	if (MyColor != ECTColor::None)
+	{
+		for (const ACTPlayerState* PlayerState : GetSortedPlayers(BoundGameState.Get()))
+		{
+			if (PlayerState != MyPlayerState && PlayerState->GetTargetColor() == MyColor)
 			{
-				RunText = NSLOCTEXT("CT", "UI_Run_Ghost", "달리기 불가");
-			}
-			else
-			{
-				switch (MyCharacter->GetRunState())
-				{
-				case ECTRunState::Idle:
-					RunText = NSLOCTEXT("CT", "UI_Run_Ready", "달리기 가능");
-					break;
-				case ECTRunState::Running:
-					RunText = FText::Format(NSLOCTEXT("CT", "UI_Run_Running", "달리는 중 {0}"), Remaining);
-					break;
-				case ECTRunState::Cooldown:
-					RunText = FText::Format(NSLOCTEXT("CT", "UI_Run_Cooldown", "쿨타임 {0}"), Remaining);
-					break;
-				}
+				HunterColor = PlayerState->GetAssignedColor();
+				break;
 			}
 		}
-		Text_RunState->SetText(RunText);
 	}
+
+	if (!bForce && bHunterInitialized && HunterColor == LastHunterColor) { return; }
+
+	bHunterInitialized = true;
+	LastHunterColor = HunterColor;
+	ApplyColorToWidgets(HunterColor, Text_HunterColor, Image_Hunter, NSLOCTEXT("CT", "UI_NoHunter", "-"));
 }
 
 void UCTHUDWidget::RefreshMyState()
@@ -269,8 +331,9 @@ void UCTHUDWidget::RefreshMyState()
 	const int32 TailCount = MyPlayerState ? MyPlayerState->GetTailCount() : 0;
 	const bool bIsGhost = MyPlayerState && MyPlayerState->IsGhost();
 
-	ApplyColorToWidgets(MyColor, Text_MyColor, Image_MyColor, NSLOCTEXT("CT", "UI_NoMyColor", "-"));
+	ApplyColorToWidgets(MyColor, Text_MyColor, Image_My, NSLOCTEXT("CT", "UI_NoMyColor", "-"));
 	ApplyColorToWidgets(TargetColor, Text_TargetColor, Image_TargetColor, NSLOCTEXT("CT", "UI_NoTarget", "목표 없음"));
+	RefreshHunter(/*bForce=*/true);
 
 	if (Text_TailCount)
 	{
@@ -300,6 +363,7 @@ void UCTHUDWidget::SyncScoreboardPlayers()
 {
 	// 알림 없는 값(이름 등) 주기 갱신
 	bScoreboardDirty = true;
+	RefreshHunter(/*bForce=*/false);
 
 	if (!VerticalBox_Scoreboard || !ScoreEntryClass) { return; }
 
@@ -368,23 +432,29 @@ void UCTHUDWidget::RefreshScoreboard()
 	});
 
 	// 순서 바뀔 때만 재배치 (애니메이션 끊김)
-	bool bOrderChanged = VerticalBox_Scoreboard->GetChildrenCount() != SortedEntries.Num();
-	for (int32 Index = 0; !bOrderChanged && Index < SortedEntries.Num(); ++Index)
+	// 화면에는 위쪽 몇 명만 (전체 순위는 결과 화면)
+	const int32 DisplayCount = MaxScoreboardEntries > 0 ? FMath::Min(MaxScoreboardEntries, SortedEntries.Num()) : SortedEntries.Num();
+
+	bool bOrderChanged = VerticalBox_Scoreboard->GetChildrenCount() != DisplayCount;
+	for (int32 Index = 0; !bOrderChanged && Index < DisplayCount; ++Index)
 	{
 		bOrderChanged = VerticalBox_Scoreboard->GetChildAt(Index) != SortedEntries[Index];
 	}
 	if (bOrderChanged)
 	{
 		VerticalBox_Scoreboard->ClearChildren();
-		for (UCTScoreEntryWidget* Entry : SortedEntries)
+		for (int32 Index = 0; Index < DisplayCount; ++Index)
 		{
-			VerticalBox_Scoreboard->AddChildToVerticalBox(Entry);
+			VerticalBox_Scoreboard->AddChildToVerticalBox(SortedEntries[Index]);
 		}
 	}
 
 	// 동점은 같은 순위
 	const ACTPlayerState* MyPlayerState = BoundMyPlayerState.Get();
 	int32 Rank = 0;
+	// 모두 동점이면 왕관 없음
+	const bool bAllTied = SortedEntries.Num() > 1
+		&& SortedEntries[0]->GetEntryPlayerState()->GetTailCount() == SortedEntries.Last()->GetEntryPlayerState()->GetTailCount();
 	int32 PreviousTailCount = INDEX_NONE;
 	for (int32 Index = 0; Index < SortedEntries.Num(); ++Index)
 	{
@@ -394,6 +464,6 @@ void UCTHUDWidget::RefreshScoreboard()
 			Rank = Index + 1;
 			PreviousTailCount = PlayerState->GetTailCount();
 		}
-		SortedEntries[Index]->RefreshEntry(Rank, PlayerState == MyPlayerState);
+		SortedEntries[Index]->RefreshEntry(Rank, PlayerState == MyPlayerState, !bAllTied);
 	}
 }

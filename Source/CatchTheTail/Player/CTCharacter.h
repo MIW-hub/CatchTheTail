@@ -57,6 +57,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Combat")
 	float GetPushReadyPercent() const;
 
+	// 밀기 쿨타임 남은 시간(초) (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetPushCooldownRemainingSeconds() const;
+
+	// 잡기 준비도 0~1 (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetGrabReadyPercent() const;
+
+	// 잡기 쿨타임 남은 시간(초) (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetGrabCooldownRemainingSeconds() const;
+
+	// 쿨타임 설정값 (HUD 표시용)
+	float GetRunCooldownSeconds() const { return RunCooldownSeconds; }
+	float GetGrabCooldownSeconds() const { return GrabCooldownSeconds; }
+	float GetPushCooldownSeconds() const { return PushCooldownSeconds; }
+
 	// 배율 1.0 걷기 속도
 	UFUNCTION(BlueprintPure, Category = "CT|Speed")
 	float GetBaseWalkSpeed() const { return BaseWalkSpeed; }
@@ -210,6 +227,32 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> PushedMontage;
 
+	// 밀려 넘어진 뒤 일어나는 몽타주. 비어 있으면 넘어짐 자세를 유지한 뒤 바로 풀림 (아직 제작 전)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GetUpMontage;
+
+	// 유령 걷기 반복 몽타주, 섹션명=GhostWalkLoopSection
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GhostWalkMontage;
+
+	// 유령 걷기 반복 섹션 이름
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	FName GhostWalkLoopSection = TEXT("Loop");
+
+	// 유령 걷기 몽타주 기준 속도(cm/s), 실속도 비례 재생
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "1"))
+	float GhostWalkReferenceSpeed = 300.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float GhostWalkMinPlayRate = 0.6f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float GhostWalkMaxPlayRate = 1.5f;
+
+	// 이 속도 미만이면 유령 걷기 모션 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0"))
+	float GhostWalkMinSpeed = 30.f;
+
 	// 달리기 반복 몽타주, 섹션명=RunMontageLoopSection
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> RunMontage;
@@ -343,9 +386,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0", ClampMax = "180"))
 	float PushHalfAngleDegrees = 60.f;
 
-	// 밀려나는 수평 속도
+	// 밀려나는 거리 (밀린 캐릭터 키의 몇 배인지). 1이면 키 정도 (공중 비행 + 착지 후 미끄러짐을 합쳐 어림)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
-	float PushSpeed = 800.f;
+	float PushDistanceInHeights = 1.f;
+
+	// 밀기 몽타주 재생 속도 (잡기 등은 ActionMontagePlayRate)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float PushMontagePlayRate = 2.f;
 
 	// 밀 때 상승 속도
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
@@ -353,7 +400,11 @@ protected:
 
 	// 밀기 쿨타임(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
-	float PushCooldownSeconds = 1.f;
+	float PushCooldownSeconds = 3.f;
+
+	// 잡기 쿨타임(초). 잡기를 누른 순간부터 센다
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
+	float GrabCooldownSeconds = 1.5f;
 
 protected:
 	// 카메라 초기 설정
@@ -396,6 +447,11 @@ protected:
 
 	// 달리기 몽타주 반복/정지 (매 프레임)
 	void UpdateRunMontage();
+	void UpdateGhostWalkMontage();
+
+	// 밀려 넘어진 몽타주가 끝나면 일어나기 몽타주 재생 (비어 있으면 안 함)
+	UFUNCTION()
+	void HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
 	// 꼬리 / 잡기 동작 구간 (서버)
 	void SpawnTail();
@@ -481,6 +537,12 @@ private:
 
 	// 마지막 밀기 입력 시각 (로컬)
 	double LocalLastPushTime = -1000.0;
+
+	// 마지막 잡기 시각 (서버)
+	double LastGrabTime = -1000.0;
+
+	// 마지막 잡기 입력 시각 (로컬)
+	double LocalLastGrabTime = -1000.0;
 
 	// 꼬리 (서버 생성, 복제)
 	UPROPERTY(ReplicatedUsing = OnRep_OwnedTail)

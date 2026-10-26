@@ -5,6 +5,7 @@
 #include "../Core/CTSettingsSubsystem.h"
 #include "../UI/CTIntroWidget.h"
 #include "../UI/CTNameEntryWidget.h"
+#include "../UI/CTLanguageSelectWidget.h"
 #include "Blueprint/UserWidget.h"
 
 void ACTMenuPlayerController::BeginPlay()
@@ -35,7 +36,7 @@ void ACTMenuPlayerController::BeginPlay()
 	}
 	else
 	{
-		ShowNameEntryOrMenu();
+		ShowLanguageSelectOrMenu();
 	}
 }
 
@@ -46,6 +47,13 @@ void ACTMenuPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		IntroWidget->OnIntroFinished.RemoveAll(this);
 		IntroWidget->RemoveFromParent();
 		IntroWidget = nullptr;
+	}
+
+	if (LanguageSelectWidget)
+	{
+		LanguageSelectWidget->OnLanguageConfirmed.RemoveAll(this);
+		LanguageSelectWidget->RemoveFromParent();
+		LanguageSelectWidget = nullptr;
 	}
 
 	if (NameEntryWidget)
@@ -91,14 +99,14 @@ void ACTMenuPlayerController::HandleIntroFinished()
 		IntroWidget = nullptr;
 	}
 
-	ShowNameEntryOrMenu();
+	ShowLanguageSelectOrMenu();
 }
 
 void ACTMenuPlayerController::ShowNameEntryOrMenu()
 {
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 
-	// 이름 없으면 먼저 입력 (위젯 없으면 생략)
+	// 언어 선택 다음 단계: 이름 없으면 입력 (위젯 없으면 생략)
 	if (NameEntryWidgetClass && GameInstance && !GameInstance->HasPlayerName())
 	{
 		ShowNameEntry();
@@ -107,6 +115,47 @@ void ACTMenuPlayerController::ShowNameEntryOrMenu()
 	{
 		ShowMainMenu();
 	}
+}
+
+void ACTMenuPlayerController::ShowLanguageSelectOrMenu()
+{
+	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
+
+	// 언어를 아직 안 골랐으면 먼저 선택 (위젯 없으면 생략)
+	if (!LanguageSelectWidgetClass || !Settings || Settings->HasChosenLanguage())
+	{
+		ShowNameEntryOrMenu();
+		return;
+	}
+
+	if (LanguageSelectWidget)
+	{
+		LanguageSelectWidget->OnLanguageConfirmed.RemoveAll(this);
+		LanguageSelectWidget->RemoveFromParent();
+		LanguageSelectWidget = nullptr;
+	}
+
+	LanguageSelectWidget = CreateWidget<UCTLanguageSelectWidget>(this, LanguageSelectWidgetClass);
+	if (!LanguageSelectWidget)
+	{
+		ShowNameEntryOrMenu();
+		return;
+	}
+
+	LanguageSelectWidget->OnLanguageConfirmed.AddUniqueDynamic(this, &ACTMenuPlayerController::HandleLanguageConfirmed);
+	ShowWidgetWithUIInput(LanguageSelectWidget);
+}
+
+void ACTMenuPlayerController::HandleLanguageConfirmed()
+{
+	if (LanguageSelectWidget)
+	{
+		LanguageSelectWidget->OnLanguageConfirmed.RemoveAll(this);
+		LanguageSelectWidget->RemoveFromParent();
+		LanguageSelectWidget = nullptr;
+	}
+
+	ShowNameEntryOrMenu();
 }
 
 void ACTMenuPlayerController::ShowNameEntry()

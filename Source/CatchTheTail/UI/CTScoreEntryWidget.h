@@ -21,7 +21,8 @@ public:
 
 	// 표시 갱신 (Rank는 1부터)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
-	void RefreshEntry(int32 Rank, bool bIsLocalPlayer);
+	// bAllowCrown: 1등에게 왕관을 보여줄지 (모두 동점이면 false)
+	void RefreshEntry(int32 Rank, bool bIsLocalPlayer, bool bAllowCrown = true);
 
 protected:
 	// 갱신 후 (연출용)
@@ -42,6 +43,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_TailCount;
+
+	// 1등(공동 포함) 표시용 왕관
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Image_Crown;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Widget_GhostMark;

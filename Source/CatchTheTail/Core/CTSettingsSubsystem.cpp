@@ -1,6 +1,7 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTSettingsSubsystem.h"
 #include "CTGameInstance.h"
+#include "CTAudioSubsystem.h"
 #include "CTSettingsConfig.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
@@ -75,6 +76,12 @@ void UCTSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	LoadSettings();
+
+	// 테스트용: -CTTestMusicVolume=0.2 -CTTestSfxVolume=0.5 (저장하지 않음)
+	float TestVolume = 0.f;
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTTestMusicVolume="), TestVolume)) { Data.MusicVolume = FMath::Clamp(TestVolume, 0.f, 1.f); }
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTTestSfxVolume="), TestVolume)) { Data.SfxVolume = FMath::Clamp(TestVolume, 0.f, 1.f); }
+
 	ApplyLanguage();
 	ApplyDisplay();
 	ApplyAudio(); // 월드 없으면 생략. 맵 열릴 때 컨트롤러가 재적용
@@ -171,20 +178,28 @@ void UCTSettingsSubsystem::SetTeamMarkerEnabled(bool bEnabled)
 void UCTSettingsSubsystem::ApplyAudio()
 {
 	UGameInstance* GameInstance = GetGameInstance();
+
+	// 배경음은 사운드 믹스 대신 지금 나오는 배경음에 직접 볼륨을 줌 (음소거 포함)
+	if (UCTAudioSubsystem* Audio = GameInstance ? GameInstance->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->RefreshMusicVolume();
+	}
+
+	// 효과음은 사운드 믹스로 (버튼 소리, 발소리 등 여러 곳에서 나서)
 	UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
+	if (!World) { return; } // 맵 열릴 때 컨트롤러가 다시 적용
+
 	USoundMix* Mix = Config()->SettingsSoundMix.LoadSynchronous();
-	if (!World || !Mix) { return; }
+	if (!Mix)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 효과음 볼륨을 적용하지 못함: 사운드 믹스가 없습니다 (프로젝트 설정 CatchTheTail Settings 확인)"));
+		return;
+	}
 
 	UGameplayStatics::SetBaseSoundMix(World, Mix);
 
-	// 음소거는 두 클래스 볼륨 0
-	const float MusicVolume = Data.bMuteAll ? 0.f : Data.MusicVolume;
+	// 음소거는 볼륨 0
 	const float SfxVolume = Data.bMuteAll ? 0.f : Data.SfxVolume;
-
-	if (USoundClass* MusicClass = Config()->MusicSoundClass.LoadSynchronous())
-	{
-		UGameplayStatics::SetSoundMixClassOverride(World, Mix, MusicClass, MusicVolume, 1.f, 0.f, true);
-	}
 	if (USoundClass* SfxClass = Config()->SfxSoundClass.LoadSynchronous())
 	{
 		UGameplayStatics::SetSoundMixClassOverride(World, Mix, SfxClass, SfxVolume, 1.f, 0.f, true);
@@ -264,12 +279,27 @@ FString UCTSettingsSubsystem::GetLanguage() const
 	return FString(TEXT("en"));
 }
 
-void UCTSettingsSubsystem::SetLanguage(const FString& CultureCode)
+void UCTSettingsSubsystem::SetLanguage(const FString& CultureCode, bool bConfirm)
 {
 	if (!IsSupportedLanguage(CultureCode)) { return; }
 
 	Data.Language = CultureCode;
+	if (bConfirm) { Data.bLanguageChosen = true; }
 	ApplyLanguage();
+	CommitChange();
+}
+
+bool UCTSettingsSubsystem::HasChosenLanguage() const
+{
+	FString Forced;
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTLanguage="), Forced) && IsSupportedLanguage(Forced)) { return true; }
+	return Data.bLanguageChosen && IsSupportedLanguage(Data.Language);
+}
+
+void UCTSettingsSubsystem::ConfirmLanguage()
+{
+	Data.Language = GetLanguage();
+	Data.bLanguageChosen = true;
 	CommitChange();
 }
 
@@ -294,8 +324,10 @@ void UCTSettingsSubsystem::ResetToDefaults()
 	// 키 포함 초기화. 컨텍스트 정리는 ApplyKeyBindingsToLocalPlayer
 	// 언어는 초기화하지 않고 유지
 	const FString KeepLanguage = Data.Language;
+	const bool bKeepChosen = Data.bLanguageChosen;
 	Data = FCTSettingsData();
 	Data.Language = KeepLanguage;
+	Data.bLanguageChosen = bKeepChosen;
 
 	ApplyKeyBindingsToLocalPlayer();
 	EffectiveContexts.Empty();

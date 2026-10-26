@@ -195,6 +195,30 @@ float ACTCharacter::GetPushReadyPercent() const
 	return FMath::Clamp(static_cast<float>(Elapsed / PushCooldownSeconds), 0.f, 1.f);
 }
 
+float ACTCharacter::GetPushCooldownRemainingSeconds() const
+{
+	if (PushCooldownSeconds <= 0.f || !GetWorld()) { return 0.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastPushTime;
+	return FMath::Clamp(static_cast<float>(PushCooldownSeconds - Elapsed), 0.f, PushCooldownSeconds);
+}
+
+float ACTCharacter::GetGrabReadyPercent() const
+{
+	if (GrabCooldownSeconds <= 0.f || !GetWorld()) { return 1.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastGrabTime;
+	return FMath::Clamp(static_cast<float>(Elapsed / GrabCooldownSeconds), 0.f, 1.f);
+}
+
+float ACTCharacter::GetGrabCooldownRemainingSeconds() const
+{
+	if (GrabCooldownSeconds <= 0.f || !GetWorld()) { return 0.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastGrabTime;
+	return FMath::Clamp(static_cast<float>(GrabCooldownSeconds - Elapsed), 0.f, GrabCooldownSeconds);
+}
+
 bool ACTCharacter::CanMoveNow() const
 {
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
@@ -487,6 +511,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	UpdateRunMontage();
+	UpdateGhostWalkMontage();
 	UpdateMovementSounds(DeltaSeconds);
 
 	// 로컬 전용
@@ -558,6 +583,11 @@ void ACTCharacter::OnRunReleased()
 void ACTCharacter::OnGrabPressed()
 {
 	if (!CanUseActions()) { return; }
+
+	// 쿨타임 중 서버 거절
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LocalLastGrabTime < GrabCooldownSeconds) { return; }
+	LocalLastGrabTime = Now;
 
 	// 서버 응답 전 선재생
 	PlayActionMontage(ECTCharacterAction::Grab);
@@ -669,6 +699,10 @@ void ACTCharacter::ServerGrab_Implementation()
 	// 동작 중이면 재시작 안 함 (연타 방지)
 	const double Now = World->GetTimeSeconds();
 	if (bGrabActive || Now < GrabLockEndTime || GetWorldTimerManager().IsTimerActive(GrabWindowStartTimerHandle)) { return; }
+
+	// 쿨타임 (클라 시계 오차 감안해 조금 느슨하게)
+	if (Now - LastGrabTime < GrabCooldownSeconds * 0.9f) { return; }
+	LastGrabTime = Now;
 
 	bool bSuccess = false;
 
@@ -903,6 +937,18 @@ void ACTCharacter::ServerPush_Implementation()
 		Direction.Z = 0.f;
 		Direction = Direction.GetSafeNormal();
 
+		// 키만큼 밀리도록 수평 속도를 역산: 거리 = 속도 * (공중 시간 + 착지 후 미끄러짐 시간 1/k)
+		float PushSpeed = 0.f;
+		const UCharacterMovementComponent* OtherMovement = OtherCharacter->GetCharacterMovement();
+		if (OtherMovement && PushUpSpeed > 0.f)
+		{
+			const float Gravity = FMath::Max(FMath::Abs(OtherMovement->GetGravityZ()), 1.f);
+			const float AirTime = 2.f * PushUpSpeed / Gravity;
+			const float BrakingK = FMath::Max(OtherMovement->GroundFriction * OtherMovement->BrakingFrictionFactor, 1.f);
+			const float Height = OtherCharacter->GetSimpleCollisionHalfHeight() * 2.f;
+			PushSpeed = Height * PushDistanceInHeights / (AirTime + 1.f / BrakingK);
+		}
+
 		const FVector LaunchVelocity = Direction * PushSpeed + FVector(0.f, 0.f, PushUpSpeed);
 		OtherCharacter->LaunchCharacter(LaunchVelocity, /*bXYOverride=*/true, /*bZOverride=*/true);
 		OtherCharacter->MulticastPlayAction(ECTCharacterAction::Pushed, true);
@@ -935,9 +981,64 @@ void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action,
 
 void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 {
-	if (UAnimMontage* Montage = GetActionMontage(Action))
+	UAnimMontage* Montage = GetActionMontage(Action);
+	if (!Montage) { return; }
+
+	PlayAnimMontage(Montage, Action == ECTCharacterAction::Push ? PushMontagePlayRate : ActionMontagePlayRate);
+
+	// 밀려 넘어진 뒤 일어나기 (몽타주가 풀리기 시작할 때 이어서 재생)
+	if (Action == ECTCharacterAction::Pushed && GetUpMontage)
 	{
-		PlayAnimMontage(Montage, ActionMontagePlayRate);
+		if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			FOnMontageBlendingOutStarted Delegate;
+			Delegate.BindUObject(this, &ACTCharacter::HandlePushedMontageEnded);
+			AnimInstance->Montage_SetBlendingOutDelegate(Delegate, Montage);
+		}
+	}
+}
+
+void ACTCharacter::HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (bInterrupted || !GetUpMontage || IsGhost()) { return; }
+	PlayAnimMontage(GetUpMontage, ActionMontagePlayRate);
+}
+
+void ACTCharacter::UpdateGhostWalkMontage()
+{
+	// 전용 서버는 연출 불필요
+	if (!GhostWalkMontage || GetNetMode() == NM_DedicatedServer) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	// 유령+이동+지상만, 공중은 점프 모션
+	const bool bWantWalk =
+		IsGhost() &&
+		!GetCharacterMovement()->IsFalling() &&
+		GetVelocity().Size2D() > GhostWalkMinSpeed;
+
+	const bool bPlaying = AnimInstance->Montage_IsPlaying(GhostWalkMontage);
+
+	if (bWantWalk)
+	{
+		if (!bPlaying)
+		{
+			// 다른 몽타주(잡힘 등) 끝날 때까지 대기
+			const UAnimMontage* Active = AnimInstance->GetCurrentActiveMontage();
+			if (Active && Active != GhostWalkMontage) { return; }
+
+			PlayAnimMontage(GhostWalkMontage, 1.f, GhostWalkLoopSection);
+			AnimInstance->Montage_SetNextSection(GhostWalkLoopSection, GhostWalkLoopSection, GhostWalkMontage);
+		}
+
+		// 실속도에 재생 속도 맞춤 (발 미끄러짐)
+		const float Rate = FMath::Clamp(GetVelocity().Size2D() / GhostWalkReferenceSpeed, GhostWalkMinPlayRate, GhostWalkMaxPlayRate);
+		AnimInstance->Montage_SetPlayRate(GhostWalkMontage, Rate);
+	}
+	else if (bPlaying)
+	{
+		AnimInstance->Montage_Stop(GhostWalkMontage->BlendOut.GetBlendTime(), GhostWalkMontage);
 	}
 }
 
