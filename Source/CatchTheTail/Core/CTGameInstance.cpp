@@ -3,6 +3,7 @@
 #include "HAL/PlatformTime.h"
 #include "../Type/CTTypes.h"
 #include "CTProfileSaveGame.h"
+#include "CTSessionSubsystem.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -167,32 +168,32 @@ void UCTGameInstance::HostGame()
 	UGameplayStatics::OpenLevel(World, FirstMap, /*bAbsolute=*/true, FString(TEXT("listen")) + MakeNameOption());
 }
 
-void UCTGameInstance::QuickJoin()
+void UCTGameInstance::ShowMenuMessage(const FText& Message)
 {
-	const FText Message = bOnlineSessionAvailable
-		? NSLOCTEXT("CT", "Menu_QuickJoinPending", "빠른 참가는 준비 중입니다.")
-		: NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
 	PendingMessage = Message;
 	OnMenuMessage.Broadcast(Message);
 }
 
+void UCTGameInstance::QuickJoin()
+{
+	UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>();
+	if (!bOnlineSessionAvailable || !Session || !Session->IsAvailable())
+	{
+		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다."));
+		return;
+	}
+	Session->QuickJoin();
+}
+
 void UCTGameInstance::JoinByRoomCode(const FString& RoomCode)
 {
-	FText Message;
-	if (!bOnlineSessionAvailable)
+	UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>();
+	if (!bOnlineSessionAvailable || !Session || !Session->IsAvailable())
 	{
-		Message = NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
+		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다."));
+		return;
 	}
-	else if (RoomCode.TrimStartAndEnd().IsEmpty())
-	{
-		Message = NSLOCTEXT("CT", "Menu_EmptyRoomCode", "방 코드를 입력하세요.");
-	}
-	else
-	{
-		Message = NSLOCTEXT("CT", "Menu_RoomCodePending", "방 코드 입장은 준비 중입니다.");
-	}
-	PendingMessage = Message;
-	OnMenuMessage.Broadcast(Message);
+	Session->JoinByRoomCode(RoomCode);
 }
 
 void UCTGameInstance::LeaveToMainMenu(FText Message)
@@ -200,6 +201,8 @@ void UCTGameInstance::LeaveToMainMenu(FText Message)
 	PendingMessage = Message;
 	StoredRoomCode.Reset();
 	StoredMapIndex = INDEX_NONE;
+
+	if (UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>()) { Session->CloseRoom(); }
 
 	UWorld* World = GetWorld();
 	if (!World) { return; }
@@ -210,6 +213,7 @@ void UCTGameInstance::LeaveToMainMenu(FText Message)
 
 void UCTGameInstance::QuitToDesktop()
 {
+	if (UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>()) { Session->CloseRoom(); }
 	UKismetSystemLibrary::QuitGame(this, GetFirstLocalPlayerController(), EQuitPreference::Quit, /*bIgnorePlatformRestrictions=*/false);
 }
 

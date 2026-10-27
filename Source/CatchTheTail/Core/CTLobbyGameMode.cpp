@@ -2,6 +2,7 @@
 #include "CTLobbyGameMode.h"
 #include "CTGameInstance.h"
 #include "CTGameState.h"
+#include "CTSessionSubsystem.h"
 #include "CTMapSettings.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTLobbyPlayerController.h"
@@ -55,6 +56,12 @@ void ACTLobbyGameMode::InitGameState()
 			if (GameInstance) { GameInstance->SetStoredRoomCode(RoomCode); }
 		}
 		CTGameState->SetRoomCode(RoomCode);
+
+		// 다른 사람이 코드로 찾을 수 있게 온라인 방을 엽니다 (이미 열려 있으면 그대로)
+		if (UCTSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UCTSessionSubsystem>() : nullptr)
+		{
+			Session->CreateRoom(RoomCode);
+		}
 
 		// 맵 선택은 방이 열려 있는 동안 유지. 처음이면 목록의 첫 맵
 		int32 MapIndex = GameInstance ? GameInstance->GetStoredMapIndex() : INDEX_NONE;

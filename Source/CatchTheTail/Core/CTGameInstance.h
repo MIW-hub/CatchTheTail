@@ -90,6 +90,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Online")
 	bool IsOnlineSessionAvailable() const { return bOnlineSessionAvailable; }
 
+	// 메뉴에 안내 문구를 띄움 (다음 메뉴 화면에도 남김)
+	void ShowMenuMessage(const FText& Message);
+
+	// 접속 옵션 "?Name=..." (이름이 없으면 빈 문자열)
+	FString MakeNameOption() const;
+
 	// 열려 있는 방을 찾아 무작위로 입장. 온라인 기능이 막혀 있으면 안내만 띄움
 	UFUNCTION(BlueprintCallable, Category = "CT|Online")
 	void QuickJoin();
@@ -120,10 +126,10 @@ protected:
 	 * 켜면 빠른 참가와 방 코드 입장이 열립니다. (아직 세션 코드가 없으면 준비 중 안내만 나옴)
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Online")
-	bool bOnlineSessionAvailable = false;
+	bool bOnlineSessionAvailable = true;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
-	FName MainMenuMapName = TEXT("L_MainMenu");
+	FName MainMenuMapName = TEXT("L_Mainmenu");
 
 	// HostGame이 가장 먼저 여는 대기 로비 맵. 비우면 게임 맵을 바로 엽니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
@@ -156,9 +162,6 @@ private:
 	void SaveProfile() const;
 
 	bool StoreValidatedName(const FString& NewName, FText& OutError);
-
-	// 접속 옵션 "?Name=..."
-	FString MakeNameOption() const;
 
 	FString PlayerName;
 

@@ -153,3 +153,8 @@ b맵	Map B	マップB
 마우스 이동	Mouse	マウス
 마우스 왼쪽 클릭	Left click	左クリック
 게임 중에 쓰는 키입니다	Keys used during the game	ゲーム中に使うキーです
+방을 찾는 중입니다...	Searching for a room...	ルームを探しています...
+해당 방 코드를 찾을 수 없습니다.	No room found with that code.	そのコードのルームが見つかりません。
+참가할 수 있는 방이 없습니다.	No open rooms to join.	参加できるルームがありません。
+방이 가득 찼습니다.	The room is full.	ルームが満員です。
+방에 입장하지 못했습니다.	Could not join the room.	ルームに参加できませんでした。

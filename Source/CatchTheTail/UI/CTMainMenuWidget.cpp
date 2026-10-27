@@ -168,17 +168,13 @@ void UCTMainMenuWidget::ShowPanel(ECTMenuPanel Panel)
 
 void UCTMainMenuWidget::ApplyOnlineAvailability()
 {
-	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
-
-	const bool bAvailable = GameInstance && GameInstance->IsOnlineSessionAvailable();
-	const FText Reason = bAvailable ? FText::GetEmpty() : NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다.");
-
-	UWidget* Blocked[] = { Button_Start, Button_JoinByCode, EditableTextBox_RoomCode };
-	for (UWidget* Widget : Blocked)
+	// 빠른 참가, 방 코드 입력은 항상 열어 둠. 온라인을 쓸 수 없으면 누른 뒤 안내 문구가 나옴
+	UWidget* Unlocked[] = { Button_Start, Button_JoinByCode, EditableTextBox_RoomCode };
+	for (UWidget* Widget : Unlocked)
 	{
 		if (!Widget) { continue; }
-		Widget->SetIsEnabled(bAvailable);
-		Widget->SetToolTipText(Reason);
+		Widget->SetIsEnabled(true);
+		Widget->SetToolTipText(FText::GetEmpty());
 	}
 }
 
