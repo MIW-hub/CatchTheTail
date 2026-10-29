@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTResultWidget.h"
+#include "CTButtonHoverEffect.h"
 #include "../Core/CTAudioSubsystem.h"
 #include "CTScoreEntryWidget.h"
 #include "../Core/CTGameState.h"
@@ -13,6 +14,7 @@
 void UCTResultWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	UCTButtonHoverEffect::Attach(this);
 
 	// 버튼 소리 (올림 / 누름)
 	UCTAudioSubsystem::ApplyUISounds(this);

@@ -57,6 +57,15 @@ public:
 	void AddTailCount(int32 Delta);
 	void SetIsGhost(bool bNewIsGhost);
 	void SetReady(bool bNewReady);
+
+	// 전화부스 남은 사용 횟수 (서버가 관리, 복제)
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	int32 GetPhoneUsesLeft() const { return PhoneUsesLeft; }
+
+	void SetPhoneUsesLeft(int32 NewUses);
+
+	// 한 번 사용. 남은 횟수가 없으면 false
+	bool ConsumePhoneUse();
 	void SetIsHost(bool bNewIsHost);
 
 	// 값 변경 시 호출 (UI용)
@@ -72,6 +81,9 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_TailCount, BlueprintReadOnly, Category = "CT|PlayerState")
 	int32 TailCount = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|PlayerState")
+	int32 PhoneUsesLeft = 0;
 
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;

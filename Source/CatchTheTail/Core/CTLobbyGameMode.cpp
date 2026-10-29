@@ -73,6 +73,16 @@ void ACTLobbyGameMode::InitGameState()
 		}
 		CTGameState->SetSelectedMapIndex(MapIndex);
 
+		// 경기 설정도 방이 열려 있는 동안 유지. 처음이면 기본값
+		FCTMatchSettings MatchSettings;
+		if (GameInstance && GameInstance->HasStoredMatchSettings())
+		{
+			MatchSettings = GameInstance->GetStoredMatchSettings();
+		}
+		MatchSettings.Sanitize();
+		CTGameState->SetMatchSettings(MatchSettings);
+		if (GameInstance) { GameInstance->SetStoredMatchSettings(MatchSettings); }
+
 		CTGameState->SetStartCountdown(0.0);
 	}
 }
@@ -87,6 +97,14 @@ void ACTLobbyGameMode::PreLogin(const FString& Options, const FString& Address, 
 	{
 		ErrorMessage = CTJoinReject::LobbyStarting;
 		UE_LOG(LogTemp, Log, TEXT("[CT] 입장 거절: 로비 시작 중 (%s)"), *Address);
+	}
+
+	// 방장이 정한 최대 인원이 차면 거절
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (CTGameState && GetNumPlayers() >= CTGameState->GetMatchSettings().MaxPlayers)
+	{
+		ErrorMessage = CTJoinReject::LobbyFull;
+		UE_LOG(LogTemp, Log, TEXT("[CT] 입장 거절: 최대 인원 (%s)"), *Address);
 	}
 }
 
@@ -172,6 +190,32 @@ bool ACTLobbyGameMode::SelectMap(APlayerController* Requester, int32 MapIndex)
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 맵 선택: %d"), MapIndex);
+	return true;
+}
+
+bool ACTLobbyGameMode::ChangeMatchSetting(APlayerController* Requester, ECTMatchSetting Setting, int32 Direction)
+{
+	ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	const ACTPlayerState* RequesterState = Requester ? Requester->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!CTGameState || !RequesterState || !RequesterState->IsHost()) { return false; }
+
+	// 시작이 정해진 뒤에는 바꿀 수 없음
+	if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f || GetWorldTimerManager().IsTimerActive(StartTimerHandle)) { return false; }
+	if (static_cast<int32>(Setting) < 0 || Setting >= ECTMatchSetting::Count) { return false; }
+
+	FCTMatchSettings NewSettings = CTGameState->GetMatchSettings();
+	if (!NewSettings.Step(Setting, Direction)) { return false; }
+
+	// 이미 들어와 있는 인원보다 적게, 경기 시간보다 긴 라운드로는 바꿀 수 없음
+	if (!NewSettings.IsAllowed(GetNumPlayers())) { return false; }
+
+	CTGameState->SetMatchSettings(NewSettings);
+	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
+	{
+		GameInstance->SetStoredMatchSettings(NewSettings);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 경기 설정 변경: %s = %d"), *FCTMatchSettings::GetKey(Setting).ToString(), NewSettings.Get(Setting));
 	return true;
 }
 

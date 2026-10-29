@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Types/SlateEnums.h"
+#include "../Core/CTMatchSettings.h"
 #include "CTLobbyWidget.generated.h"
 
 class UButton;
@@ -14,6 +15,23 @@ class UPanelWidget;
 class UScrollBox;
 class UTextBlock;
 class UWidget;
+
+// 경기 설정의 < > 버튼 하나를 맡는 도우미. 버튼 클릭 이벤트에는 값을 실을 수 없어서 항목과 방향을 들고 있다가 로비 위젯에 전달합니다.
+UCLASS()
+class CATCHTHETAIL_API UCTMatchSettingArrow : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	DECLARE_DELEGATE_TwoParams(FOnArrowClicked, ECTMatchSetting, int32);
+	FOnArrowClicked OnArrowClicked;
+
+	ECTMatchSetting Setting = ECTMatchSetting::GameMinutes;
+	int32 Direction = 1;
+
+	UFUNCTION()
+	void HandleClicked() { OnArrowClicked.ExecuteIfBound(Setting, Direction); }
+};
 
 /**
  * 대기 로비 화면. 이름이 맞는 위젯만 만들어 두면 자동으로 연결됩니다. (모두 선택 사항)
@@ -104,6 +122,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MapDescription;
 
+	// 경기 설정 요약 한 줄 (모두에게 보임). 예: 5분 · 라운드 60초 · 최대 8명
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MatchSettings;
+
 	// 맵 선택 창을 여는 버튼 (방장에게만 보임)
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_SelectMap;
@@ -189,6 +211,26 @@ private:
 	TArray<TObjectPtr<UCTMapEntryWidget>> MapEntries;
 
 	bool bMapSelectOpen = false;
+
+	// 경기 설정: 항목마다 값 글자와 < > 버튼 (이름은 Text_Setting_이름, Button_Setting_이름_Prev / _Next)
+	void BindMatchSettingWidgets();
+	void RefreshMatchSettings(bool bIsHost, bool bStarting);
+	void HandleSettingArrow(ECTMatchSetting Setting, int32 Direction);
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTMatchSettingArrow>> SettingArrows;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UTextBlock>> SettingLabelTexts;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UTextBlock>> SettingValueTexts;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UButton>> SettingPrevButtons;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UButton>> SettingNextButtons;
 
 	// 미리보기에 마지막으로 보여 준 맵 번호 (바뀔 때만 다시 그림)
 	int32 LastShownMapIndex = -2;

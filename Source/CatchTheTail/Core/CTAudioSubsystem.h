@@ -62,7 +62,14 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<USoundAttenuation> WorldAttenuation;
 
-	TWeakObjectPtr<UAudioComponent> MusicComponent;
+	// 반드시 강한 참조(UPROPERTY)로 들고 있어야 함. 이 컴포넌트는 소유자 없이 만들어져서 참조가 없으면 가비지 컬렉션에서 지워지고 배경음이 갑자기 끊김
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> MusicComponent;
+
+	// 페이드 아웃 중인 이전 곡. 끝까지 사라지도록 잡아 둠
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UAudioComponent>> FadingMusicComponents;
+
 	ECTMusic CurrentMusic = ECTMusic::None;
 
 	USoundBase* GetSfx(ECTSfx Sfx);

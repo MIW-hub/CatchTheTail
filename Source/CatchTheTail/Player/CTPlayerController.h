@@ -71,12 +71,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	int32 MappingPriority = 0;
 
-	// 카메라 상하 각도 제한
+	// 카메라 상하 각도 제한. 위로 올려다볼수록 카메라가 캐릭터 뒤 아래로 내려가므로
+	// 뒤 시점 거리(450cm) 기준 약 +19도부터 카메라가 바닥 아래로 들어갑니다. 여유를 두고 +5도까지만 허용
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
 	float ViewPitchMin = -80.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
-	float ViewPitchMax = 20.f;
+	float ViewPitchMax = 5.f;
 
 private:
 	UFUNCTION()

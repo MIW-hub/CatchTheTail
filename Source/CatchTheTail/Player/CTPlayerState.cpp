@@ -38,6 +38,7 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ACTPlayerState, AssignedColor);
 	DOREPLIFETIME(ACTPlayerState, TargetColor);
 	DOREPLIFETIME(ACTPlayerState, TailCount);
+	DOREPLIFETIME(ACTPlayerState, PhoneUsesLeft);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
 	DOREPLIFETIME(ACTPlayerState, bReady);
 	DOREPLIFETIME(ACTPlayerState, bIsHost);
@@ -195,4 +196,17 @@ void ACTPlayerState::NotifyPawnGhostState()
 	{
 		CTCharacter->OnGhostStateChanged(bIsGhost);
 	}
+}
+
+void ACTPlayerState::SetPhoneUsesLeft(int32 NewUses)
+{
+	if (!HasAuthority()) { return; }
+	PhoneUsesLeft = FMath::Max(NewUses, 0);
+}
+
+bool ACTPlayerState::ConsumePhoneUse()
+{
+	if (!HasAuthority() || PhoneUsesLeft <= 0) { return false; }
+	--PhoneUsesLeft;
+	return true;
 }

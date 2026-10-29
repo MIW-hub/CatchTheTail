@@ -15,6 +15,10 @@ class CATCHTHETAIL_API UCTHUDWidget : public UCTUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	// 화면 위쪽에 안내 문구를 잠깐 띄움 (전화부스 결과 등). Text_Notice 가 없으면 코드에서 만듦
+	void ShowNotice(const FText& Message, float Seconds);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -146,6 +150,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Scoreboard;
 
+	// 안내 문구 (선택). 없으면 ShowNotice 가 화면 위 가운데에 만듭니다
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_Notice;
+
 private:
 	// 연결 (늦게 도착해서 매 프레임 확인)
 	void TryBindGameState();
@@ -178,6 +186,9 @@ private:
 	// 쿨다운 이미지별 동적 머티리얼
 	UPROPERTY(Transient)
 	TMap<TObjectPtr<UImage>, TObjectPtr<UMaterialInstanceDynamic>> OverlayMaterials;
+
+	UTextBlock* EnsureNoticeText();
+	float NoticeRemaining = 0.f;
 
 	ECTColor LastHunterColor = ECTColor::None;
 	bool bHunterInitialized = false;

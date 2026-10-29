@@ -18,6 +18,9 @@ class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
 public:
 	ACTGameMode();
 
+	// 로비에서 방장이 정한 경기 설정(시간, 시작 꼬리 수 등)을 이 판에 적용
+	virtual void InitGameState() override;
+
 	// 게임이 진행 중이면 새 입장을 거절
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
@@ -71,6 +74,10 @@ protected:
 	// 시작 꼬리 수
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	int32 InitialTailCount = 1;
+
+	// 전화부스 한 판 사용 횟수 (플레이어마다)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Gimmick", meta = (ClampMin = "0"))
+	int32 PhoneUsesPerGame = 2;
 
 	/**
 	 * 새 라운드가 시작될 때 꼬리가 이 수보다 적은 플레이어에게 꼬리를 채워 줍니다.

@@ -6,6 +6,7 @@
 #include "Components/AudioComponent.h"
 #include "Components/Button.h"
 #include "Components/CheckBox.h"
+#include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -67,19 +68,30 @@ void UCTAudioSubsystem::PlayMusic(ECTMusic Music)
 	}
 
 	// 같은 곡이 이미 나오고 있으면 그대로
-	if (Music == CurrentMusic && MusicComponent.IsValid() && MusicComponent->IsPlaying()) { return; }
+	if (Music == CurrentMusic && IsValid(MusicComponent) && MusicComponent->IsPlaying()) { return; }
 
 	UWorld* World = GetWorld();
 	const UCTAudioSettings* Settings = GetDefault<UCTAudioSettings>();
 	USoundBase* Sound = Settings->LoadMusic(Music);
 	if (!World || !Sound) { return; }
 
+#if WITH_EDITOR
+	// 에디터에서 창을 여러 개(서버 + 클라이언트)로 띄워 테스트하면 창마다 같은 배경음이 겹쳐 들리고, 맵이 바뀔 때마다 서로 어긋남. 첫 번째 창만 재생
+	const FWorldContext* Context = GEngine ? GEngine->GetWorldContextFromWorld(World) : nullptr;
+	if (Context && Context->WorldType == EWorldType::PIE && Context->PIEInstance > 0) { return; }
+#endif
+
 	const float Fade = Settings->MusicFadeSeconds;
-	if (MusicComponent.IsValid())
+
+	// 다 사라진 이전 곡은 정리
+	FadingMusicComponents.RemoveAll([](const UAudioComponent* Old) { return !IsValid(Old) || !Old->IsPlaying(); });
+
+	if (IsValid(MusicComponent))
 	{
 		// 이전 곡이 사라질 때 반복 보강이 다시 켜지지 않게 먼저 해제
 		MusicComponent->OnAudioFinished.RemoveAll(this);
 		MusicComponent->FadeOut(Fade, 0.f);
+		FadingMusicComponents.Add(MusicComponent);
 	}
 
 	// 만들기만 하고(CreateSound2D) 재생은 FadeIn 한 번만. 맵이 바뀌어도 이어지도록 persist, 끝나도 지우지 않고 우리가 관리
@@ -107,7 +119,7 @@ float UCTAudioSubsystem::GetSettingsMusicVolume() const
 void UCTAudioSubsystem::RefreshMusicVolume()
 {
 	// 사운드 믹스 대신 배경음에 직접 볼륨을 줌 (슬라이더를 내리는 만큼 확실히 작아짐)
-	if (MusicComponent.IsValid())
+	if (IsValid(MusicComponent))
 	{
 		MusicComponent->SetVolumeMultiplier(GetSettingsMusicVolume());
 		UE_LOG(LogTemp, Log, TEXT("[CT] 배경음 볼륨 %.2f (재생 중: %s)"), GetSettingsMusicVolume(), MusicComponent->IsPlaying() ? TEXT("예") : TEXT("아니오"));
@@ -117,7 +129,7 @@ void UCTAudioSubsystem::RefreshMusicVolume()
 void UCTAudioSubsystem::HandleMusicFinished()
 {
 	// 곡이 끝났는데 아직 이 곡을 틀어야 하면 처음부터 다시
-	if (CurrentMusic == ECTMusic::None || !MusicComponent.IsValid()) { return; }
+	if (CurrentMusic == ECTMusic::None || !IsValid(MusicComponent)) { return; }
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 배경음이 끝나 다시 재생"));
 	MusicComponent->Play(0.f);
@@ -127,12 +139,13 @@ void UCTAudioSubsystem::HandleMusicFinished()
 
 void UCTAudioSubsystem::StopMusic()
 {
-	if (MusicComponent.IsValid())
+	if (IsValid(MusicComponent))
 	{
 		MusicComponent->OnAudioFinished.RemoveAll(this);
 		MusicComponent->FadeOut(GetDefault<UCTAudioSettings>()->MusicFadeSeconds, 0.f);
+		FadingMusicComponents.Add(MusicComponent);
 	}
-	MusicComponent.Reset();
+	MusicComponent = nullptr;
 	CurrentMusic = ECTMusic::None;
 }
 

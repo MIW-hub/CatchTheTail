@@ -158,3 +158,26 @@ b맵	Map B	マップB
 참가할 수 있는 방이 없습니다.	No open rooms to join.	参加できるルームがありません。
 방이 가득 찼습니다.	The room is full.	ルームが満員です。
 방에 입장하지 못했습니다.	Could not join the room.	ルームに参加できませんでした。
+전화 거는 중...	Calling...	電話中...
+전화를 더 쓸 수 없습니다.	You cannot use the phone any more.	これ以上電話は使えません。
+목표를 찾을 수 없습니다.	Target not found.	ターゲットが見つかりません。
+목표가 {0}m 이내에 있습니다. (남은 횟수 {1})	Your target is within {0}m. ({1} uses left)	ターゲットは{0}m以内にいます。(残り{1}回)
+목표가 약 {0}m 거리에 있습니다. (남은 횟수 {1})	Your target is about {0}m away. ({1} uses left)	ターゲットは約{0}m先にいます。(残り{1}回)
+누군가 당신을 찾았습니다!	Someone is looking for you!	誰かがあなたを探しています!
+경기 시간	Game Time	試合時間
+라운드 시간	Round Time	ラウンド時間
+최대 인원	Max Players	最大人数
+시작 꼬리 수	Starting Tails	開始時のしっぽの数
+전화부스 횟수	Phone Booth Uses	電話ボックスの回数
+부쉬	Bush	茂み
+{0}분	{0} min	{0}分
+{0}초	{0}s	{0}秒
+{0}명	{0} players	{0}人
+{0}개	{0}	{0}個
+사용 안 함	Off	使用しない
+{0}회	{0} times	{0}回
+켜기	On	オン
+끄기	Off	オフ
+{0}분 · 라운드 {1}초 · 최대 {2}명	{0} min · Round {1}s · Max {2} players	{0}分 · ラウンド{1}秒 · 最大{2}人
+맵 설정	Map Settings	マップ設定
+경기 설정	Match Settings	試合設定

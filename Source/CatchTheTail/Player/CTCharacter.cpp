@@ -5,15 +5,21 @@
 #include "../Core/CTGameState.h"
 #include "CTPlayerState.h"
 #include "../Tail/CTTail.h"
+#include "../World/CTBush.h"
+#include "../UI/CTHUDWidget.h"
+#include "CTPlayerController.h"
 #include "../Tongue/CTTongueComponent.h"
 #include "../Animation/CTAnimNotifyState_GrabWindow.h"
 #include "EngineUtils.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
 #include "Curves/CurveFloat.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -59,7 +65,7 @@ ACTCharacter::ACTCharacter()
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	CameraBoom->SocketOffset = FVector(0.f, 0.f, 60.f);
 	CameraBoom->bUsePawnControlRotation = true; // null
-	CameraBoom->bDoCollisionTest = true;        // 벽 충돌 시 당김
+	CameraBoom->bDoCollisionTest = bCameraCollision; // 벽 충돌 시 당김 (기본 꺼짐)
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->ProbeChannel = ECC_Camera;
 	CameraBoom->bEnableCameraLag = true;
@@ -68,6 +74,19 @@ ACTCharacter::ACTCharacter()
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+
+	// 부쉬 안에서 내 몸을 부쉬 위에 보여 주는 겹친 몸 (내 화면에서만, 평소에는 꺼짐)
+	XRayMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("XRayMesh"));
+	XRayMesh->SetupAttachment(GetMesh());
+	XRayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	XRayMesh->SetGenerateOverlapEvents(false);
+	XRayMesh->SetCanEverAffectNavigation(false);
+	XRayMesh->SetCastShadow(false);
+	XRayMesh->SetOnlyOwnerSee(true);
+	XRayMesh->SetVisibility(false);
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> XRayFinder(TEXT("/Game/Material/M_Player_XRay.M_Player_XRay"));
+	if (XRayFinder.Succeeded()) { XRayMaterial = XRayFinder.Object; }
 
 	// 혀: Head 본에 부착
 	TongueMesh = CreateDefaultSubobject<UCTTongueComponent>(TEXT("TongueMesh"));
@@ -82,6 +101,8 @@ void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTCharacter, RunState);
 	DOREPLIFETIME(ACTCharacter, RunStateEndTime);
 	DOREPLIFETIME(ACTCharacter, OwnedTail);
+	DOREPLIFETIME(ACTCharacter, CurrentBush);
+	DOREPLIFETIME(ACTCharacter, bBoothLocked);
 }
 
 void ACTCharacter::BeginPlay()
@@ -221,6 +242,9 @@ float ACTCharacter::GetGrabCooldownRemainingSeconds() const
 
 bool ACTCharacter::CanMoveNow() const
 {
+	// 전화부스 사용 중에는 못 움직임
+	if (bBoothLocked) { return false; }
+
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
 	// 대기 로비는 자유롭게 돌아다닐 수 있음
 	if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::Lobby) { return true; }
@@ -235,6 +259,9 @@ bool ACTCharacter::CanMoveNow() const
 bool ACTCharacter::CanUseActions() const
 {
 	if (IsGhost()) { return false; }
+
+	// 부쉬 안, 전화부스 사용 중에는 잡기/밀기 불가
+	if (CurrentBush || bBoothLocked) { return false; }
 
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
 	return CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing;
@@ -323,6 +350,12 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 	{
 		if (bNewIsGhost)
 		{
+			SetCurrentBush(nullptr);
+			SetBoothLocked(false);
+		}
+
+		if (bNewIsGhost)
+		{
 			ForceResetRun();
 			AddSpeedBuff(CTBuffNames::Ghost, GhostBuffValue);
 		}
@@ -403,7 +436,7 @@ void ACTCharacter::ApplyCameraSettings()
 	if (!CameraBoom || !FollowCamera) { return; }
 
 	// BP 값은 생성자 이후 적용
-	CameraBoom->bDoCollisionTest = true;
+	CameraBoom->bDoCollisionTest = bCameraCollision;
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	FollowCamera->SetFieldOfView(CameraFieldOfView);
@@ -512,6 +545,8 @@ void ACTCharacter::Tick(float DeltaSeconds)
 
 	UpdateRunMontage();
 	UpdateGhostWalkMontage();
+	UpdateBushVisibility();
+	UpdateBushXRay();
 	UpdateMovementSounds(DeltaSeconds);
 
 	// 로컬 전용
@@ -623,7 +658,7 @@ void ACTCharacter::ServerSetRunInput_Implementation(bool bPressed)
 
 void ACTCharacter::TryStartRun()
 {
-	if (IsGhost() || RunState != ECTRunState::Idle)
+	if (IsGhost() || bBoothLocked || RunState != ECTRunState::Idle)
 	{
 		return;
 	}
@@ -694,6 +729,7 @@ void ACTCharacter::ServerGrab_Implementation()
 
 	if (!CTGameMode || !CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
+	if (CurrentBush || bBoothLocked) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
 	// 동작 중이면 재시작 안 함 (연타 방지)
@@ -916,6 +952,7 @@ void ACTCharacter::ServerPush_Implementation()
 
 	if (!CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
+	if (CurrentBush || bBoothLocked) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
 	// 쿨타임 확인
@@ -1175,9 +1212,108 @@ void ACTCharacter::RefreshBodyColor()
 		}
 	}
 
+	// 부쉬 안에서 보이는 겹친 몸도 같은 색
+	for (UMaterialInstanceDynamic* Material : XRayMaterials)
+	{
+		if (Material)
+		{
+			Material->SetVectorParameterValue(BodyColorParameterName, Tint);
+		}
+	}
+
 	// 꼬리도 같은 색
 	if (OwnedTail)
 	{
 		OwnedTail->RefreshVisual();
 	}
+}
+
+// 레벨 기믹 (부쉬, 전화부스)
+
+void ACTCharacter::SetCurrentBush(ACTBush* NewBush)
+{
+	if (!HasAuthority() || CurrentBush == NewBush) { return; }
+
+	CurrentBush = NewBush;
+	OnRep_CurrentBush();
+}
+
+void ACTCharacter::OnRep_CurrentBush()
+{
+	// 몸 숨김은 UpdateBushVisibility 가 매 프레임 판단
+	UpdateBushVisibility();
+}
+
+void ACTCharacter::SetBoothLocked(bool bNewLocked)
+{
+	if (!HasAuthority() || bBoothLocked == bNewLocked) { return; }
+
+	bBoothLocked = bNewLocked;
+	if (bNewLocked)
+	{
+		StopJumping();
+		GetCharacterMovement()->StopMovementImmediately();
+	}
+}
+
+void ACTCharacter::ClientShowNotice_Implementation(const FText& Message, float Seconds)
+{
+	if (const ACTPlayerController* CTController = Cast<ACTPlayerController>(GetController()))
+	{
+		if (UCTHUDWidget* HUD = CTController->GetHUDWidget())
+		{
+			HUD->ShowNotice(Message, Seconds);
+		}
+	}
+}
+
+void ACTCharacter::UpdateBushVisibility()
+{
+	// 전용 서버는 화면이 없음. 내 캐릭터는 항상 보임
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+
+	bool bShouldHide = false;
+	if (CurrentBush && !IsLocallyControlled())
+	{
+		// 같은 부쉬 안에 있거나, 이미 유령인 사람은 숨은 몸이 보임
+		const APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const ACTCharacter* Viewer = LocalController ? Cast<ACTCharacter>(LocalController->GetPawn()) : nullptr;
+		const bool bViewerSees = !Viewer || Viewer->IsGhost() || Viewer->CurrentBush == CurrentBush;
+		bShouldHide = !bViewerSees;
+	}
+
+	if (bShouldHide == bBodyHiddenByBush) { return; }
+	bBodyHiddenByBush = bShouldHide;
+
+	// 꼬리는 일부러 그대로 둠: 몸은 숨어도 꼬리는 보여서 완전히 안전하지는 않음
+	// (자식에게 전파하지 않음: 붙어 있는 꼬리까지 숨겨지면 안 됨)
+	if (GetMesh()) { GetMesh()->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
+	if (TongueMesh) { TongueMesh->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
+}
+
+void ACTCharacter::UpdateBushXRay()
+{
+	// 내 화면에서만: 부쉬 안에 있는 동안 겹친 몸을 켬 (깊이 검사를 끈 머티리얼이라 부쉬에 가려지지 않음)
+	if (!IsLocallyControlled() || !XRayMesh || !GetMesh()) { return; }
+
+	const bool bWantXRay = CurrentBush != nullptr && XRayMaterial != nullptr;
+	if (bWantXRay == bXRayActive) { return; }
+	bXRayActive = bWantXRay;
+
+	if (bWantXRay && !bXRaySetup)
+	{
+		// 처음 켤 때 한 번: 같은 메시를 쓰고 원래 몸의 포즈를 그대로 따라감
+		XRayMesh->SetSkeletalMesh(GetMesh()->GetSkeletalMeshAsset());
+		XRayMesh->SetLeaderPoseComponent(GetMesh());
+
+		XRayMaterials.Reset();
+		for (int32 SlotIndex = 0; SlotIndex < XRayMesh->GetNumMaterials(); ++SlotIndex)
+		{
+			XRayMaterials.Add(XRayMesh->CreateAndSetMaterialInstanceDynamicFromMaterial(SlotIndex, XRayMaterial));
+		}
+		bXRaySetup = true;
+		RefreshBodyColor(); // 색을 겹친 몸에도 적용
+	}
+
+	XRayMesh->SetVisibility(bWantXRay);
 }

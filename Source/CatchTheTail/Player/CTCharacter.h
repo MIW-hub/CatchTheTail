@@ -12,7 +12,9 @@ class UInputAction;
 class UCurveFloat;
 class UAnimMontage;
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class ACTTail;
+class ACTBush;
 class UCTTongueComponent;
 struct FInputActionValue;
 
@@ -85,6 +87,25 @@ public:
 	// 이동/점프/달리기 가능 여부
 	UFUNCTION(BlueprintPure, Category = "CT|State")
 	bool CanMoveNow() const;
+
+	// 부쉬 안에 있는가 (다른 사람 화면에서 몸이 숨겨짐, 잡기/밀기 불가)
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	bool IsInBush() const { return CurrentBush != nullptr; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	ACTBush* GetCurrentBush() const { return CurrentBush; }
+
+	// 전화부스를 쓰는 중 (이동, 행동 불가)
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	bool IsBoothLocked() const { return bBoothLocked; }
+
+	// 서버 전용: 부쉬 출입, 부스 사용 중 잠금
+	void SetCurrentBush(ACTBush* NewBush);
+	void SetBoothLocked(bool bNewLocked);
+
+	// 이 캐릭터를 조종하는 사람 화면에만 안내 문구를 띄움 (서버가 호출)
+	UFUNCTION(Client, Reliable)
+	void ClientShowNotice(const FText& Message, float Seconds);
 
 	// 행동별 몽타주
 	UFUNCTION(BlueprintPure, Category = "CT|Animation")
@@ -186,6 +207,10 @@ protected:
 	// 카메라 충돌 구 크기(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "1"))
 	float CameraProbeSize = 15.f;
+
+	// 카메라가 벽/물체에 닿으면 앞으로 당길지. 꺼 두면 물체를 뚫고 들어갈 수 있지만 시점이 튀지 않음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
+	bool bCameraCollision = false;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "30", ClampMax = "120"))
 	float CameraFieldOfView = 70.f;
@@ -418,7 +443,27 @@ protected:
 	void UpdateMovementSounds(float DeltaSeconds);
 
 	void UpdateCameraClip();
+
+	// 부쉬에 숨은 다른 캐릭터를 이 컴퓨터 화면에서 숨기거나 다시 보이게 (매 프레임)
+	void UpdateBushVisibility();
 	void SetHiddenFromOwnCamera(bool bNewHidden);
+
+	// 부쉬 안에 있을 때 내 화면에서만, 부쉬에 가려진 내 캐릭터를 실루엣으로 보여 줌
+	void UpdateBushXRay();
+
+	// 내 화면에만 보이는 겹친 몸. 깊이 검사를 끈 머티리얼로 그려서 부쉬 위에 보임
+	UPROPERTY(VisibleAnywhere, Category = "CT|Camera")
+	TObjectPtr<USkeletalMeshComponent> XRayMesh;
+
+	// 겹친 몸에 쓰는 머티리얼 (BodyColor 파라미터, 깊이 검사 끔, 약간 어둡게)
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Camera")
+	TObjectPtr<UMaterialInterface> XRayMaterial;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> XRayMaterials;
+
+	bool bXRayActive = false;
+	bool bXRaySetup = false;
 
 	// 입력 처리
 	void Move(const FInputActionValue& Value);
@@ -543,6 +588,20 @@ private:
 
 	// 마지막 잡기 입력 시각 (로컬)
 	double LocalLastGrabTime = -1000.0;
+
+	// 지금 들어가 있는 부쉬 (서버 결정, 복제)
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentBush)
+	TObjectPtr<ACTBush> CurrentBush;
+
+	UFUNCTION()
+	void OnRep_CurrentBush();
+
+	// 전화부스 사용 중 (서버 결정, 복제)
+	UPROPERTY(Replicated)
+	bool bBoothLocked = false;
+
+	// 지금 몸을 숨기고 있는가 (이 컴퓨터)
+	bool bBodyHiddenByBush = false;
 
 	// 꼬리 (서버 생성, 복제)
 	UPROPERTY(ReplicatedUsing = OnRep_OwnedTail)

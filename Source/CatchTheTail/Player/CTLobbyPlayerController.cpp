@@ -156,6 +156,19 @@ void ACTLobbyPlayerController::ServerSelectMap_Implementation(int32 MapIndex)
 	}
 }
 
+void ACTLobbyPlayerController::RequestChangeMatchSetting(ECTMatchSetting Setting, int32 Direction)
+{
+	ServerChangeMatchSetting(Setting, Direction);
+}
+
+void ACTLobbyPlayerController::ServerChangeMatchSetting_Implementation(ECTMatchSetting Setting, int32 Direction)
+{
+	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)
+	{
+		GameMode->ChangeMatchSetting(this, Setting, Direction);
+	}
+}
+
 void ACTLobbyPlayerController::ServerStartGame_Implementation()
 {
 	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)

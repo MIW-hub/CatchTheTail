@@ -22,6 +22,24 @@ ACTGameMode::ACTGameMode()
 	bUseSeamlessTravel = true;
 }
 
+void ACTGameMode::InitGameState()
+{
+	Super::InitGameState();
+
+	// 로비를 거치지 않고 게임 맵에서 바로 시작한 테스트에서는 BP에 정해 둔 값을 그대로 씀
+	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
+	if (!GameInstance || !GameInstance->HasStoredMatchSettings()) { return; }
+
+	const FCTMatchSettings& Settings = GameInstance->GetStoredMatchSettings();
+	GameDurationSeconds = Settings.GameMinutes * 60.f;
+	RoundDurationSeconds = static_cast<float>(Settings.RoundSeconds);
+	InitialTailCount = Settings.InitialTails;
+	PhoneUsesPerGame = Settings.PhoneUses;
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 경기 설정 적용: %d분, 라운드 %d초, 시작 꼬리 %d, 전화 %d회, 부쉬 %s"),
+		Settings.GameMinutes, Settings.RoundSeconds, Settings.InitialTails, Settings.PhoneUses, Settings.IsBushEnabled() ? TEXT("켜기") : TEXT("끄기"));
+}
+
 void ACTGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 {
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
@@ -169,6 +187,7 @@ void ACTGameMode::StartGame()
 		PlayerState->SetColors(ECTColor::None, ECTColor::None); // 직전 색 없음
 		PlayerState->SetTailCount(InitialTailCount);
 		PlayerState->SetIsGhost(false);
+		PlayerState->SetPhoneUsesLeft(PhoneUsesPerGame);
 	}
 
 	const double Now = CTGameState->GetServerWorldTimeSeconds();

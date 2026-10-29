@@ -163,6 +163,8 @@ void UCTGameInstance::HostGame()
 	// 새 방이니 이전 방 코드는 버림
 	StoredMapIndex = INDEX_NONE;
 	StoredRoomCode.Reset();
+	StoredMatchSettings = FCTMatchSettings();
+	bHasStoredMatchSettings = false;
 
 	const FName FirstMap = LobbyMapName.IsNone() ? GameMapName : LobbyMapName;
 	UGameplayStatics::OpenLevel(World, FirstMap, /*bAbsolute=*/true, FString(TEXT("listen")) + MakeNameOption());
@@ -201,6 +203,8 @@ void UCTGameInstance::LeaveToMainMenu(FText Message)
 	PendingMessage = Message;
 	StoredRoomCode.Reset();
 	StoredMapIndex = INDEX_NONE;
+	StoredMatchSettings = FCTMatchSettings();
+	bHasStoredMatchSettings = false;
 
 	if (UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>()) { Session->CloseRoom(); }
 
@@ -251,6 +255,10 @@ FText UCTGameInstance::MakeJoinFailureMessage(const FString& ErrorString) const
 	if (ErrorString.Contains(CTJoinReject::LobbyStarting))
 	{
 		return NSLOCTEXT("CT", "Menu_JoinStarting", "곧 게임이 시작되어 입장할 수 없습니다.");
+	}
+	if (ErrorString.Contains(CTJoinReject::LobbyFull))
+	{
+		return NSLOCTEXT("CT", "Menu_JoinFull", "방이 가득 차서 입장할 수 없습니다.");
 	}
 
 	// 엔진 기본 인원 초과 메시지 (Server full 등)

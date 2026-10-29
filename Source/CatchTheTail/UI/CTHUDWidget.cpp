@@ -4,7 +4,11 @@
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTPlayerState.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Engine/Font.h"
 #include "Components/TextBlock.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/VerticalBox.h"
@@ -27,6 +31,7 @@ void UCTHUDWidget::NativeConstruct()
 
 	SetShown(Widget_Countdown, false);
 	SetShown(Widget_Ghost, false);
+	SetShown(Text_Notice, false);
 	UpdateSkillSlots();
 
 	TryBindGameState();
@@ -46,6 +51,12 @@ void UCTHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 
 	TryBindGameState();
 	TryBindMyPlayerState();
+
+	if (NoticeRemaining > 0.f)
+	{
+		NoticeRemaining -= InDeltaTime;
+		if (NoticeRemaining <= 0.f) { SetShown(Text_Notice, false); }
+	}
 
 	UpdateTimeDisplay();
 	UpdateSkillSlots();
@@ -466,4 +477,49 @@ void UCTHUDWidget::RefreshScoreboard()
 		}
 		SortedEntries[Index]->RefreshEntry(Rank, PlayerState == MyPlayerState, !bAllTied);
 	}
+}
+
+UTextBlock* UCTHUDWidget::EnsureNoticeText()
+{
+	if (Text_Notice) { return Text_Notice; }
+
+	// WBP에 없으면 화면 위 가운데에 직접 만듦 (루트가 캔버스일 때)
+	UCanvasPanel* Canvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->RootWidget) : nullptr;
+	if (!Canvas) { return nullptr; }
+
+	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_Notice"));
+	Text->SetJustification(ETextJustify::Center);
+	Text->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	Text->SetShadowOffset(FVector2D(2.f, 2.f));
+	Text->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.8f));
+
+	FSlateFontInfo Font = Text->GetFont();
+	if (UFont* NotoFont = LoadObject<UFont>(nullptr, TEXT("/Game/Font/NotoSansKR-Bold_Font.NotoSansKR-Bold_Font")))
+	{
+		Font.FontObject = NotoFont;
+		Font.TypefaceFontName = NAME_None;
+	}
+	Font.Size = 30;
+	Text->SetFont(Font);
+
+	if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(Text))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.5f, 0.18f));
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		CanvasSlot->SetAutoSize(true);
+		CanvasSlot->SetPosition(FVector2D::ZeroVector);
+	}
+
+	Text_Notice = Text;
+	return Text_Notice;
+}
+
+void UCTHUDWidget::ShowNotice(const FText& Message, float Seconds)
+{
+	UTextBlock* Text = EnsureNoticeText();
+	if (!Text) { return; }
+
+	Text->SetText(Message);
+	SetShown(Text, true);
+	NoticeRemaining = FMath::Max(Seconds, 0.1f);
 }

@@ -72,4 +72,5 @@ namespace CTJoinReject
 {
 	inline constexpr const TCHAR* GameInProgress = TEXT("CT_GAME_IN_PROGRESS");
 	inline constexpr const TCHAR* LobbyStarting  = TEXT("CT_LOBBY_STARTING");
+	inline constexpr const TCHAR* LobbyFull      = TEXT("CT_LOBBY_FULL");
 }

@@ -19,6 +19,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, LobbyMinPlayers);
 	DOREPLIFETIME(ACTGameState, RoomCode);
 	DOREPLIFETIME(ACTGameState, SelectedMapIndex);
+	DOREPLIFETIME(ACTGameState, MatchSettings);
 	DOREPLIFETIME(ACTGameState, ReturnToLobbyServerTime);
 	DOREPLIFETIME(ACTGameState, GameEndServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
@@ -125,6 +126,14 @@ void ACTGameState::SetSelectedMapIndex(int32 NewMapIndex)
 	if (!HasAuthority()) { return; }
 
 	SelectedMapIndex = NewMapIndex;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetMatchSettings(const FCTMatchSettings& NewSettings)
+{
+	if (!HasAuthority()) { return; }
+
+	MatchSettings = NewSettings;
 	ForceNetUpdate();
 }
 

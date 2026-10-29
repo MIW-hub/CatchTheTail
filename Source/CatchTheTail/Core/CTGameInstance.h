@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
 #include "Engine/EngineBaseTypes.h"
+#include "CTMatchSettings.h"
 #include "CTGameInstance.generated.h"
 
 class UNetDriver;
@@ -113,6 +114,12 @@ public:
 	int32 GetStoredMapIndex() const { return StoredMapIndex; }
 	void SetStoredMapIndex(int32 NewMapIndex) { StoredMapIndex = NewMapIndex; }
 
+	// 방장이 로비에서 정한 경기 설정. 게임을 하고 로비로 돌아와도 유지하고, 게임 맵의 GameMode가 읽어 적용 (방장 컴퓨터에서만 사용)
+	const FCTMatchSettings& GetStoredMatchSettings() const { return StoredMatchSettings; }
+	void SetStoredMatchSettings(const FCTMatchSettings& NewSettings) { StoredMatchSettings = NewSettings; bHasStoredMatchSettings = true; }
+	// 로비를 거쳐 설정이 정해졌는가 (게임 맵에서 바로 시작한 테스트에서는 false)
+	bool HasStoredMatchSettings() const { return bHasStoredMatchSettings; }
+
 	const FString& GetStoredRoomCode() const { return StoredRoomCode; }
 	void SetStoredRoomCode(const FString& NewRoomCode) { StoredRoomCode = NewRoomCode; }
 
@@ -167,6 +174,9 @@ private:
 
 	FString StoredRoomCode;
 	int32 StoredMapIndex = INDEX_NONE;
+
+	FCTMatchSettings StoredMatchSettings;
+	bool bHasStoredMatchSettings = false;
 
 	FText PendingMessage;
 	bool bIntroShown = false;

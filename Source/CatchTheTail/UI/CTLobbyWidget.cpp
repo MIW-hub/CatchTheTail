@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTLobbyWidget.h"
+#include "CTButtonHoverEffect.h"
 #include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "../Core/CTGameState.h"
@@ -22,6 +23,7 @@
 void UCTLobbyWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	UCTButtonHoverEffect::Attach(this);
 
 	// 버튼 소리 (올림 / 누름)
 	UCTAudioSubsystem::ApplyUISounds(this);
@@ -36,6 +38,7 @@ void UCTLobbyWidget::NativeConstruct()
 	// 맵 선택
 	if (Button_SelectMap)       { Button_SelectMap->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleSelectMapClicked); }
 	if (Button_MapSelectClose)  { Button_MapSelectClose->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleMapSelectCloseClicked); }
+	BindMatchSettingWidgets();
 	SetMapSelectOpen(false);
 
 	// 채팅
@@ -266,6 +269,7 @@ void UCTLobbyWidget::RefreshLobby()
 	RefreshRoomCode();
 
 	RefreshMap(bIsHost, bStarting);
+	RefreshMatchSettings(bIsHost, bStarting);
 
 	BP_OnLobbyRefreshed(bIsHost, bCanStart, StartRemaining);
 }
@@ -328,6 +332,81 @@ void UCTLobbyWidget::RefreshMap(bool bIsHost, bool bStarting)
 	for (UCTMapEntryWidget* Entry : MapEntries)
 	{
 		if (Entry) { Entry->SetSelected(Entry->GetMapIndex() == SelectedIndex); }
+	}
+}
+
+void UCTLobbyWidget::BindMatchSettingWidgets()
+{
+	const int32 Count = static_cast<int32>(ECTMatchSetting::Count);
+	SettingArrows.Reset();
+	SettingLabelTexts.Init(nullptr, Count);
+	SettingValueTexts.Init(nullptr, Count);
+	SettingPrevButtons.Init(nullptr, Count);
+	SettingNextButtons.Init(nullptr, Count);
+
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		const ECTMatchSetting Setting = static_cast<ECTMatchSetting>(Index);
+		const FString Key = FCTMatchSettings::GetKey(Setting).ToString();
+
+		SettingLabelTexts[Index] = Cast<UTextBlock>(GetWidgetFromName(*FString::Printf(TEXT("Label_Setting_%s"), *Key)));
+		SettingValueTexts[Index] = Cast<UTextBlock>(GetWidgetFromName(*FString::Printf(TEXT("Text_Setting_%s"), *Key)));
+		SettingPrevButtons[Index] = Cast<UButton>(GetWidgetFromName(*FString::Printf(TEXT("Button_Setting_%s_Prev"), *Key)));
+		SettingNextButtons[Index] = Cast<UButton>(GetWidgetFromName(*FString::Printf(TEXT("Button_Setting_%s_Next"), *Key)));
+
+		auto Bind = [this, Setting](UButton* Button, int32 Direction)
+		{
+			if (!Button) { return; }
+			UCTMatchSettingArrow* Arrow = NewObject<UCTMatchSettingArrow>(this);
+			Arrow->Setting = Setting;
+			Arrow->Direction = Direction;
+			Arrow->OnArrowClicked.BindUObject(this, &UCTLobbyWidget::HandleSettingArrow);
+			Button->OnClicked.AddDynamic(Arrow, &UCTMatchSettingArrow::HandleClicked);
+			SettingArrows.Add(Arrow);
+		};
+		Bind(SettingPrevButtons[Index], -1);
+		Bind(SettingNextButtons[Index], 1);
+	}
+}
+
+void UCTLobbyWidget::RefreshMatchSettings(bool bIsHost, bool bStarting)
+{
+	const UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	if (!CTGameState) { return; }
+
+	const FCTMatchSettings& Settings = CTGameState->GetMatchSettings();
+	const int32 NumPlayers = CTGameState->PlayerArray.Num();
+
+	if (Text_MatchSettings)
+	{
+		Text_MatchSettings->SetText(Settings.MakeSummary());
+	}
+
+	for (int32 Index = 0; Index < SettingValueTexts.Num(); ++Index)
+	{
+		const ECTMatchSetting Setting = static_cast<ECTMatchSetting>(Index);
+
+		if (SettingLabelTexts[Index]) { SettingLabelTexts[Index]->SetText(FCTMatchSettings::GetLabel(Setting)); }
+		if (SettingValueTexts[Index]) { SettingValueTexts[Index]->SetText(FCTMatchSettings::FormatValue(Setting, Settings.Get(Setting))); }
+
+		// 방장만 바꿀 수 있고, 더 이동할 수 없거나 허용되지 않는 값이면 막음
+		auto CanMove = [&](int32 Direction)
+		{
+			FCTMatchSettings Next = Settings;
+			return bIsHost && !bStarting && Next.Step(Setting, Direction) && Next.IsAllowed(NumPlayers);
+		};
+		if (SettingPrevButtons[Index]) { SettingPrevButtons[Index]->SetIsEnabled(CanMove(-1)); }
+		if (SettingNextButtons[Index]) { SettingNextButtons[Index]->SetIsEnabled(CanMove(1)); }
+	}
+}
+
+void UCTLobbyWidget::HandleSettingArrow(ECTMatchSetting Setting, int32 Direction)
+{
+	ReturnFocusToGame();
+	if (ACTLobbyPlayerController* Controller = GetOwningPlayer<ACTLobbyPlayerController>())
+	{
+		Controller->RequestChangeMatchSetting(Setting, Direction);
 	}
 }
 

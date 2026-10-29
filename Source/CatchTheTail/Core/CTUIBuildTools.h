@@ -52,6 +52,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool RefineNameChange(UBlueprint* WidgetBlueprint);
 
+	/**
+	 * 대기 로비(WBP_CTLobbyWidget)의 맵 선택 창을 "맵 설정" 창으로 바꿉니다.
+	 * - 맵 선택 버튼과 창 제목 글자를 "맵 설정"으로 바꿈
+	 * - 창을 오른쪽으로 넓히고 왼쪽에 경기 설정 칸(Panel_MatchSettings: 항목마다 Label_Setting_이름, Button_Setting_이름_Prev, Text_Setting_이름, Button_Setting_이름_Next)을 추가, 맵 목록은 오른쪽으로 이동
+	 * - 로비 화면 맵 아래에 설정 요약 글자(Text_MatchSettings) 추가
+	 * 이미 만들었으면 글자만 다시 바꾸고 다시 만들지 않으므로 여러 번 불러도 됩니다. 성공하면 true. 컴파일과 저장은 호출한 쪽에서 합니다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint);
+
 	// 위젯 트리를 글자로 설명 (이름, 종류, 캔버스 위치)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static FString DescribeWidgetTree(UBlueprint* WidgetBlueprint);

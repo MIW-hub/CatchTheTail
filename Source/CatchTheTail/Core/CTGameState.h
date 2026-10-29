@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "../Type/CTTypes.h"
+#include "CTMatchSettings.h"
 #include "CTGameState.generated.h"
 
 class ACTPlayerState;
@@ -64,6 +65,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	int32 GetSelectedMapIndex() const { return SelectedMapIndex; }
 
+	// 로비: 방장이 정한 경기 설정 (모두에게 복제)
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	const FCTMatchSettings& GetMatchSettings() const { return MatchSettings; }
+
 	// 로비: 방 코드 (방장이 만들고 모두에게 복제). 아직 없으면 빈 문자열
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	FString GetRoomCode() const { return RoomCode; }
@@ -102,6 +107,7 @@ public:
 	void SetLobbyMinPlayers(int32 NewMinPlayers);
 	void SetRoomCode(const FString& NewRoomCode);
 	void SetSelectedMapIndex(int32 NewMapIndex);
+	void SetMatchSettings(const FCTMatchSettings& NewSettings);
 	// 0이면 예약 없음
 	void SetReturnToLobbyTime(double NewServerTime);
 	void SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime);
@@ -134,6 +140,10 @@ protected:
 	// 로비에서 선택된 맵 번호
 	UPROPERTY(Replicated)
 	int32 SelectedMapIndex = INDEX_NONE;
+
+	// 로비 경기 설정
+	UPROPERTY(Replicated)
+	FCTMatchSettings MatchSettings;
 
 	// 로비 방 코드
 	UPROPERTY(Replicated)

@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTUIBuildTools.h"
+#include "CTMatchSettings.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -554,6 +555,14 @@ FString UCTUIBuildTools::DescribeWidgetTree(UBlueprint* WidgetBlueprint)
 				CanvasSlot->GetAnchors().Minimum.X, CanvasSlot->GetAnchors().Minimum.Y,
 				CanvasSlot->GetAlignment().X, CanvasSlot->GetAlignment().Y);
 		}
+		if (const USizeBox* Box = Cast<USizeBox>(Widget))
+		{
+			Result += FString::Printf(TEXT(" sizebox w=%s%.0f h=%s%.0f"), Box->bOverride_WidthOverride ? TEXT("") : TEXT("(off)"), Box->WidthOverride, Box->bOverride_HeightOverride ? TEXT("") : TEXT("(off)"), Box->HeightOverride);
+		}
+		if (const UTextBlock* TextBlock = Cast<UTextBlock>(Widget))
+		{
+			Result += FString::Printf(TEXT(" text=\"%s\""), *TextBlock->GetText().ToString());
+		}
 		Result += TEXT("\n");
 	}
 
@@ -899,6 +908,168 @@ bool UCTUIBuildTools::RefineNameChange(UBlueprint* WidgetBlueprint)
 			BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 			BoxSlot->SetHorizontalAlignment(HAlign_Left);
 			BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+		}
+	}
+
+	if (const FMapProperty* GuidMapProperty = CastField<FMapProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetVariableNameToGuidMap"))))
+	{
+		FScriptMapHelper GuidMap(GuidMapProperty, GuidMapProperty->ContainerPtrToValuePtr<void>(WidgetBlueprint));
+		TArray<UWidget*> Current;
+		Tree->GetAllWidgets(Current);
+		for (UWidget* Widget : Current)
+		{
+			if (!Widget->bIsVariable) { continue; }
+			FName Key = Widget->GetFName();
+			if (GuidMap.FindMapPairIndexFromHash(&Key) == INDEX_NONE)
+			{
+				FGuid Guid = FGuid::NewGuid();
+				GuidMap.AddPair(&Key, &Guid);
+			}
+		}
+	}
+
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	Tree = nullptr;
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyWidget");
+
+	UCanvasPanel* DialogCanvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_CompactMapDialog")));
+	UImage* Card = Cast<UImage>(Tree->FindWidget(TEXT("Image_MapDialogCard")));
+	UScrollBox* MapScroll = Cast<UScrollBox>(Tree->FindWidget(TEXT("Scroll_MapList")));
+	UButton* CloseButton = Cast<UButton>(Tree->FindWidget(TEXT("Button_MapSelectClose")));
+	if (!DialogCanvas || !Card || !MapScroll || !CloseButton)
+	{
+		Tree = nullptr;
+		return false;
+	}
+
+	// 이름 바꾸기: 맵 선택 -> 맵 설정
+	if (UTextBlock* ButtonLabel = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_Button_SelectMap"))))
+	{
+		ButtonLabel->SetText(Loc(TEXT("Label_Button_SelectMap"), TEXT("맵 설정")));
+	}
+	if (UTextBlock* DialogTitle = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_MapDialogTitle"))))
+	{
+		DialogTitle->SetText(Loc(TEXT("Label_MapDialogTitle"), TEXT("맵 설정")));
+	}
+
+	auto SlotOf = [](UWidget* Widget) { return Widget ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr; };
+	auto AddToCanvas = [](UCanvasPanel* Canvas, UWidget* Widget, FVector2D Position, FVector2D Size)
+	{
+		UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Widget));
+		if (CanvasSlot)
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.f, 0.f));
+			CanvasSlot->SetAlignment(FVector2D(0.0, 0.0));
+			CanvasSlot->SetPosition(Position);
+			CanvasSlot->SetSize(Size);
+		}
+	};
+
+	if (!Tree->FindWidget(TEXT("Panel_MatchSettings")))
+	{
+		// 창을 오른쪽으로 넓힘 (왼쪽에 설정 칸을 둘 자리)
+		constexpr float Extra = 640.f;
+		// Native_MapDialog 는 원래 크기, Cap_MapDialog 는 같은 비율로 줄인 한도라서 줄인 비율만큼만 넓힘
+		USizeBox* NativeBox = Cast<USizeBox>(Tree->FindWidget(TEXT("Native_MapDialog")));
+		USizeBox* CapBox = Cast<USizeBox>(Tree->FindWidget(TEXT("Cap_MapDialog")));
+		if (NativeBox && NativeBox->bOverride_WidthOverride)
+		{
+			const float CapRatio = (CapBox && CapBox->bOverride_WidthOverride && NativeBox->WidthOverride > 0.f) ? CapBox->WidthOverride / NativeBox->WidthOverride : 1.f;
+			NativeBox->SetWidthOverride(NativeBox->WidthOverride + Extra);
+			if (CapBox && CapBox->bOverride_WidthOverride) { CapBox->SetWidthOverride(CapBox->WidthOverride + Extra * CapRatio); }
+		}
+		if (UCanvasPanelSlot* CardSlot = SlotOf(Card))
+		{
+			CardSlot->SetSize(CardSlot->GetSize() + FVector2D(Extra, 0.0));
+		}
+		if (UCanvasPanelSlot* CloseSlot = SlotOf(CloseButton))
+		{
+			CloseSlot->SetPosition(CloseSlot->GetPosition() + FVector2D(Extra, 0.0));
+		}
+
+		// 맵 목록: 오른쪽으로 옮기고 위에 소제목 자리를 둠
+		constexpr float ListTop = 205.f;
+		const float ListBottom = 145.f + 590.f;
+		if (UCanvasPanelSlot* ListSlot = SlotOf(MapScroll))
+		{
+			ListSlot->SetPosition(FVector2D(60.0 + Extra, ListTop));
+			ListSlot->SetSize(FVector2D(ListSlot->GetSize().X, ListBottom - ListTop));
+		}
+
+		// 소제목
+		UTextBlock* SettingsHeader = MakeText(TEXT("Label_MatchSettingsHeader"), TEXT("경기 설정"), TEXT("SemiBold"), 26, TextTitle);
+		AddToCanvas(DialogCanvas, SettingsHeader, FVector2D(60.0, 145.0), FVector2D(560.0, 44.0));
+		UTextBlock* MapHeader = MakeText(TEXT("Label_MapListHeader"), TEXT("맵 선택"), TEXT("SemiBold"), 26, TextTitle);
+		AddToCanvas(DialogCanvas, MapHeader, FVector2D(60.0 + Extra, 145.0), FVector2D(560.0, 44.0));
+
+		// 경기 설정 칸: 항목마다 [이름 ... < 값 >]
+		UVerticalBox* Panel = Make<UVerticalBox>(TEXT("Panel_MatchSettings"));
+		Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		const FMargin ArrowMargin(0.101266f, 0.192771f, 0.101266f, 0.192771f);
+		for (int32 Index = 0; Index < static_cast<int32>(ECTMatchSetting::Count); ++Index)
+		{
+			const ECTMatchSetting Setting = static_cast<ECTMatchSetting>(Index);
+			const FString Key = FCTMatchSettings::GetKey(Setting).ToString();
+
+			UHorizontalBox* Row = Make<UHorizontalBox>(*FString::Printf(TEXT("Row_Setting_%s"), *Key));
+			Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+			UTextBlock* Label = MakeText(*FString::Printf(TEXT("Label_Setting_%s"), *Key), TEXT(""), TEXT("Regular"), 22, TextDim);
+			Label->SetText(FCTMatchSettings::GetLabel(Setting));
+			USizeBox* LabelBox = Sized(*FString::Printf(TEXT("Size_Label_Setting_%s"), *Key), Label, 0.f, 56.f);
+			Cast<USizeBoxSlot>(LabelBox->GetContentSlot())->SetVerticalAlignment(VAlign_Center);
+			AddH(Row, LabelBox, 12.f, true);
+
+			auto MakeArrow = [&](const TCHAR* Suffix, const TCHAR* Glyph)
+			{
+				UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("Rectangle_5"), ArrowMargin, FLinearColor::White);
+				if (UTextBlock* ArrowLabel = Cast<UTextBlock>(Arrow->GetChildAt(0)))
+				{
+					ArrowLabel->SetText(FText::FromString(Glyph));
+				}
+				return Sized(*FString::Printf(TEXT("Size_Button_Setting_%s_%s"), *Key, Suffix), Arrow, 56.f, 56.f);
+			};
+
+			AddH(Row, MakeArrow(TEXT("Prev"), TEXT("<")), 8.f, false);
+
+			UTextBlock* Value = MakeText(*FString::Printf(TEXT("Text_Setting_%s"), *Key), TEXT(""), TEXT("SemiBold"), 24, TextMain, ETextJustify::Center);
+			Value->SetText(FCTMatchSettings::FormatValue(Setting, FCTMatchSettings().Get(Setting)));
+			USizeBox* ValueBox = Sized(*FString::Printf(TEXT("Size_Text_Setting_%s"), *Key), Value, 170.f, 56.f);
+			Cast<USizeBoxSlot>(ValueBox->GetContentSlot())->SetVerticalAlignment(VAlign_Center);
+			AddH(Row, ValueBox, 8.f, false);
+
+			AddH(Row, MakeArrow(TEXT("Next"), TEXT(">")), 0.f, false);
+
+			AddV(Panel, Sized(*FString::Printf(TEXT("Size_Row_Setting_%s"), *Key), Row, 0.f, 56.f), 18.f);
+		}
+		AddToCanvas(DialogCanvas, Panel, FVector2D(60.0, ListTop), FVector2D(560.0, ListBottom - ListTop));
+	}
+
+	// 로비 화면: 맵 아래에 설정 요약 한 줄
+	if (UCanvasPanel* MapCanvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_CompactMap"))))
+	{
+		if (!Tree->FindWidget(TEXT("Text_MatchSettings")))
+		{
+			UTextBlock* Summary = MakeText(TEXT("Text_MatchSettings"), TEXT(""), TEXT("Regular"), 19, TextDim, ETextJustify::Center);
+			Summary->SetText(FCTMatchSettings().MakeSummary());
+			AddToCanvas(MapCanvas, Summary, FVector2D(0.0, 484.0), FVector2D(440.0, 30.0));
 		}
 	}
 
