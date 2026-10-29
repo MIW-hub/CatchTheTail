@@ -106,7 +106,7 @@ void ACTMenuPlayerController::ShowNameEntryOrMenu()
 {
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 
-	// 언어 선택 다음 단계: 이름 없으면 입력 (위젯 없으면 생략)
+	// 이름 없으면 입력
 	if (NameEntryWidgetClass && GameInstance && !GameInstance->HasPlayerName())
 	{
 		ShowNameEntry();
@@ -121,7 +121,7 @@ void ACTMenuPlayerController::ShowLanguageSelectOrMenu()
 {
 	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 
-	// 언어를 아직 안 골랐으면 먼저 선택 (위젯 없으면 생략)
+	// 언어 미선택이면 먼저 선택
 	if (!LanguageSelectWidgetClass || !Settings || Settings->HasChosenLanguage())
 	{
 		ShowNameEntryOrMenu();
@@ -162,7 +162,7 @@ void ACTMenuPlayerController::ShowNameEntry()
 {
 	if (!NameEntryWidgetClass) { return; }
 
-	// 메뉴 내렸다가 이름 저장 후 복귀
+	// 메뉴 내리고 이름 저장 후 복귀
 	if (MainMenuWidget)
 	{
 		MainMenuWidget->RemoveFromParent();

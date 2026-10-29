@@ -18,12 +18,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	// 붙이기
 	// 붙은 본 기준 자세 상쇄
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tongue|Attach")
 	bool bCompensateAttachBoneRefPose = true;
 
-	// 흔들림
 	// 흔들림 축 (컴포넌트 공간)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tongue|Wave")
 	FVector WaveAxis = FVector(0.f, 0.f, 1.f);
@@ -52,7 +50,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tongue|Wave", meta = (ClampMin = "0"))
 	float AmplitudeExponent = 1.f;
 
-	// 속도 반응
 	// 최대 흔들림 속도 (cm/s)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tongue|Speed", meta = (ClampMin = "1"))
 	float FullWaveSpeed = 800.f;

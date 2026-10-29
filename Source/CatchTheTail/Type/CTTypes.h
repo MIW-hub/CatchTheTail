@@ -1,5 +1,5 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
-// 공용 타입 모음: 색, 게임 단계, 달리기 상태, 속도 버프
+// 공용 타입 모음
 #pragma once
 
 #include "CoreMinimal.h"
@@ -67,7 +67,7 @@ struct FCTSpeedBuff
 	float Value = 0.f;
 };
 
-// 서버가 입장을 거절할 때 보내는 사유 코드. 클라이언트가 이 코드를 보고 안내 문구를 고릅니다.
+// 입장 거절 사유 코드
 namespace CTJoinReject
 {
 	inline constexpr const TCHAR* GameInProgress = TEXT("CT_GAME_IN_PROGRESS");

@@ -7,7 +7,7 @@ UCTMapSettings::UCTMapSettings()
 	CategoryName = TEXT("Game");
 	SectionName = TEXT("CT Maps");
 
-	// 기본 목록. 프로젝트 설정에서 바꾸면 그 값이 우선합니다.
+	// 기본 목록. 프로젝트 설정이 우선
 	FCTMapInfo TypeA;
 	TypeA.DisplayName = NSLOCTEXT("CT", "Map_TypeA", "타입 A");
 	TypeA.Description = NSLOCTEXT("CT", "Map_TypeA_Desc", "기본 맵입니다.");

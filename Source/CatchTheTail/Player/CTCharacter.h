@@ -88,14 +88,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|State")
 	bool CanMoveNow() const;
 
-	// 부쉬 안에 있는가 (다른 사람 화면에서 몸이 숨겨짐, 잡기/밀기 불가)
+	// 부쉬 안 여부
 	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
 	bool IsInBush() const { return CurrentBush != nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
 	ACTBush* GetCurrentBush() const { return CurrentBush; }
 
-	// 전화부스를 쓰는 중 (이동, 행동 불가)
+	// 전화부스 사용 중
 	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
 	bool IsBoothLocked() const { return bBoothLocked; }
 
@@ -103,7 +103,7 @@ public:
 	void SetCurrentBush(ACTBush* NewBush);
 	void SetBoothLocked(bool bNewLocked);
 
-	// 이 캐릭터를 조종하는 사람 화면에만 안내 문구를 띄움 (서버가 호출)
+	// 조종자 화면 안내 문구 (서버 호출)
 	UFUNCTION(Client, Reliable)
 	void ClientShowNotice(const FText& Message, float Seconds);
 
@@ -192,15 +192,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0.1"))
 	float CameraDistanceInterpSpeed = 8.f;
 
-	/**
-	 * 카메라가 캐릭터에 이 거리(cm)보다 가까워지면 내 화면에서 내 캐릭터(몸, 혀, 꼬리)를 숨깁니다.
-	 * 벽에 바짝 붙어서 스프링암이 짧아졌을 때 카메라가 몸 안으로 들어와 화면이 가려지는 것을 막습니다.
-	 * 다른 사람의 화면에는 영향이 없습니다. 0이면 사용하지 않음
-	 */
+	// 카메라가 이 거리(cm)보다 가까우면 내 캐릭터 숨김, 0이면 끔
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0"))
 	float CameraHideDistance = 130.f;
 
-	/** 숨긴 뒤 다시 보이게 하는 거리 = 숨기는 거리 + 이 값(cm). 경계에서 깜빡이지 않게 해 줍니다. */
+	// 숨김 해제 여유 거리(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0"))
 	float CameraHideHysteresis = 30.f;
 
@@ -208,7 +204,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "1"))
 	float CameraProbeSize = 15.f;
 
-	// 카메라가 벽/물체에 닿으면 앞으로 당길지. 꺼 두면 물체를 뚫고 들어갈 수 있지만 시점이 튀지 않음
+	// 카메라 벽 충돌 시 당김, 끄면 시점은 안 튐
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
 	bool bCameraCollision = false;
 
@@ -252,7 +248,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> PushedMontage;
 
-	// 밀려 넘어진 뒤 일어나는 몽타주. 비어 있으면 넘어짐 자세를 유지한 뒤 바로 풀림 (아직 제작 전)
+	// 일어나기 몽타주, 비면 바로 풀림
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> GetUpMontage;
 
@@ -411,7 +407,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0", ClampMax = "180"))
 	float PushHalfAngleDegrees = 60.f;
 
-	// 밀려나는 거리 (밀린 캐릭터 키의 몇 배인지). 1이면 키 정도 (공중 비행 + 착지 후 미끄러짐을 합쳐 어림)
+	// 밀림 거리 (피해자 키 배수)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
 	float PushDistanceInHeights = 1.f;
 
@@ -427,7 +423,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
 	float PushCooldownSeconds = 3.f;
 
-	// 잡기 쿨타임(초). 잡기를 누른 순간부터 센다
+	// 잡기 쿨타임(초), 입력 순간부터
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
 	float GrabCooldownSeconds = 1.5f;
 
@@ -438,24 +434,24 @@ protected:
 	// Pitch별 카메라 거리 보간 (로컬만)
 	void UpdateCameraDistance(float DeltaSeconds);
 
-	/** 카메라가 너무 가까우면 내 캐릭터를 내 화면에서만 숨기고, 멀어지면 다시 보이게 합니다. */
-	// 걷기, 점프, 착지 소리. 모든 컴퓨터에서 각자 재생 (위치 소리라 가까울수록 크게 들림)
+	// 걷기/점프/착지 소리, 각자 재생
 	void UpdateMovementSounds(float DeltaSeconds);
 
 	void UpdateCameraClip();
+// 카메라 근접 시 내 캐릭터 숨김
 
-	// 부쉬에 숨은 다른 캐릭터를 이 컴퓨터 화면에서 숨기거나 다시 보이게 (매 프레임)
+	// 부쉬 속 캐릭터 숨김 (매 프레임)
 	void UpdateBushVisibility();
 	void SetHiddenFromOwnCamera(bool bNewHidden);
 
-	// 부쉬 안에 있을 때 내 화면에서만, 부쉬에 가려진 내 캐릭터를 실루엣으로 보여 줌
+	// 부쉬 안일 때 내 캐릭터 실루엣
 	void UpdateBushXRay();
 
-	// 내 화면에만 보이는 겹친 몸. 깊이 검사를 끈 머티리얼로 그려서 부쉬 위에 보임
+	// 내 화면 전용 겹친 몸
 	UPROPERTY(VisibleAnywhere, Category = "CT|Camera")
 	TObjectPtr<USkeletalMeshComponent> XRayMesh;
 
-	// 겹친 몸에 쓰는 머티리얼 (BodyColor 파라미터, 깊이 검사 끔, 약간 어둡게)
+	// 겹친 몸 머티리얼 (깊이 검사 끔)
 	UPROPERTY(EditDefaultsOnly, Category = "CT|Camera")
 	TObjectPtr<UMaterialInterface> XRayMaterial;
 
@@ -473,7 +469,7 @@ protected:
 	void OnGrabPressed();
 	void OnPushPressed();
 
-	// 서버에게 부탁하는 함수들 (RPC)
+	// 서버 RPC
 	UFUNCTION(Server, Reliable)
 	void ServerSetRunInput(bool bPressed);
 
@@ -494,7 +490,7 @@ protected:
 	void UpdateRunMontage();
 	void UpdateGhostWalkMontage();
 
-	// 밀려 넘어진 몽타주가 끝나면 일어나기 몽타주 재생 (비어 있으면 안 함)
+	// 넘어짐 끝나면 일어나기 재생
 	UFUNCTION()
 	void HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
@@ -550,22 +546,22 @@ private:
 
 	FTimerHandle RunTimerHandle;
 
-	// 발소리 사이 이동 거리(cm). 빠르게 달릴수록 소리 간격이 짧아집니다
+	// 발소리 간격 이동 거리(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "10", AllowPrivateAccess = "true"))
 	float FootstepDistance = 190.f;
 
-	// 이 속도(cm/s)보다 느리면 발소리 없음
+	// 발소리 최소 속도(cm/s)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
 	float MinFootstepSpeed = 80.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
 	float FootstepVolume = 0.55f;
 
-	// 이 낙하 속도(cm/s) 이상일 때만 착지 소리 (작은 턱에서는 안 남)
+	// 착지 소리 최소 낙하 속도(cm/s)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
 	float LandMinFallSpeed = 300.f;
 
-	// true면 이동 거리로 발소리를 냄. 기본은 꺼짐 - 발소리는 애니메이션의 "CT Footstep" 노티파이로 냅니다.
+	// 거리 기반 발소리, 기본은 노티파이 사용
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (AllowPrivateAccess = "true"))
 	bool bUseDistanceFootsteps = false;
 
@@ -574,7 +570,7 @@ private:
 	bool bWasOnGroundForSound = true;
 	float LastFallSpeedForSound = 0.f;
 
-	// 지금 카메라가 가까워서 내 캐릭터를 숨긴 상태인가 (내 컴퓨터)
+	// 근접 카메라로 숨긴 상태 (로컬)
 	bool bHiddenFromOwnCamera = false;
 
 	// 마지막 밀기 시각 (서버)

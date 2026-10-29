@@ -74,7 +74,7 @@ bool FCTMatchSettings::Step(ECTMatchSetting Setting, int32 Direction)
 	const TArray<int32>& Options = GetOptions(Setting);
 	if (Options.IsEmpty() || Direction == 0) { return false; }
 
-	// 지금 값 이상인 첫 선택지 번호 (선택지에 없는 값이어도 가까운 쪽으로 이동)
+	// 현재 값 이상인 첫 선택지 번호
 	const int32 Current = Get(Setting);
 	int32 Index = 0;
 	for (int32 OptionIndex = 0; OptionIndex < Options.Num(); ++OptionIndex)

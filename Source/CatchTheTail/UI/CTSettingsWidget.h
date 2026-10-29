@@ -59,7 +59,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UComboBoxString> ComboBox_Language;
 
-	// 언어 버튼 (콤보박스 대신 쓸 수 있음)
+	// 언어 버튼
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_LanguageKo;
 
@@ -120,11 +120,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> EditableTextBox_NewName;
 
-	// 이름 변경 칸을 펼치는 버튼 (펼친 칸 안의 Button_ChangeName 이 실제 변경)
+	// 이름 변경 칸 펼침 버튼
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_ChangeNameOpen;
 
-	// 새 이름 입력 + 변경 버튼이 있는 칸. 처음에는 접혀 있음
+	// 이름 입력 + 변경 칸 (처음엔 접힘)
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Row_NameChange;
 

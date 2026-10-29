@@ -57,11 +57,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	float GetLobbyStartRemainingSeconds() const;
 
-	// 게임 종료 후: 로비로 자동 복귀까지 남은 초. 예약이 없으면 0
+	// 종료 후 로비 자동 복귀까지 남은 초, 예약 없으면 0
 	UFUNCTION(BlueprintPure, Category = "CT|Result")
 	float GetReturnToLobbyRemainingSeconds() const;
 
-	// 로비: 선택된 맵 번호 (CT Maps 목록의 번호). 없으면 -1
+	// 로비: 선택 맵 번호, 없으면 -1
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	int32 GetSelectedMapIndex() const { return SelectedMapIndex; }
 
@@ -69,7 +69,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	const FCTMatchSettings& GetMatchSettings() const { return MatchSettings; }
 
-	// 로비: 방 코드 (방장이 만들고 모두에게 복제). 아직 없으면 빈 문자열
+	// 로비: 방 코드, 없으면 빈 문자열
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	FString GetRoomCode() const { return RoomCode; }
 

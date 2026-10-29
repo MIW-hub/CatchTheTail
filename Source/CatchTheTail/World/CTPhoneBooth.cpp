@@ -12,7 +12,7 @@
 
 namespace
 {
-	// 서버가 부스를 확인하는 간격(초)
+	// 부스 확인 간격(초)
 	constexpr float ServerCheckInterval = 0.1f;
 }
 
@@ -32,7 +32,7 @@ ACTPhoneBooth::ACTPhoneBooth()
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetRelativeScale3D(FVector(1.2f, 1.2f, 2.2f));
 
-	// 임시 모양 (블루프린트에서 부스 메시로 교체)
+	// 임시 모양
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeFinder.Succeeded())
 	{
@@ -44,7 +44,7 @@ void ACTPhoneBooth::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 임시 모양일 때만 빨간색
+	// 임시 모양일 때만 빨강
 	if (Mesh->GetNumMaterials() > 0 && Mesh->GetMaterial(0) && Mesh->GetMaterial(0)->GetName().Contains(TEXT("BasicShapeMaterial")))
 	{
 		if (UMaterialInstanceDynamic* Material = Mesh->CreateAndSetMaterialInstanceDynamic(0))
@@ -87,7 +87,7 @@ bool ACTPhoneBooth::CanUsePhone(const ACTCharacter* Character)
 
 void ACTPhoneBooth::ServerTick(double Now)
 {
-	// 쓰는 중: 나가거나 유령이 되면 취소, 시간이 되면 결과
+	// 사용 중: 나가거나 유령이면 취소, 끝나면 결과
 	if (ACTCharacter* Current = CurrentUser.Get())
 	{
 		if (!IsCharacterInside(Current) || !CanUsePhone(Current)) { CancelUse(); }
@@ -96,7 +96,7 @@ void ACTPhoneBooth::ServerTick(double Now)
 	}
 	CurrentUser.Reset();
 
-	// 나간 사람은 다시 쓸 수 있게 목록에서 뺌
+	// 나간 사람은 목록에서 뺌
 	for (auto It = WaitForExit.CreateIterator(); It; ++It)
 	{
 		if (!It->IsValid() || !IsCharacterInside(It->Get())) { It.RemoveCurrent(); }
@@ -121,7 +121,7 @@ void ACTPhoneBooth::BeginUse(ACTCharacter* Character, double Now)
 	ACTPlayerState* PlayerState = Character->GetPlayerState<ACTPlayerState>();
 	if (!PlayerState) { return; }
 
-	// 횟수를 다 썼으면 한 번만 알려 주고, 나갔다 들어올 때까지 조용히
+	// 횟수 소진은 한 번만 안내
 	if (PlayerState->GetPhoneUsesLeft() <= 0)
 	{
 		WaitForExit.Add(Character);
@@ -160,7 +160,7 @@ void ACTPhoneBooth::FinishUse(double Now)
 	ACTPlayerState* MyState = Character->GetPlayerState<ACTPlayerState>();
 	const ACTGameState* CTGameState = GetWorld()->GetGameState<ACTGameState>();
 
-	// 내 목표 = 내 목표 색을 배정받은 (유령 아닌) 사람
+	// 목표 = 목표 색의 비유령
 	ACTCharacter* Target = nullptr;
 	if (MyState && CTGameState)
 	{
@@ -177,7 +177,7 @@ void ACTPhoneBooth::FinishUse(double Now)
 
 	if (!Target || !MyState)
 	{
-		// 횟수는 쓰지 않음
+		// 횟수 소모 없음
 		Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_NoTarget", "목표를 찾을 수 없습니다."), NoticeSeconds);
 		BP_OnUseFinished(Character, false);
 		return;
@@ -186,7 +186,7 @@ void ACTPhoneBooth::FinishUse(double Now)
 	MyState->ConsumePhoneUse();
 	const int32 UsesLeft = MyState->GetPhoneUsesLeft();
 
-	// 거리는 구간으로만 알려 줌 (방향 없음)
+	// 거리는 구간만 (방향 없음)
 	const float DistanceMeters = FVector::Dist(Character->GetActorLocation(), Target->GetActorLocation()) / 100.f;
 	const int32 Step = FMath::Max(FMath::RoundToInt(DistanceStepMeters), 1);
 	const int32 Rounded = FMath::RoundToInt(DistanceMeters / Step) * Step;

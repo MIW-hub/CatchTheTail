@@ -16,7 +16,7 @@ class UScrollBox;
 class UTextBlock;
 class UWidget;
 
-// 경기 설정의 < > 버튼 하나를 맡는 도우미. 버튼 클릭 이벤트에는 값을 실을 수 없어서 항목과 방향을 들고 있다가 로비 위젯에 전달합니다.
+// 경기 설정 < > 버튼 하나
 UCLASS()
 class CATCHTHETAIL_API UCTMatchSettingArrow : public UObject
 {
@@ -33,9 +33,7 @@ public:
 	void HandleClicked() { OnArrowClicked.ExecuteIfBound(Setting, Direction); }
 };
 
-/**
- * 대기 로비 화면. 이름이 맞는 위젯만 만들어 두면 자동으로 연결됩니다. (모두 선택 사항)
- */
+// 대기 로비 화면
 UCLASS(Abstract)
 class CATCHTHETAIL_API UCTLobbyWidget : public UUserWidget
 {
@@ -50,15 +48,15 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
-	// 갱신될 때마다 호출. 추가 연출은 BP에서
+	// 갱신 후 (연출용)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Lobby")
 	void BP_OnLobbyRefreshed(bool bIsHost, bool bCanStart, float StartRemainingSeconds);
 
-	// 플레이어 목록. 줄마다 "이름   [상태]"
+	// 플레이어 목록
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_PlayerList;
 
-	// "인원 3/3 · 준비 2명" 또는 "게임 시작 3"
+	// 인원/카운트다운 문구
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Status;
 
@@ -66,7 +64,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_RoomCode;
 
-	// 방 코드 보기/숨기기 버튼. 평소에는 코드를 가려 둡니다.
+	// 방 코드 보기/숨기기 버튼
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_ToggleRoomCode;
 
@@ -78,7 +76,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_CopyRoomCode;
 
-	// 복사했다는 안내 문구 (잠깐 보였다 사라짐)
+	// 복사 안내 문구
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_CopyResult;
 
@@ -98,15 +96,15 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Leave;
 
-	// 채팅 로그가 들어 있는 스크롤 박스 (새 글이 오면 맨 아래로 이동)
+	// 채팅 스크롤 박스
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UScrollBox> ScrollBox_Chat;
 
-	// 채팅 로그. 줄마다 "이름: 내용"
+	// 채팅 로그
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_ChatLog;
 
-	// 채팅 입력칸. Enter로 보내기
+	// 채팅 입력칸
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> EditableTextBox_Chat;
 
@@ -122,7 +120,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MapDescription;
 
-	// 경기 설정 요약 한 줄 (모두에게 보임). 예: 5분 · 라운드 60초 · 최대 8명
+	// 경기 설정 요약
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MatchSettings;
 
@@ -130,11 +128,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_SelectMap;
 
-	// 맵 선택 창 전체 (평소에는 숨김, 버튼을 누르면 표시)
+	// 맵 선택 창
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Panel_MapSelect;
 
-	// 맵 선택 창 안에서 항목이 들어갈 곳 (Wrap Box, Scroll Box, Vertical Box 등 자식을 담는 패널)
+	// 맵 항목이 들어갈 패널
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> Panel_MapList;
 
@@ -142,7 +140,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_MapSelectClose;
 
-	// 맵 선택 창의 항목 위젯 (UCTMapEntryWidget 부모)
+	// 맵 항목 위젯 클래스
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby|Map")
 	TSubclassOf<UCTMapEntryWidget> MapEntryClass;
 
@@ -160,7 +158,7 @@ private:
 	void ClearCopyResult();
 	void RefreshRoomCode();
 
-	// 방 코드를 화면에 보여 주는 중인가 (기본 가림)
+	// 방 코드 표시 중
 	bool bRoomCodeVisible = false;
 
 	FTimerHandle CopyResultTimerHandle;
@@ -190,10 +188,10 @@ private:
 	UFUNCTION()
 	void HandleLeaveClicked();
 
-	// 클릭 뒤 키보드 포커스를 게임 화면으로 되돌림
+	// 포커스를 게임 화면으로 복귀
 	void ReturnFocusToGame();
 
-	// 맵: 미리보기 갱신, 선택 창 열기/닫기
+	// 맵 선택
 	void RefreshMap(bool bIsHost, bool bStarting);
 	void SetMapSelectOpen(bool bOpen);
 	void RebuildMapEntries();
@@ -212,7 +210,7 @@ private:
 
 	bool bMapSelectOpen = false;
 
-	// 경기 설정: 항목마다 값 글자와 < > 버튼 (이름은 Text_Setting_이름, Button_Setting_이름_Prev / _Next)
+	// 경기 설정 항목별 값 글자와 < > 버튼
 	void BindMatchSettingWidgets();
 	void RefreshMatchSettings(bool bIsHost, bool bStarting);
 	void HandleSettingArrow(ECTMatchSetting Setting, int32 Direction);
@@ -232,7 +230,7 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UButton>> SettingNextButtons;
 
-	// 미리보기에 마지막으로 보여 준 맵 번호 (바뀔 때만 다시 그림)
+	// 마지막 미리보기 맵 번호
 	int32 LastShownMapIndex = -2;
 
 	FTimerHandle RefreshTimerHandle;

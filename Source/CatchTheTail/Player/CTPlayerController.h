@@ -26,7 +26,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void ShowResultScreen();
 
-	// 게임이 끝난 뒤 대기 로비로 돌아가기 요청 (방장만 가능)
+	// 로비 복귀 요청 (방장만)
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void RequestReturnToLobby();
 
@@ -34,7 +34,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void HideResultScreen();
 
-	// 카메라 흔들림 (설정 반영), PlayCameraShake 대체
+	// 카메라 흔들림 (설정 반영)
 	UFUNCTION(BlueprintCallable, Category = "CT|Camera")
 	void PlayCTCameraShake(TSubclassOf<UCameraShakeBase> ShakeClass, float Scale = 1.f);
 
@@ -42,13 +42,13 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// 이 레벨에서 재생할 배경음. 로비 컨트롤러가 교체
+	// 레벨 배경음, 로비가 교체
 	virtual ECTMusic GetLevelMusic() const { return ECTMusic::Game; }
 
-	// 카운트다운 숫자가 바뀔 때 소리
+	// 카운트다운 소리 감지
 	virtual void PlayerTick(float DeltaTime) override;
 
-	// 화면에 띄울 UI 생성. 로비 컨트롤러가 교체
+	// UI 생성, 로비가 교체
 	virtual void CreateUI();
 
 	// UI
@@ -71,8 +71,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	int32 MappingPriority = 0;
 
-	// 카메라 상하 각도 제한. 위로 올려다볼수록 카메라가 캐릭터 뒤 아래로 내려가므로
-	// 뒤 시점 거리(450cm) 기준 약 +19도부터 카메라가 바닥 아래로 들어갑니다. 여유를 두고 +5도까지만 허용
+	// 카메라 상하 제한, 바닥 아래 방지
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
 	float ViewPitchMin = -80.f;
 
@@ -89,11 +88,11 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerReturnToLobby();
 
-	// 엔진은 접속 시 OS 닉네임(컴퓨터 이름)을 Name 옵션으로 덮어쓰므로, 저장된 이름을 서버에 직접 알림
+	// 저장된 이름을 서버에 알림 (엔진이 OS 닉네임으로 덮어씀)
 	UFUNCTION(Server, Reliable)
 	void ServerSetPlayerName(const FString& NewName);
 
-	// GameState 늦게 오므로 재시도
+	// GameState 지연 도착 재시도
 	void TryBindGameState();
 
 	UFUNCTION()

@@ -31,7 +31,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	TSubclassOf<UCTNameEntryWidget> NameEntryWidgetClass;
 
-	// 언어 선택 위젯, 비면 생략 (이름 입력 다음에 처음 한 번)
+	// 언어 선택 위젯, 비면 생략
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	TSubclassOf<UCTLanguageSelectWidget> LanguageSelectWidgetClass;
 
@@ -51,13 +51,13 @@ private:
 	void ShowIntro();
 	void ShowMainMenu();
 
-	// 언어 선택 다음 단계: 이름 없으면 입력, 있으면 메뉴 (순서: 언어 → 이름 → 메뉴)
+	// 언어 다음: 이름 없으면 입력, 있으면 메뉴
 	void ShowNameEntryOrMenu();
 
 	// 이름 입력 (최초 1회)
 	void ShowNameEntry();
 
-	// 언어를 아직 안 골랐으면 선택 화면, 아니면 메뉴
+	// 언어 미선택이면 선택, 아니면 메뉴
 	void ShowLanguageSelectOrMenu();
 
 	UFUNCTION()

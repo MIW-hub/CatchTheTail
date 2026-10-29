@@ -76,7 +76,7 @@ void UCTAudioSubsystem::PlayMusic(ECTMusic Music)
 	if (!World || !Sound) { return; }
 
 #if WITH_EDITOR
-	// 에디터에서 창을 여러 개(서버 + 클라이언트)로 띄워 테스트하면 창마다 같은 배경음이 겹쳐 들리고, 맵이 바뀔 때마다 서로 어긋남. 첫 번째 창만 재생
+	// 에디터 다중 창은 첫 창만 재생
 	const FWorldContext* Context = GEngine ? GEngine->GetWorldContextFromWorld(World) : nullptr;
 	if (Context && Context->WorldType == EWorldType::PIE && Context->PIEInstance > 0) { return; }
 #endif
@@ -88,13 +88,13 @@ void UCTAudioSubsystem::PlayMusic(ECTMusic Music)
 
 	if (IsValid(MusicComponent))
 	{
-		// 이전 곡이 사라질 때 반복 보강이 다시 켜지지 않게 먼저 해제
+		// 이전 곡 소멸 시 반복 재시작 방지
 		MusicComponent->OnAudioFinished.RemoveAll(this);
 		MusicComponent->FadeOut(Fade, 0.f);
 		FadingMusicComponents.Add(MusicComponent);
 	}
 
-	// 만들기만 하고(CreateSound2D) 재생은 FadeIn 한 번만. 맵이 바뀌어도 이어지도록 persist, 끝나도 지우지 않고 우리가 관리
+	// 생성 후 FadeIn 한 번만 재생. persist, 자동 파괴 안 함
 	UAudioComponent* Component = UGameplayStatics::CreateSound2D(World, Sound, GetSettingsMusicVolume(), 1.f, 0.f, nullptr, /*bPersistAcrossLevelTransition=*/true, /*bAutoDestroy=*/false);
 	if (Component)
 	{
@@ -118,7 +118,7 @@ float UCTAudioSubsystem::GetSettingsMusicVolume() const
 
 void UCTAudioSubsystem::RefreshMusicVolume()
 {
-	// 사운드 믹스 대신 배경음에 직접 볼륨을 줌 (슬라이더를 내리는 만큼 확실히 작아짐)
+	// 사운드 믹스 대신 배경음에 직접 볼륨
 	if (IsValid(MusicComponent))
 	{
 		MusicComponent->SetVolumeMultiplier(GetSettingsMusicVolume());
@@ -128,12 +128,12 @@ void UCTAudioSubsystem::RefreshMusicVolume()
 
 void UCTAudioSubsystem::HandleMusicFinished()
 {
-	// 곡이 끝났는데 아직 이 곡을 틀어야 하면 처음부터 다시
+	// 곡이 끝났는데 재생 대상이면 재시작
 	if (CurrentMusic == ECTMusic::None || !IsValid(MusicComponent)) { return; }
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 배경음이 끝나 다시 재생"));
 	MusicComponent->Play(0.f);
-	// 볼륨 0 이었다면 다시 틀어도 안 들리므로 설정 볼륨을 다시 적용
+	// 볼륨 0이었다면 설정 볼륨 재적용
 	RefreshMusicVolume();
 }
 
@@ -169,7 +169,7 @@ void UCTAudioSubsystem::ApplyUISounds(UUserWidget* Widget)
 	{
 		if (UButton* Button = Cast<UButton>(Child))
 		{
-			// 이름으로 뒤로가기 계열을 구분
+			// 이름으로 뒤로가기 구분
 			const FString Name = Button->GetName();
 			const bool bBack = Name.Contains(TEXT("Back")) || Name.Contains(TEXT("Close")) || Name.Contains(TEXT("Cancel")) || Name.Contains(TEXT("Leave"));
 

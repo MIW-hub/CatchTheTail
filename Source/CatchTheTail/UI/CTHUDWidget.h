@@ -16,7 +16,7 @@ class CATCHTHETAIL_API UCTHUDWidget : public UCTUserWidget
 	GENERATED_BODY()
 
 public:
-	// 화면 위쪽에 안내 문구를 잠깐 띄움 (전화부스 결과 등). Text_Notice 가 없으면 코드에서 만듦
+	// 상단 안내 문구
 	void ShowNotice(const FText& Message, float Seconds);
 
 protected:
@@ -52,7 +52,6 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnMyTailCountChanged(int32 NewTailCount, int32 Delta);
 
-	// 설정
 	// 점수판 한 줄 위젯
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	TSubclassOf<UCTScoreEntryWidget> ScoreEntryClass;
@@ -61,7 +60,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0.05"))
 	float ScoreboardSyncInterval = 0.25f;
 
-	// 화면에 보여줄 최대 순위 줄 수. 0이면 전부 (전체 순위는 결과 화면)
+	// 최대 순위 줄 수. 0이면 전부
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0"))
 	int32 MaxScoreboardEntries = 4;
 
@@ -110,13 +109,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Widget_Ghost;
 
-	/**
-	 * 스킬 슬롯 (달리기 / 잡기 / 밀기)
-	 * Image_CoolTime, _1, _2 : 달리기, 잡기, 밀기 슬롯 위에 덮는 쿨다운 이미지.
-	 *                          브러시를 M_CT_CooldownRadial 머티리얼로 두면 시계 방향으로 걷히고,
-	 *                          일반 이미지면 쿨타임 동안만 어둡게 표시됩니다.
-	 * Text_RunCooldown, Text_GrabCooldown, Text_PushCooldown : 남은 시간(초). 쿨타임이 아닐 때는 비어 있습니다.
-	 */
+	// 스킬 슬롯 쿨다운 이미지
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> Image_CoolTime;
 
@@ -135,27 +128,27 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_PushCooldown;
 
-	// 쿨다운 머티리얼의 0~1 파라미터 이름 (남은 비율)
+	// 쿨다운 머티리얼 남은 비율 파라미터
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FName CooldownProgressParameter = TEXT("Progress");
 
-	// 달리는 중 남은 시간 글자색
+	// 달리는 중 글자색
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FLinearColor RunActiveTextColor = FLinearColor(0.1f, 0.8f, 1.f, 1.f);
 
-	// 쿨타임 남은 시간 글자색
+	// 쿨타임 글자색
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FLinearColor CooldownTextColor = FLinearColor::White;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Scoreboard;
 
-	// 안내 문구 (선택). 없으면 ShowNotice 가 화면 위 가운데에 만듭니다
+	// 안내 문구. 없으면 코드에서 생성
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Notice;
 
 private:
-	// 연결 (늦게 도착해서 매 프레임 확인)
+	// 연결 (매 프레임 재시도)
 	void TryBindGameState();
 	void TryBindMyPlayerState();
 	void UnbindAll();
@@ -178,12 +171,12 @@ private:
 	void RefreshMyState();
 	void RefreshHunter(bool bForce);
 
-	// 슬롯 하나 갱신. Remaining/Total 이 쿨타임, bRunning 이면 달리는 중 표시, bAvailable false 면 사용 불가(어둡게)
+	// 쿨타임/달리기/사용불가 표시
 	void UpdateSkillSlot(UImage* Overlay, UTextBlock* Text, float Remaining, float Total, bool bRunning, bool bAvailable);
 
 	UMaterialInstanceDynamic* GetOverlayMaterial(UImage* Overlay);
 
-	// 쿨다운 이미지별 동적 머티리얼
+	// 쿨다운 이미지별 머티리얼
 	UPROPERTY(Transient)
 	TMap<TObjectPtr<UImage>, TObjectPtr<UMaterialInstanceDynamic>> OverlayMaterials;
 

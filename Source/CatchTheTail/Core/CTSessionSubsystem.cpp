@@ -10,7 +10,7 @@
 
 namespace
 {
-	// 세션에 붙이는 방 코드 설정 이름
+	// 세션의 방 코드 설정 이름
 	const FName RoomCodeKey(TEXT("CTROOMCODE"));
 
 	constexpr int32 MaxRoomPlayers = 8;
@@ -18,7 +18,7 @@ namespace
 
 	IOnlineSubsystem* FindSubsystem()
 	{
-		// 스팀이 안 켜져 있으면 같은 네트워크(LAN) 방으로
+		// 스팀 없으면 LAN
 		IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
 		return Subsystem ? Subsystem : IOnlineSubsystem::Get(NULL_SUBSYSTEM);
 	}
@@ -94,7 +94,7 @@ void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 	IOnlineSessionPtr Sessions = GetSessionInterface();
 	if (!Sessions.IsValid() || RoomCode.IsEmpty()) { return; }
 
-	// 게임을 하고 로비로 돌아와도 같은 방을 유지
+	// 로비 복귀 후에도 같은 방 유지
 	if (Sessions->GetNamedSession(NAME_GameSession)) { return; }
 
 	const bool bLan = IsLan();
@@ -177,7 +177,7 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 	}
 	if (bBusy) { return; }
 
-	// 이전 방(내가 연 방 포함)이 남아 있으면 먼저 정리한 뒤 다시 시도
+	// 남은 이전 방 정리 후 재시도
 	if (Sessions->GetNamedSession(NAME_GameSession))
 	{
 		bBusy = true;
@@ -226,7 +226,7 @@ void UCTSessionSubsystem::HandleFindSessionsComplete(bool bWasSuccessful)
 	}
 	Sessions->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle);
 
-	// 입장할 수 있는 방만 추림 (코드가 있으면 코드가 같은 방)
+	// 입장 가능한 방만 (코드 있으면 코드 일치)
 	TArray<const FOnlineSessionSearchResult*> Candidates;
 	if (bWasSuccessful)
 	{

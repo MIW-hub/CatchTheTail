@@ -25,7 +25,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Anim")
 	TObjectPtr<UCharacterMovementComponent> MovementComponent;
 
-	// 설정
 	// 이동 판정 속도 (cm/s)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Anim|Settings", meta = (ClampMin = "0"))
 	float MoveThreshold = 3.f;
@@ -60,7 +59,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Anim|Move")
 	bool bShouldMove = false;
 
-	// 점프 / 공중
 	// 공중 (점프+낙하)
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Anim|Jump")
 	bool bIsFalling = false;
@@ -80,7 +78,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Anim|Jump")
 	float TimeInAir = 0.f;
 
-	// 캐릭터 상태
 	// 달리기 중
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Anim|State")
 	bool bIsRunning = false;

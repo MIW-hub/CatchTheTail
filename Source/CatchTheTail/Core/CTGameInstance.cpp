@@ -14,7 +14,6 @@ void UCTGameInstance::Init()
 {
 	Super::Init();
 
-	// 저장된 프로필 로드
 	LoadProfile();
 
 	// 접속 끊김/이동 실패 알림
@@ -65,7 +64,7 @@ void UCTGameInstance::LoadProfile()
 
 	if (const UCTProfileSaveGame* Profile = Cast<UCTProfileSaveGame>(UGameplayStatics::LoadGameFromSlot(CTProfileSlotName, 0)))
 	{
-		// 규칙 재검사 (파일 수정/규칙 변경 대비)
+		// 규칙 재검사 (파일 변조 대비)
 		FText Ignored;
 		if (ValidatePlayerName(Profile->PlayerName, Ignored))
 		{
@@ -225,7 +224,7 @@ void UCTGameInstance::QuitToDesktop()
 
 void UCTGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
 {
-	// 방 입장 중 실패 (방장이 거절했거나 응답이 없음). 이유를 메뉴에 안내
+	// 입장 중 실패, 이유를 메뉴에 안내
 	if (FailureType == ENetworkFailure::PendingConnectionFailure)
 	{
 		const FText Message = MakeJoinFailureMessage(ErrorString);
@@ -238,7 +237,7 @@ void UCTGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver,
 	// 메뉴면 처리 불필요
 	if (IsInMainMenuMap()) { return; }
 
-	// 방장(서버) 쪽 오류는 무시. 참가자만 방장과의 연결이 끊긴 것으로 처리
+	// 방장 쪽 오류는 무시, 참가자만 연결 끊김 처리
 	const UWorld* FailedWorld = World ? World : GetWorld();
 	if (!FailedWorld || FailedWorld->GetNetMode() != NM_Client) { return; }
 

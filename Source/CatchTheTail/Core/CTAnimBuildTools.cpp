@@ -44,7 +44,7 @@ float UCTAnimBuildTools::BuildMontageSegments(UAnimMontage* Montage, const TArra
 		Cursor += (EndTimes[Index] - StartTimes[Index]) / FMath::Abs(PlayRates[Index]);
 	}
 
-	// 섹션은 이름 순서대로 이어짐. 반복 섹션만 자기 자신으로
+	// 반복 섹션만 자기 자신으로 연결
 	for (int32 Index = 0; Index < Montage->CompositeSections.Num(); ++Index)
 	{
 		FCompositeSection& Section = Montage->CompositeSections[Index];

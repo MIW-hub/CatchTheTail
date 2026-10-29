@@ -64,7 +64,7 @@ ACTCharacter::ACTCharacter()
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	CameraBoom->SocketOffset = FVector(0.f, 0.f, 60.f);
-	CameraBoom->bUsePawnControlRotation = true; // null
+	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->bDoCollisionTest = bCameraCollision; // 벽 충돌 시 당김 (기본 꺼짐)
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->ProbeChannel = ECC_Camera;
@@ -75,7 +75,7 @@ ACTCharacter::ACTCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// 부쉬 안에서 내 몸을 부쉬 위에 보여 주는 겹친 몸 (내 화면에서만, 평소에는 꺼짐)
+	// 부쉬 속 겹친 몸 (내 화면만)
 	XRayMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("XRayMesh"));
 	XRayMesh->SetupAttachment(GetMesh());
 	XRayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -450,7 +450,7 @@ void ACTCharacter::UpdateCameraClip()
 		return;
 	}
 
-	// 숨긴 상태에서는 더 멀어져야 다시 보이게 해서 경계에서 깜빡이지 않게 합니다.
+	// 숨김 해제는 더 멀어져야 (깜빡임 방지)
 	const float Distance = FVector::Dist(FollowCamera->GetComponentLocation(), GetActorLocation());
 	const float Threshold = bHiddenFromOwnCamera ? CameraHideDistance + CameraHideHysteresis : CameraHideDistance;
 	const bool bShouldHide = Distance < Threshold;
@@ -465,7 +465,7 @@ void ACTCharacter::SetHiddenFromOwnCamera(bool bNewHidden)
 {
 	bHiddenFromOwnCamera = bNewHidden;
 
-	// OwnerNoSee: 이 캐릭터를 조종하는 내 화면에서만 안 보입니다. (다른 사람 화면은 그대로)
+	// OwnerNoSee: 조종자 화면에서만 숨김
 	auto Apply = [bNewHidden](AActor* Actor)
 	{
 		if (!Actor) { return; }
@@ -479,7 +479,7 @@ void ACTCharacter::SetHiddenFromOwnCamera(bool bNewHidden)
 	};
 
 	Apply(this);      // 몸, 혀
-	Apply(OwnedTail); // 꼬리 (스폰할 때 이 캐릭터를 Owner로 지정했음)
+	Apply(OwnedTail); // 꼬리
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 카메라 %s: 내 캐릭터 %s"), bNewHidden ? TEXT("가까움") : TEXT("멀어짐"), bNewHidden ? TEXT("숨김") : TEXT("보임"));
 }
@@ -534,7 +534,7 @@ void ACTCharacter::UpdateMovementSounds(float DeltaSeconds)
 	}
 	else if (!bOnGround || Speed < MinFootstepSpeed)
 	{
-		// 멈추면 다음 걸음은 바로 나도록 절반쯤 채워 둠
+		// 멈추면 다음 걸음 바로 나게 절반 채움
 		FootstepDistanceAccum = FootstepDistance * 0.5f;
 	}
 }
@@ -573,7 +573,7 @@ void ACTCharacter::UpdateCameraDistance(float DeltaSeconds)
 	const float TargetLength = FMath::Lerp(CameraDistanceBehind, CameraDistanceTop, Alpha);
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetLength, DeltaSeconds, CameraDistanceInterpSpeed);
 
-	// 벽에 붙어 카메라가 몸 가까이 오면 내 캐릭터를 숨깁니다.
+	// 근접 시 내 캐릭터 숨김
 	UpdateCameraClip();
 }
 
@@ -736,7 +736,7 @@ void ACTCharacter::ServerGrab_Implementation()
 	const double Now = World->GetTimeSeconds();
 	if (bGrabActive || Now < GrabLockEndTime || GetWorldTimerManager().IsTimerActive(GrabWindowStartTimerHandle)) { return; }
 
-	// 쿨타임 (클라 시계 오차 감안해 조금 느슨하게)
+	// 쿨타임, 시계 오차로 90%
 	if (Now - LastGrabTime < GrabCooldownSeconds * 0.9f) { return; }
 	LastGrabTime = Now;
 
@@ -974,7 +974,7 @@ void ACTCharacter::ServerPush_Implementation()
 		Direction.Z = 0.f;
 		Direction = Direction.GetSafeNormal();
 
-		// 키만큼 밀리도록 수평 속도를 역산: 거리 = 속도 * (공중 시간 + 착지 후 미끄러짐 시간 1/k)
+		// 키만큼 밀리게 속도 역산
 		float PushSpeed = 0.f;
 		const UCharacterMovementComponent* OtherMovement = OtherCharacter->GetCharacterMovement();
 		if (OtherMovement && PushUpSpeed > 0.f)
@@ -1006,7 +1006,7 @@ void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action,
 		PlayActionMontage(Action);
 	}
 
-	// 동작 소리: 밀기, 꼬리를 잡힘 (캐릭터 위치에서 들림)
+	// 동작 소리 (밀기, 잡힘)
 	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
 	{
 		if (Action == ECTCharacterAction::Push) { Audio->PlaySfxAtLocation(ECTSfx::Push, GetActorLocation()); }
@@ -1023,7 +1023,7 @@ void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 
 	PlayAnimMontage(Montage, Action == ECTCharacterAction::Push ? PushMontagePlayRate : ActionMontagePlayRate);
 
-	// 밀려 넘어진 뒤 일어나기 (몽타주가 풀리기 시작할 때 이어서 재생)
+	// 넘어진 뒤 일어나기 이어 재생
 	if (Action == ECTCharacterAction::Pushed && GetUpMontage)
 	{
 		if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
@@ -1240,7 +1240,7 @@ void ACTCharacter::SetCurrentBush(ACTBush* NewBush)
 
 void ACTCharacter::OnRep_CurrentBush()
 {
-	// 몸 숨김은 UpdateBushVisibility 가 매 프레임 판단
+	// 몸 숨김은 UpdateBushVisibility가 판단
 	UpdateBushVisibility();
 }
 
@@ -1269,13 +1269,13 @@ void ACTCharacter::ClientShowNotice_Implementation(const FText& Message, float S
 
 void ACTCharacter::UpdateBushVisibility()
 {
-	// 전용 서버는 화면이 없음. 내 캐릭터는 항상 보임
+	// 전용 서버는 화면 없음
 	if (GetNetMode() == NM_DedicatedServer) { return; }
 
 	bool bShouldHide = false;
 	if (CurrentBush && !IsLocallyControlled())
 	{
-		// 같은 부쉬 안에 있거나, 이미 유령인 사람은 숨은 몸이 보임
+		// 같은 부쉬 안/유령은 숨은 몸 보임
 		const APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 		const ACTCharacter* Viewer = LocalController ? Cast<ACTCharacter>(LocalController->GetPawn()) : nullptr;
 		const bool bViewerSees = !Viewer || Viewer->IsGhost() || Viewer->CurrentBush == CurrentBush;
@@ -1285,15 +1285,14 @@ void ACTCharacter::UpdateBushVisibility()
 	if (bShouldHide == bBodyHiddenByBush) { return; }
 	bBodyHiddenByBush = bShouldHide;
 
-	// 꼬리는 일부러 그대로 둠: 몸은 숨어도 꼬리는 보여서 완전히 안전하지는 않음
-	// (자식에게 전파하지 않음: 붙어 있는 꼬리까지 숨겨지면 안 됨)
+	// 꼬리는 그대로 둠, 부착된 꼬리까지 숨기면 안 됨
 	if (GetMesh()) { GetMesh()->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
 	if (TongueMesh) { TongueMesh->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
 }
 
 void ACTCharacter::UpdateBushXRay()
 {
-	// 내 화면에서만: 부쉬 안에 있는 동안 겹친 몸을 켬 (깊이 검사를 끈 머티리얼이라 부쉬에 가려지지 않음)
+	// 부쉬 안일 때 겹친 몸 켬 (내 화면만)
 	if (!IsLocallyControlled() || !XRayMesh || !GetMesh()) { return; }
 
 	const bool bWantXRay = CurrentBush != nullptr && XRayMaterial != nullptr;
@@ -1302,7 +1301,7 @@ void ACTCharacter::UpdateBushXRay()
 
 	if (bWantXRay && !bXRaySetup)
 	{
-		// 처음 켤 때 한 번: 같은 메시를 쓰고 원래 몸의 포즈를 그대로 따라감
+		// 최초 1회 메시 설정, 원본 포즈 추종
 		XRayMesh->SetSkeletalMesh(GetMesh()->GetSkeletalMeshAsset());
 		XRayMesh->SetLeaderPoseComponent(GetMesh());
 

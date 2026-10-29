@@ -17,10 +17,7 @@ enum class ECTMatchSetting : uint8
 	Count         UMETA(Hidden)
 };
 
-/**
- * 경기 설정 값 모음. 로비의 GameState에 복제되어 모두에게 보이고, 게임이 시작되면 GameMode가 읽어 적용합니다.
- * 항목마다 고를 수 있는 값(선택지)이 정해져 있어서, 화면의 < > 버튼은 선택지를 한 칸씩 이동합니다.
- */
+// 경기 설정 값 모음. GameState로 복제
 USTRUCT(BlueprintType)
 struct CATCHTHETAIL_API FCTMatchSettings
 {
@@ -53,16 +50,16 @@ struct CATCHTHETAIL_API FCTMatchSettings
 	int32 Get(ECTMatchSetting Setting) const;
 	void Set(ECTMatchSetting Setting, int32 NewValue);
 
-	// 모든 값을 선택지 중 가장 가까운 값으로 맞춤
+	// 모든 값을 가까운 선택지로 보정
 	void Sanitize();
 
-	// 선택지를 한 칸 이동 (Direction -1 / +1). 끝이면 그대로. 값이 바뀌면 true
+	// 선택지 한 칸 이동. 값이 바뀌면 true
 	bool Step(ECTMatchSetting Setting, int32 Direction);
 
-	// 이 방향으로 더 이동할 수 있는가
+	// 해당 방향으로 이동 가능한가
 	bool CanStep(ECTMatchSetting Setting, int32 Direction) const;
 
-	// 지금 방 인원으로 허용되는 설정인가 (이미 들어온 인원보다 적은 최대 인원, 경기 시간보다 긴 라운드는 불가)
+	// 현재 인원에서 허용되는 설정인가
 	bool IsAllowed(int32 NumPlayers) const;
 
 	bool IsBushEnabled() const { return Bush != 0; }
@@ -70,13 +67,13 @@ struct CATCHTHETAIL_API FCTMatchSettings
 	// 항목의 선택지 (오름차순)
 	static const TArray<int32>& GetOptions(ECTMatchSetting Setting);
 
-	// 위젯 이름에 쓰는 항목 이름 (예: Button_Setting_GameMinutes_Prev)
+	// 위젯 이름용 항목 이름
 	static FName GetKey(ECTMatchSetting Setting);
 
-	// 화면에 보이는 항목 이름 / 값
+	// 표시용 항목 이름 / 값
 	static FText GetLabel(ECTMatchSetting Setting);
 	static FText FormatValue(ECTMatchSetting Setting, int32 Value);
 
-	// 로비 화면 요약 한 줄 (예: "5분 · 라운드 60초 · 최대 8명")
+	// 로비 요약 한 줄
 	FText MakeSummary() const;
 };

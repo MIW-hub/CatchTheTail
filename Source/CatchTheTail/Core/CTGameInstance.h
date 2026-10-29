@@ -28,7 +28,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void HostGame();
 
-	// 메인 메뉴로. Message는 메뉴에 표시
+	// 메인 메뉴로, Message는 메뉴 표시
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void LeaveToMainMenu(FText Message);
 
@@ -36,7 +36,6 @@ public:
 	void QuitToDesktop();
 
 	// 플레이어 이름
-	// 없으면 빈 문자열
 	UFUNCTION(BlueprintPure, Category = "CT|Profile")
 	FString GetPlayerName() const { return PlayerName; }
 
@@ -83,41 +82,41 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CT|Menu")
 	FCTMenuMessageSignature OnMenuMessage;
 
-	// 이름이 저장될 때마다 호출. 화면의 이름 표시를 갱신할 때 씁니다.
+	// 이름 저장 시 호출 (UI 갱신용)
 	UPROPERTY(BlueprintAssignable, Category = "CT|Menu")
 	FCTPlayerNameChangedSignature OnPlayerNameChanged;
 
-	// 스팀 등 온라인 세션 기능을 쓸 수 있는가. 빠른 참가, 방 코드 입장이 이 값에 따라 막힙니다.
+	// 온라인 세션 사용 가능 여부 (빠른 참가, 방 코드 입장)
 	UFUNCTION(BlueprintPure, Category = "CT|Online")
 	bool IsOnlineSessionAvailable() const { return bOnlineSessionAvailable; }
 
-	// 메뉴에 안내 문구를 띄움 (다음 메뉴 화면에도 남김)
+	// 메뉴 안내 문구 표시 (다음 화면에도 유지)
 	void ShowMenuMessage(const FText& Message);
 
 	// 접속 옵션 "?Name=..." (이름이 없으면 빈 문자열)
 	FString MakeNameOption() const;
 
-	// 열려 있는 방을 찾아 무작위로 입장. 온라인 기능이 막혀 있으면 안내만 띄움
+	// 무작위 방 입장, 온라인 불가면 안내만
 	UFUNCTION(BlueprintCallable, Category = "CT|Online")
 	void QuickJoin();
 
-	// 방 코드로 입장. 온라인 기능이 막혀 있으면 안내만 띄움
+	// 방 코드 입장, 온라인 불가면 안내만
 	UFUNCTION(BlueprintCallable, Category = "CT|Online")
 	void JoinByRoomCode(const FString& RoomCode);
 
-	// 게임이 끝난 뒤 돌아갈 대기 로비 맵 이름. 비어 있으면 None
+	// 게임 후 돌아갈 로비 맵 이름
 	UFUNCTION(BlueprintPure, Category = "CT|Menu")
 	FName GetLobbyMapName() const { return LobbyMapName; }
 
-	// 이 방의 방 코드. 게임을 하고 로비로 돌아와도 같은 코드를 유지하려고 보관 (방장 컴퓨터에서만 사용)
-	// 마지막으로 선택한 맵 번호. 로비로 돌아와도 같은 맵을 유지하려고 보관 (방장 컴퓨터에서만 사용)
+	// 로비 복귀 후에도 유지할 값 (방장 컴퓨터만)
+	// 마지막 선택 맵 번호
 	int32 GetStoredMapIndex() const { return StoredMapIndex; }
 	void SetStoredMapIndex(int32 NewMapIndex) { StoredMapIndex = NewMapIndex; }
 
-	// 방장이 로비에서 정한 경기 설정. 게임을 하고 로비로 돌아와도 유지하고, 게임 맵의 GameMode가 읽어 적용 (방장 컴퓨터에서만 사용)
+	// 로비에서 정한 경기 설정
 	const FCTMatchSettings& GetStoredMatchSettings() const { return StoredMatchSettings; }
 	void SetStoredMatchSettings(const FCTMatchSettings& NewSettings) { StoredMatchSettings = NewSettings; bHasStoredMatchSettings = true; }
-	// 로비를 거쳐 설정이 정해졌는가 (게임 맵에서 바로 시작한 테스트에서는 false)
+	// 로비를 거쳐 설정이 정해졌는가
 	bool HasStoredMatchSettings() const { return bHasStoredMatchSettings; }
 
 	const FString& GetStoredRoomCode() const { return StoredRoomCode; }
@@ -128,17 +127,14 @@ public:
 	FName GetGameMapName() const { return GameMapName; }
 
 protected:
-	/**
-	 * 온라인 세션(스팀) 기능 사용 가능 여부. 스팀 연결을 만들기 전까지 끕니다.
-	 * 켜면 빠른 참가와 방 코드 입장이 열립니다. (아직 세션 코드가 없으면 준비 중 안내만 나옴)
-	 */
+	// 온라인 세션(스팀) 사용 여부, 연결 전까지 끔
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Online")
 	bool bOnlineSessionAvailable = true;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	FName MainMenuMapName = TEXT("L_Mainmenu");
 
-	// HostGame이 가장 먼저 여는 대기 로비 맵. 비우면 게임 맵을 바로 엽니다.
+	// HostGame이 처음 여는 로비 맵, 비면 게임 맵
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	FName LobbyMapName = TEXT("L_Lobby");
 
@@ -157,10 +153,10 @@ private:
 	void HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString);
 	void HandleTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString);
 
-	// 입장 거절 사유 코드를 안내 문구로 바꿈
+	// 입장 거절 코드를 안내 문구로 변환
 	FText MakeJoinFailureMessage(const FString& ErrorString) const;
 
-	// 입장 거절 안내를 마지막으로 띄운 시각. 같은 실패에 대해 일반 안내가 덮어쓰지 않게 함
+	// 마지막 입장 거절 안내 시각, 일반 안내 덮어쓰기 방지
 	double LastJoinRejectTime = -1000.0;
 
 	bool IsInMainMenuMap() const;

@@ -17,13 +17,13 @@ ACTLobbyGameMode::ACTLobbyGameMode()
 	GameStateClass = ACTGameState::StaticClass();
 	PlayerStateClass = ACTPlayerState::StaticClass();
 
-	// 게임 맵으로 이동할 때 PlayerState(이름 등)를 유지
+	// 맵 이동 시 PlayerState 유지
 	bUseSeamlessTravel = true;
 }
 
 namespace
 {
-	// 헷갈리는 글자(0/O, 1/I/L)를 뺀 6글자 방 코드
+	// 0/O, 1/I/L 뺀 6글자 방 코드
 	FString MakeRoomCode()
 	{
 		static const TCHAR Alphabet[] = TEXT("ABCDEFGHJKMNPQRSTUVWXYZ23456789");
@@ -47,7 +47,7 @@ void ACTLobbyGameMode::InitGameState()
 		CTGameState->SetPhase(ECTGamePhase::Lobby);
 		CTGameState->SetLobbyMinPlayers(MinPlayersToStart);
 
-		// 방 코드는 방이 열려 있는 동안 유지 (게임을 하고 돌아와도 같은 코드)
+		// 방 코드는 방이 열린 동안 유지
 		UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 		FString RoomCode = GameInstance ? GameInstance->GetStoredRoomCode() : FString();
 		if (RoomCode.IsEmpty())
@@ -57,13 +57,13 @@ void ACTLobbyGameMode::InitGameState()
 		}
 		CTGameState->SetRoomCode(RoomCode);
 
-		// 다른 사람이 코드로 찾을 수 있게 온라인 방을 엽니다 (이미 열려 있으면 그대로)
+		// 코드로 찾을 수 있게 온라인 방 개설
 		if (UCTSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UCTSessionSubsystem>() : nullptr)
 		{
 			Session->CreateRoom(RoomCode);
 		}
 
-		// 맵 선택은 방이 열려 있는 동안 유지. 처음이면 목록의 첫 맵
+		// 맵 선택 유지, 처음이면 첫 맵
 		int32 MapIndex = GameInstance ? GameInstance->GetStoredMapIndex() : INDEX_NONE;
 		FCTMapInfo Ignored;
 		if (!UCTMapSettings::GetMapInfo(MapIndex, Ignored))
@@ -73,7 +73,7 @@ void ACTLobbyGameMode::InitGameState()
 		}
 		CTGameState->SetSelectedMapIndex(MapIndex);
 
-		// 경기 설정도 방이 열려 있는 동안 유지. 처음이면 기본값
+		// 경기 설정 유지, 처음이면 기본값
 		FCTMatchSettings MatchSettings;
 		if (GameInstance && GameInstance->HasStoredMatchSettings())
 		{
@@ -92,14 +92,14 @@ void ACTLobbyGameMode::PreLogin(const FString& Options, const FString& Address, 
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	if (!ErrorMessage.IsEmpty()) { return; }
 
-	// 시작이 정해진 뒤에는 맵 이동 중이라 새로 들어올 수 없음
+	// 시작 확정 후 입장 불가
 	if (GetWorldTimerManager().IsTimerActive(StartTimerHandle))
 	{
 		ErrorMessage = CTJoinReject::LobbyStarting;
 		UE_LOG(LogTemp, Log, TEXT("[CT] 입장 거절: 로비 시작 중 (%s)"), *Address);
 	}
 
-	// 방장이 정한 최대 인원이 차면 거절
+	// 최대 인원 초과 거절
 	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	if (CTGameState && GetNumPlayers() >= CTGameState->GetMatchSettings().MaxPlayers)
 	{
@@ -112,7 +112,7 @@ void ACTLobbyGameMode::Logout(AController* Exiting)
 {
 	Super::Logout(Exiting);
 
-	// 나간 PlayerState가 정리된 뒤에 조건을 다시 확인
+	// PlayerState 정리 후 재확인
 	GetWorldTimerManager().SetTimer(RecheckTimerHandle, this, &ACTLobbyGameMode::RecheckStartCondition, 0.3f, false);
 }
 
@@ -121,7 +121,7 @@ void ACTLobbyGameMode::RecheckStartCondition()
 	ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	if (!CTGameState || !GetWorldTimerManager().IsTimerActive(StartTimerHandle)) { return; }
 
-	// 시작 카운트다운 중 인원이 부족해졌으면 시작 취소 (방장이 다시 시작할 수 있음)
+	// 인원 부족 시 시작 취소
 	if (!CTGameState->CanStartLobby())
 	{
 		GetWorldTimerManager().ClearTimer(StartTimerHandle);
@@ -163,7 +163,7 @@ void ACTLobbyGameMode::SetPlayerReady(APlayerController* Requester, bool bReady)
 	ACTPlayerState* RequesterState = Requester ? Requester->GetPlayerState<ACTPlayerState>() : nullptr;
 	if (!CTGameState || !RequesterState) { return; }
 
-	// 방장은 준비가 필요 없고, 시작이 정해진 뒤에는 바꿀 수 없음
+	// 방장은 준비 불필요, 시작 확정 후 변경 불가
 	if (RequesterState->IsHost()) { return; }
 	if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f) { return; }
 
@@ -176,7 +176,7 @@ bool ACTLobbyGameMode::SelectMap(APlayerController* Requester, int32 MapIndex)
 	const ACTPlayerState* RequesterState = Requester ? Requester->GetPlayerState<ACTPlayerState>() : nullptr;
 	if (!CTGameState || !RequesterState || !RequesterState->IsHost()) { return false; }
 
-	// 시작이 정해진 뒤에는 바꿀 수 없음
+	// 시작 확정 후 변경 불가
 	if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f || GetWorldTimerManager().IsTimerActive(StartTimerHandle)) { return false; }
 
 	// 목록에 있고 사용 가능한 맵만
@@ -199,14 +199,14 @@ bool ACTLobbyGameMode::ChangeMatchSetting(APlayerController* Requester, ECTMatch
 	const ACTPlayerState* RequesterState = Requester ? Requester->GetPlayerState<ACTPlayerState>() : nullptr;
 	if (!CTGameState || !RequesterState || !RequesterState->IsHost()) { return false; }
 
-	// 시작이 정해진 뒤에는 바꿀 수 없음
+	// 시작 확정 후 변경 불가
 	if (CTGameState->GetLobbyStartRemainingSeconds() > 0.f || GetWorldTimerManager().IsTimerActive(StartTimerHandle)) { return false; }
 	if (static_cast<int32>(Setting) < 0 || Setting >= ECTMatchSetting::Count) { return false; }
 
 	FCTMatchSettings NewSettings = CTGameState->GetMatchSettings();
 	if (!NewSettings.Step(Setting, Direction)) { return false; }
 
-	// 이미 들어와 있는 인원보다 적게, 경기 시간보다 긴 라운드로는 바꿀 수 없음
+	// 현재 인원/경기 시간에 맞지 않으면 불가
 	if (!NewSettings.IsAllowed(GetNumPlayers())) { return false; }
 
 	CTGameState->SetMatchSettings(NewSettings);
@@ -256,7 +256,7 @@ void ACTLobbyGameMode::TravelToGameMap()
 	UWorld* World = GetWorld();
 	if (!GameInstance || !World) { return; }
 
-	// 선택한 맵. 목록이 비어 있으면 GameInstance의 기본 게임 맵
+	// 선택 맵, 목록 비면 기본 게임 맵
 	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	FString MapName = CTGameState ? UCTMapSettings::GetTravelName(CTGameState->GetSelectedMapIndex()) : FString();
 	if (MapName.IsEmpty())

@@ -184,7 +184,7 @@ bool ACTTail::TryTouch(ACTCharacter* Toucher)
 	ACTGameMode* CTGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTGameMode>() : nullptr;
 	if (!GrabberState || !VictimState || !CTGameMode) { return false; }
 
-	// 목표 색/유령/게임 중은 GameMode 확인
+	// 목표 색/유령/게임 중 확인은 GameMode
 	return CTGameMode->HandleTailGrabbed(GrabberState, VictimState);
 }
 
@@ -248,7 +248,7 @@ void ACTTail::RefreshSegments()
 		BodyMeshes[Index]->SetRelativeLocation(FVector(0.f, 0.f, Index * SegmentSpacing));
 	}
 
-	// 캡은 끝 몸통 위, 몸통 없으면 숨김 (캡 메시는 첫 몸통 윗면 기준)
+	// 캡은 끝 몸통 위, 몸통 없으면 숨김
 	const bool bHasBody = BodyMeshes.Num() > 0;
 	CapMesh->SetVisibility(bHasBody);
 	if (bHasBody)

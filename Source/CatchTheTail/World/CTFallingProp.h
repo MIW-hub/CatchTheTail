@@ -19,7 +19,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** 메시와 크기를 정합니다. (서버에서 스폰 직후, FinishSpawning 전에 호출) */
+	// 메시, 크기 설정 (FinishSpawning 전)
 	void Setup(UStaticMesh* InMesh, float InUniformScale);
 
 	UFUNCTION(BlueprintPure, Category = "CT|Falling")

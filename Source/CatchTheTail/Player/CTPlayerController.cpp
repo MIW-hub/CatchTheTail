@@ -32,7 +32,7 @@ void ACTPlayerController::BeginPlay()
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer))
 		{
-			// 변경된 키 반영한 복사본 등록
+			// 변경 키 반영 복사본 등록
 			UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 
 			for (UInputMappingContext* Context : DefaultMappingContexts)
@@ -112,7 +112,7 @@ void ACTPlayerController::ServerSetPlayerName_Implementation(const FString& NewN
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 	if (!GameInstance || !PlayerState) { return; }
 
-	// 서버에서도 같은 규칙으로 검사
+	// 서버 재검사
 	const FString Trimmed = NewName.TrimStartAndEnd();
 	FText Error;
 	if (!GameInstance->ValidatePlayerName(Trimmed, Error)) { return; }
@@ -173,7 +173,7 @@ void ACTPlayerController::PlayerTick(float DeltaTime)
 	Super::PlayerTick(DeltaTime);
 	if (!IsLocalController()) { return; }
 
-	// 카운트다운 숫자(시작 전 / 라운드 전환 / 로비 시작)가 바뀔 때마다 한 번 소리
+	// 카운트다운 숫자 바뀔 때 1회 소리
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
 	int32 Number = 0;
 	if (CTGameState)

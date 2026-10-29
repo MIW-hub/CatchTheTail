@@ -442,8 +442,7 @@ void UCTHUDWidget::RefreshScoreboard()
 		return PlayerA->GetPlayerName() < PlayerB->GetPlayerName();
 	});
 
-	// 순서 바뀔 때만 재배치 (애니메이션 끊김)
-	// 화면에는 위쪽 몇 명만 (전체 순위는 결과 화면)
+	// 순서 바뀔 때만 재배치, 위쪽 몇 명만
 	const int32 DisplayCount = MaxScoreboardEntries > 0 ? FMath::Min(MaxScoreboardEntries, SortedEntries.Num()) : SortedEntries.Num();
 
 	bool bOrderChanged = VerticalBox_Scoreboard->GetChildrenCount() != DisplayCount;

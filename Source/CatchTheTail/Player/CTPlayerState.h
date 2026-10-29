@@ -38,7 +38,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsReady() const { return bReady; }
 
-	// 대기 로비: 방장 (listen 서버를 연 사람)
+	// 방장 (listen 서버 호스트)
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsHost() const { return bIsHost; }
 
@@ -64,7 +64,7 @@ public:
 
 	void SetPhoneUsesLeft(int32 NewUses);
 
-	// 한 번 사용. 남은 횟수가 없으면 false
+	// 1회 사용, 없으면 false
 	bool ConsumePhoneUse();
 	void SetIsHost(bool bNewIsHost);
 
@@ -109,7 +109,7 @@ protected:
 private:
 	void NotifyChanged();
 
-	// 소리용 이전 값 (늘어났는지, 유령에서 돌아왔는지 판단)
+	// 소리 판단용 이전 꼬리 수
 	int32 LastTailCountForSound = 0;
 	bool bLastGhostForSound = false;
 

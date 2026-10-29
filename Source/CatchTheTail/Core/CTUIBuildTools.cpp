@@ -37,7 +37,7 @@ namespace
 {
 	const TCHAR* BlueprintName = TEXT("WBP_CTSettingsWidget");
 
-	// 색 (붙여 넣은 디자인 기준)
+	// 색
 	const FLinearColor TextMain(0.92f, 0.95f, 1.f, 1.f);
 	const FLinearColor TextDim(0.5f, 0.62f, 0.74f, 1.f);
 	const FLinearColor TextTitle(0.1f, 0.8f, 1.f, 1.f);
@@ -56,7 +56,7 @@ namespace
 		return Widget;
 	}
 
-	// 번역 키가 붙은 글자 (이미 있는 번역표의 원문과 같은 글자를 씀)
+	// 번역 키 붙인 글자
 	FText Loc(const TCHAR* WidgetName, const TCHAR* Source, bool bHint = false)
 	{
 		const FString Key = FString::Printf(TEXT("%s.%s%s"), BlueprintName, WidgetName, bHint ? TEXT(".Hint") : TEXT(""));
@@ -82,7 +82,7 @@ namespace
 		return Text;
 	}
 
-	// 서로 다른 칸의 위젯을 담는 도우미
+	// 칸별 위젯 묶음
 	UVerticalBoxSlot* AddV(UVerticalBox* Box, UWidget* Child, float BottomPadding, bool bFill = false)
 	{
 		UVerticalBoxSlot* BoxSlot = Box->AddChildToVerticalBox(Child);
@@ -101,7 +101,7 @@ namespace
 		return BoxSlot;
 	}
 
-	// 크기를 정한 상자. Width 또는 Height가 0이면 그 방향은 정하지 않음
+	// 크기 지정 상자. 0이면 해당 방향 미지정
 	USizeBox* Sized(const TCHAR* Name, UWidget* Child, float Width, float Height)
 	{
 		USizeBox* Box = Make<USizeBox>(Name);
@@ -223,7 +223,7 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 	const FMargin ButtonMarginA(0.041237f, 0.210526f, 0.041237f, 0.210526f);
 	const FMargin ButtonMarginB(0.101266f, 0.192771f, 0.101266f, 0.192771f);
 
-	// ===== 바깥 틀: 어두운 배경 + 화면에 맞춰 줄어드는 1440x920 창 =====
+	// 바깥 틀
 	UOverlay* Root = Make<UOverlay>(TEXT("Root_Settings"));
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Root;
@@ -252,19 +252,19 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 	ScaleOverlaySlot->SetHorizontalAlignment(HAlign_Fill);
 	ScaleOverlaySlot->SetVerticalAlignment(VAlign_Fill);
 
-	// ===== 머리글: 제목 + 안내 =====
+	// 머리글
 	UHorizontalBox* Header = Make<UHorizontalBox>(TEXT("Row_SettingsHeader"));
 	Header->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	AddH(Header, MakeText(TEXT("Label_SettingsTitle"), TEXT("설정"), TEXT("Bold"), 36, TextMain), 24.f, true);
 	AddH(Header, MakeText(TEXT("Label_SettingsSubtitle"), TEXT("변경한 설정은 자동으로 저장됩니다"), TEXT("Regular"), 17, TextDim), 0.f, false);
 	AddV(Layout, Sized(TEXT("Height_SettingsHeader"), Header, 0.f, 64.f), 16.f);
 
-	// ===== 본문: 왼쪽 설정 카드 + 오른쪽 조작 카드 =====
+	// 본문
 	UHorizontalBox* Columns = Make<UHorizontalBox>(TEXT("Row_SettingsColumns"));
 	Columns->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	AddV(Layout, Columns, 12.f, true);
 
-	// -- 왼쪽: 스크롤되는 설정 목록
+	// 왼쪽: 설정 목록
 	UVerticalBox* List = Make<UVerticalBox>(TEXT("List_Settings"));
 	List->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	UScrollBox* ListScroll = Make<UScrollBox>(TEXT("Scroll_Settings"));
@@ -336,7 +336,7 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 	AddV(ChangeName, MakeText(TEXT("Text_NameMessage"), TEXT(""), TEXT("Regular"), 17, TextWarn), 0.f);
 	AddV(List, ChangeName, 0.f);
 
-	// -- 오른쪽: 조작 카드
+	// 오른쪽: 조작 카드
 	UVerticalBox* ControlsColumn = Make<UVerticalBox>(TEXT("Column_Controls"));
 	ControlsColumn->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	AddH(Columns, MakeCard(TEXT("Card_Controls"), ControlsColumn, CardColor, FMargin(24.f)), 0.f, true, VAlign_Fill);
@@ -353,7 +353,7 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 	AddV(ControlsColumn, ControlsScroll, 12.f, true);
 	AddV(ControlsColumn, MakeText(TEXT("Text_ControlsMessage"), TEXT(""), TEXT("Regular"), 17, TextWarn), 0.f);
 
-	// ===== 안내 줄 + 바닥 버튼 =====
+	// 안내 줄 + 바닥 버튼
 	AddV(Layout, Sized(TEXT("Height_SettingsMessage"), MakeText(TEXT("Text_Message"), TEXT(""), TEXT("Regular"), 17, TextWarn), 0.f, 44.f), 8.f);
 
 	UHorizontalBox* Footer = Make<UHorizontalBox>(TEXT("Row_SettingsFooter"));
@@ -395,7 +395,7 @@ int32 UCTUIBuildTools::BuildHudSkillSlots(UBlueprint* WidgetBlueprint, UMaterial
 
 	auto FindImage = [](const TCHAR* Name) { return Cast<UImage>(Tree->FindWidget(FName(Name))); };
 
-	// 이미 있으면 그대로 쓰고, 없을 때만 만든다. bCreated 는 새로 만들었는지
+	// 없을 때만 생성. bCreated 는 신규 여부
 	auto GetOrMakeImage = [&FindImage](const TCHAR* Name, const UImage* CopyFrom, bool& bCreated) -> UImage*
 	{
 		bCreated = false;
@@ -438,13 +438,13 @@ int32 UCTUIBuildTools::BuildHudSkillSlots(UBlueprint* WidgetBlueprint, UMaterial
 		return -1;
 	}
 
-	// 밀기 칸 (잡기 칸 복사, 아이콘은 임시로 잡기 아이콘)
+	// 밀기 칸 (잡기 칸 복사)
 	bool bCreated = false;
 	UImage* PushPanel = GetOrMakeImage(TEXT("Image_ActionPanel_2"), GrabPanel, bCreated);
 	UImage* PushIcon = GetOrMakeImage(TEXT("Image_PushIcon"), GrabIcon, bCreated);
 	UImage* PushCool = GetOrMakeImage(TEXT("Image_CoolTime_2"), GrabCool, bCreated);
 
-	// 칸 배치: 잡기, 밀기, 달리기 (달리기 위치 기준, 간격은 기존 간격)
+	// 칸 배치: 잡기, 밀기, 달리기
 	const float Spacing = 196.f;
 	const float RunX = 711.039f;
 	const float PanelY = -173.081f;
@@ -463,7 +463,7 @@ int32 UCTUIBuildTools::BuildHudSkillSlots(UBlueprint* WidgetBlueprint, UMaterial
 		PlaceOnCanvas(Set.Icon, Set.X - 5.f, IconY, 70.f, 70.f, FVector2D(0.5, 0.0));
 		PlaceOnCanvas(Set.Cool, Set.X, PanelY, 128.f, 128.f, FVector2D(0.5, 0.0));
 
-		// 쿨다운 이미지: 머티리얼이 있으면 시계 방향으로 걷히는 모양, 처음에는 숨김
+		// 쿨다운 이미지: 머티리얼 있으면 시계 방향, 처음엔 숨김
 		if (CooldownMaterial)
 		{
 			FSlateBrush Brush = Set.Cool->GetBrush();
@@ -501,7 +501,7 @@ int32 UCTUIBuildTools::BuildHudSkillSlots(UBlueprint* WidgetBlueprint, UMaterial
 		PlaceOnCanvas(Text, Entry.X, PanelY + 64.f, 128.f, 48.f, FVector2D(0.5, 0.5));
 	}
 
-	// 변수로 쓰는 위젯은 이름-GUID 표에 올라 있어야 컴파일이 문제 삼지 않음
+	// 변수 위젯은 이름-GUID 표 등록 필요
 	if (const FMapProperty* GuidMapProperty = CastField<FMapProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetVariableNameToGuidMap"))))
 	{
 		FScriptMapHelper GuidMap(GuidMapProperty, GuidMapProperty->ContainerPtrToValuePtr<void>(WidgetBlueprint));
@@ -655,7 +655,7 @@ int32 UCTUIBuildTools::BuildLanguageSelectDesign(UBlueprint* WidgetBlueprint)
 	const FMargin ButtonMarginA(0.041237f, 0.210526f, 0.041237f, 0.210526f);
 	const FMargin ButtonMarginB(0.101266f, 0.192771f, 0.101266f, 0.192771f);
 
-	// 어두운 배경 + 가운데 카드 (설정 화면과 같은 모양)
+	// 어두운 배경 + 가운데 카드
 	UOverlay* Root = Make<UOverlay>(TEXT("Root_LanguageSelect"));
 	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Root;
@@ -684,7 +684,7 @@ int32 UCTUIBuildTools::BuildLanguageSelectDesign(UBlueprint* WidgetBlueprint)
 	ScaleOverlaySlot->SetHorizontalAlignment(HAlign_Fill);
 	ScaleOverlaySlot->SetVerticalAlignment(VAlign_Fill);
 
-	// 제목: 세 언어를 같이 적어서 어느 언어로 보든 읽을 수 있게 함 (번역 대상 아님)
+	// 제목: 세 언어 병기 (번역 제외)
 	UTextBlock* Title = MakeText(TEXT("Label_LanguageTitle"), TEXT(""), TEXT("Bold"), 40, TextMain, ETextJustify::Center);
 	Title->SetText(FText::FromString(TEXT("Language  언어  言語")));
 	AddV(Layout, Title, 12.f);
@@ -693,7 +693,7 @@ int32 UCTUIBuildTools::BuildLanguageSelectDesign(UBlueprint* WidgetBlueprint)
 	Subtitle->SetText(FText::FromString(TEXT("Select your language  /  언어를 선택하세요  /  言語を選択")));
 	AddV(Layout, Subtitle, 36.f);
 
-	// 언어 버튼: 각 언어로 쓴 이름 (번역 대상 아님)
+	// 언어 버튼: 각 언어 이름 (번역 제외)
 	struct FLanguageButton { const TCHAR* Button; const TCHAR* Label; const TCHAR* Name; };
 	const FLanguageButton LanguageButtons[] = {
 		{ TEXT("Button_LanguageKo"), TEXT("Label_Button_LanguageKo"), TEXT("한국어") },
@@ -752,7 +752,7 @@ bool UCTUIBuildTools::RefineSettingsWidget(UBlueprint* WidgetBlueprint)
 
 	const FMargin ButtonMarginB(0.101266f, 0.192771f, 0.101266f, 0.192771f);
 
-	// ===== 1. 언어 콤보박스 -> 버튼 3개 =====
+	// 언어 콤보박스 -> 버튼 3개
 	UWidget* OldCombo = Tree->FindWidget(TEXT("ComboBox_Language"));
 	UWidget* OldComboBox = Tree->FindWidget(TEXT("Height_Language"));
 	if (OldCombo && !Tree->FindWidget(TEXT("Row_Language")))
@@ -791,7 +791,7 @@ bool UCTUIBuildTools::RefineSettingsWidget(UBlueprint* WidgetBlueprint)
 		}
 	}
 
-	// ===== 2. 조작 방법: 고정 안내 =====
+	// 조작 방법: 고정 안내
 	Controls->ClearChildren();
 	if (UTextBlock* Hint = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_ControlsHint"))))
 	{
@@ -824,7 +824,7 @@ bool UCTUIBuildTools::RefineSettingsWidget(UBlueprint* WidgetBlueprint)
 		AddV(Controls, Sized(*FString::Printf(TEXT("Height_Control_%s"), Line.Id), Row, 0.f, 52.f), 6.f);
 	}
 
-	// ===== 3. 버튼/체크박스 안 글자 줄바꿈 끔 =====
+	// 버튼/체크박스 글자 줄바꿈 끔
 	TArray<UWidget*> All;
 	Tree->GetAllWidgets(All);
 	for (UWidget* Widget : All)
@@ -836,13 +836,13 @@ bool UCTUIBuildTools::RefineSettingsWidget(UBlueprint* WidgetBlueprint)
 		}
 	}
 
-	// 변수로 쓰는 위젯의 이름-GUID 등록
+	// 변수 위젯 이름-GUID 등록
 	if (const FMapProperty* GuidMapProperty = CastField<FMapProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetVariableNameToGuidMap"))))
 	{
 		FScriptMapHelper GuidMap(GuidMapProperty, GuidMapProperty->ContainerPtrToValuePtr<void>(WidgetBlueprint));
 		TArray<UWidget*> Current;
 
-		// 지운 위젯의 GUID 정리
+		// 지운 위젯 GUID 정리
 		for (int32 MapIndex = GuidMap.GetMaxIndex() - 1; MapIndex >= 0; --MapIndex)
 		{
 			if (!GuidMap.IsValidIndex(MapIndex)) { continue; }
@@ -983,9 +983,9 @@ bool UCTUIBuildTools::BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint)
 
 	if (!Tree->FindWidget(TEXT("Panel_MatchSettings")))
 	{
-		// 창을 오른쪽으로 넓힘 (왼쪽에 설정 칸을 둘 자리)
+		// 창 오른쪽 확장 (왼쪽에 설정 칸 자리)
 		constexpr float Extra = 640.f;
-		// Native_MapDialog 는 원래 크기, Cap_MapDialog 는 같은 비율로 줄인 한도라서 줄인 비율만큼만 넓힘
+		// Cap_MapDialog 는 축소 한도라 축소 비율만큼만 넓힘
 		USizeBox* NativeBox = Cast<USizeBox>(Tree->FindWidget(TEXT("Native_MapDialog")));
 		USizeBox* CapBox = Cast<USizeBox>(Tree->FindWidget(TEXT("Cap_MapDialog")));
 		if (NativeBox && NativeBox->bOverride_WidthOverride)
@@ -1003,7 +1003,7 @@ bool UCTUIBuildTools::BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint)
 			CloseSlot->SetPosition(CloseSlot->GetPosition() + FVector2D(Extra, 0.0));
 		}
 
-		// 맵 목록: 오른쪽으로 옮기고 위에 소제목 자리를 둠
+		// 맵 목록: 오른쪽 이동, 위에 소제목 자리
 		constexpr float ListTop = 205.f;
 		const float ListBottom = 145.f + 590.f;
 		if (UCanvasPanelSlot* ListSlot = SlotOf(MapScroll))

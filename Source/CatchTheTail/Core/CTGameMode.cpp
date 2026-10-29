@@ -26,7 +26,7 @@ void ACTGameMode::InitGameState()
 {
 	Super::InitGameState();
 
-	// 로비를 거치지 않고 게임 맵에서 바로 시작한 테스트에서는 BP에 정해 둔 값을 그대로 씀
+	// 로비 없이 시작한 테스트는 BP 값 사용
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 	if (!GameInstance || !GameInstance->HasStoredMatchSettings()) { return; }
 
@@ -45,7 +45,7 @@ void ACTGameMode::PreLogin(const FString& Options, const FString& Address, const
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	if (!ErrorMessage.IsEmpty()) { return; }
 
-	// 게임 중 / 결과 화면 중에는 입장 불가. 로비를 거쳐 들어온 사람만 참여
+	// 게임/결과 중 입장 불가
 	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	const ECTGamePhase Phase = CTGameState ? CTGameState->GetPhase() : ECTGamePhase::WaitingForPlayers;
 	if (Phase == ECTGamePhase::Playing || Phase == ECTGamePhase::Finished)
@@ -74,7 +74,7 @@ void ACTGameMode::InitPlayerForGame(APlayerController* NewPlayer)
 	{
 		NewPlayerState->SetTailCount(InitialTailCount);
 
-		// listen 서버의 로컬 플레이어가 방장 (결과 화면의 로비 복귀 버튼에 사용)
+		// listen 서버 로컬 플레이어가 방장
 		NewPlayerState->SetIsHost(NewPlayer->IsLocalController());
 	}
 
@@ -92,7 +92,7 @@ void ACTGameMode::InitPlayerForGame(APlayerController* NewPlayer)
 
 void ACTGameMode::Logout(AController* Exiting)
 {
-	// Super 이후에는 PlayerState가 정리될 수 있어 주소만 비교용으로 보관
+	// Super 이후 정리될 수 있어 주소만 보관
 	const ACTPlayerState* LeavingState = Exiting ? Exiting->GetPlayerState<ACTPlayerState>() : nullptr;
 
 	Super::Logout(Exiting);
@@ -119,7 +119,7 @@ void ACTGameMode::HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer
 		return;
 	}
 
-	// 나간 사람의 색이 목표였던 사람이 잡을 대상을 잃지 않게, 남은 색끼리 목표를 다시 이음
+	// 목표를 잃지 않게 남은 색끼리 재연결
 	if (!bTargetFromActiveColorsOnly) { return; }
 
 	TArray<uint8> UsedColors;
@@ -318,7 +318,7 @@ void ACTGameMode::StartNewRound()
 		PlayerState->SetIsGhost(false);
 	}
 
-	// 1-2) 꼬리가 부족한 플레이어에게 꼬리를 채워 줍니다. (꼬리를 모두 잃었어도 새 라운드는 꼬리를 갖고 시작)
+	// 1-2) 꼬리 부족한 플레이어에게 채움
 	for (ACTPlayerState* PlayerState : CollectPlayers())
 	{
 		if (PlayerState->GetTailCount() < MinTailCountAtRoundStart)
@@ -445,7 +445,7 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	Victim->AddTailCount(-1);
 	Victim->SetIsGhost(true);
 
-	// 잡힘 연출. AI 등 다른 경로도 동일 재생
+	// 잡힘 연출, 다른 경로도 동일 재생
 	if (ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn()))
 	{
 		VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);

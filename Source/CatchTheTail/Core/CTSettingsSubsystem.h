@@ -91,31 +91,31 @@ public:
 	void SetTeamMarkerEnabled(bool bEnabled);
 
 	// 언어
-	// 지원하는 문화 코드 목록 (ko, en, ja)
+	// 지원 문화 코드 목록
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	static TArray<FString> GetSupportedLanguages();
 
-	// 그 언어로 쓴 언어 이름 (ko → 한국어, en → English, ja → 日本語). 번역 대상 아님
+	// 그 언어로 쓴 이름. 번역 제외
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	static FString GetLanguageDisplayName(const FString& CultureCode);
 
-	// 지금 쓰는 언어 코드. 저장값이 없으면(처음 실행) 영어
+	// 현재 언어 코드. 저장값 없으면 영어
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	FString GetLanguage() const;
 
-	// 언어 변경 (즉시 적용 + 저장). bConfirm 이 false면 미리보기라서 "골랐음" 표시는 하지 않음
+	// 언어 변경. bConfirm false면 미리보기
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void SetLanguage(const FString& CultureCode, bool bConfirm = true);
 
-	// 언어 선택 화면을 이미 거쳤는가 (직접 골랐거나 -CTLanguage 로 정함)
+	// 언어 선택 화면을 거쳤는가
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	bool HasChosenLanguage() const;
 
-	// 지금 언어로 확정 (선택 화면의 확인)
+	// 현재 언어로 확정
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ConfirmLanguage();
 
-	// 현재 언어를 문구에 적용 (시작할 때 자동 호출)
+	// 현재 언어 문구 적용 (시작 시 자동)
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ApplyLanguage();
 
@@ -123,8 +123,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ResetToDefaults();
 
-	// 적용 (맵 변경 후 재적용)
-	// 볼륨/음소거 적용
+	// 볼륨/음소거 적용 (맵 변경 후 재적용)
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ApplyAudio();
 
@@ -140,7 +139,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	bool SetKeyBinding(FName ActionId, FKey NewKey, FText& OutError);
 
-	// 바꾼 키 반영 컨텍스트 (없으면 원본). 컨트롤러 등록 시 사용
+	// 바꾼 키 컨텍스트. 없으면 원본
 	UInputMappingContext* GetEffectiveMappingContext(UInputMappingContext* Source);
 
 	// 로컬 플레이어에 키 재적용. 메뉴에선 무동작

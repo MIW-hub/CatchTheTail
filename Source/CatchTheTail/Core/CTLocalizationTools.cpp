@@ -11,7 +11,7 @@
 
 namespace
 {
-	// 번역 키가 없거나 고정 글자(번역 대상 아님)인가
+	// 번역 키 없는 고정 글자인가
 	bool NeedsKey(const FText& Text)
 	{
 		return !Text.IsEmpty() && (Text.IsCultureInvariant() || FTextInspector::GetTextId(Text).GetKey().IsEmpty());
@@ -23,7 +23,7 @@ int32 UCTLocalizationTools::MakeWidgetTextsLocalizable(UBlueprint* WidgetBluepri
 #if WITH_EDITOR
 	if (!WidgetBlueprint) { return 0; }
 
-	// UWidgetBlueprint는 에디터 모듈에 있어서, 리플렉션으로 WidgetTree를 찾음
+	// 리플렉션으로 WidgetTree 접근
 	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
 	UWidgetTree* Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
 	if (!Tree) { return 0; }

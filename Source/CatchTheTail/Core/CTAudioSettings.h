@@ -35,10 +35,7 @@ enum class ECTMusic : uint8
 	Game UMETA(DisplayName = "Game")   // 게임 중
 };
 
-/**
- * 사운드 지정. 프로젝트 설정 → Game → CT Audio 에서 바꿉니다.
- * 기본값은 Content/sound 폴더의 파일 이름에 맞춰 두었습니다.
- */
+// 사운드 지정 (프로젝트 설정 → CT Audio)
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "CT Audio"))
 class CATCHTHETAIL_API UCTAudioSettings : public UDeveloperSettings
 {
@@ -52,7 +49,6 @@ public:
 	// 효과음 얻기. 지정이 없으면 nullptr
 	USoundBase* LoadSfx(ECTSfx Sfx) const;
 
-	// 배경음 얻기
 	USoundBase* LoadMusic(ECTMusic Music) const;
 
 	// 배경음
@@ -62,7 +58,7 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Music")
 	TSoftObjectPtr<USoundBase> GameMusic;
 
-	// 배경음이 바뀔 때 서서히 줄고 커지는 시간(초)
+	// 곡 전환 페이드 시간(초)
 	UPROPERTY(Config, EditAnywhere, Category = "Music", meta = (ClampMin = "0"))
 	float MusicFadeSeconds = 1.0f;
 
@@ -106,11 +102,11 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Movement")
 	TSoftObjectPtr<USoundBase> Land;
 
-	// 이 거리(cm) 안에서는 위치에서 나는 효과음(밀기, 꼬리 잡힘)이 최대 크기로 들립니다
+	// 최대 크기로 들리는 거리(cm)
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|World", meta = (ClampMin = "0"))
 	float WorldSfxInnerRadius = 600.f;
 
-	// 이 거리(cm)까지 서서히 작아지고, 넘으면 들리지 않습니다
+	// 감쇠 끝 거리(cm). 넘으면 안 들림
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|World", meta = (ClampMin = "0"))
 	float WorldSfxFalloffDistance = 2500.f;
 };

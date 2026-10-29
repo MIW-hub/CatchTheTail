@@ -18,15 +18,15 @@ class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
 public:
 	ACTGameMode();
 
-	// 로비에서 방장이 정한 경기 설정(시간, 시작 꼬리 수 등)을 이 판에 적용
+	// 로비에서 정한 경기 설정 적용
 	virtual void InitGameState() override;
 
-	// 게임이 진행 중이면 새 입장을 거절
+	// 진행 중이면 새 입장 거절
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
-	// 게임 중 플레이어가 나가면 목표 색 정리, 혼자 남으면 종료
+	// 이탈 시 목표 색 정리, 혼자 남으면 종료
 	virtual void Logout(AController* Exiting) override;
-	// 로비에서 Seamless Travel로 넘어온 플레이어는 PostLogin이 호출되지 않으므로 여기서 같은 초기화
+	// Seamless Travel 플레이어는 PostLogin이 없어 여기서 초기화
 	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
 
 	// 로비 시작 버튼에서 호출
@@ -37,10 +37,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void EndGame();
 
-	// 서버. 방장의 로비 복귀 요청. 게임이 끝난 상태에서만 가능. 성공 시 true
+	// 서버, 방장 로비 복귀 요청 (종료 후만)
 	bool RequestReturnToLobby(APlayerController* Requester);
 
-	// 서버. 점수 변경 + 유령 처리. 성공 시 true
+	// 서버, 점수 변경 + 유령 처리
 	bool HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
 	// 블루프린트 이벤트
@@ -79,17 +79,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Gimmick", meta = (ClampMin = "0"))
 	int32 PhoneUsesPerGame = 2;
 
-	/**
-	 * 새 라운드가 시작될 때 꼬리가 이 수보다 적은 플레이어에게 꼬리를 채워 줍니다.
-	 * (꼬리를 모두 잃은 플레이어가 다음 라운드에 다시 꼬리를 갖고 시작하도록). 0이면 채워 주지 않음
-	 */
+	// 꼬리가 이 수보다 적으면 새 라운드에 채움, 0이면 안 채움
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	int32 MinTailCountAtRoundStart = 1;
 
-	/**
-	 * 게임이 끝난 뒤 이 시간(초)이 지나면 자동으로 대기 로비로 돌아갑니다. 방장이 버튼으로 먼저 돌아갈 수도 있습니다.
-	 * 0이면 자동 복귀 없음 (방장이 버튼을 눌러야 함)
-	 */
+	// 종료 후 자동 로비 복귀 시간(초), 0이면 없음
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	float ReturnToLobbyDelaySeconds = 20.f;
 
@@ -105,7 +99,7 @@ protected:
 	float AutoStartDelaySeconds = 5.f;
 
 private:
-	// 게임 중 나간 플레이어 반영: 남은 사람끼리 목표 색 다시 이음. 2명 미만이면 종료
+	// 이탈자 반영: 남은 사람끼리 목표 색 재연결
 	void HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer);
 
 	// PostLogin / 심리스 트래블 공통 초기화
@@ -117,7 +111,7 @@ private:
 	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();
 
-	// 중복 없이 색 배정. 직전 색 가능하면 회피
+	// 색 배정, 직전 색 회피
 	void AssignColorsAndTargets();
 
 	// 0.2초마다 라운드/게임 종료 확인

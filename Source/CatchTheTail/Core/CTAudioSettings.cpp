@@ -15,7 +15,7 @@ UCTAudioSettings::UCTAudioSettings()
 	CategoryName = TEXT("Game");
 	SectionName = TEXT("CT Audio");
 
-	// 기본값: Content/sound 의 파일 이름 기준
+	// 기본값은 Content/sound 파일명 기준
 	MenuMusic     = SoundPath(TEXT("BGM_Sky_Breeze_132BPM_Loop"));
 	GameMusic     = SoundPath(TEXT("BGM_Bouncy_Battery_128BPM_Loop"));
 

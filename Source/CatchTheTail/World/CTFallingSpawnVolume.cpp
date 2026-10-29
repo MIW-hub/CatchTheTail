@@ -20,7 +20,7 @@ ACTFallingSpawnVolume::ACTFallingSpawnVolume()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// 모든 클라이언트가 항상 받아야 합니다. (멀리 있어도 그림자와 머티리얼이 맞게)
+	// 멀리서도 복제 (그림자, 머티리얼)
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	SetNetUpdateFrequency(10.f);
@@ -32,7 +32,7 @@ ACTFallingSpawnVolume::ACTFallingSpawnVolume()
 	SpawnBox->SetHiddenInGame(true);
 	SpawnBox->ShapeColor = FColor(120, 190, 255);
 
-	// 기본 그림자 메시와 머티리얼 (블루프린트에서 바꿀 수 있음)
+	// 기본 그림자 메시, 머티리얼
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> PlaneFinder(TEXT("/Engine/BasicShapes/Plane.Plane"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ShadowFinder(TEXT("/Game/Material/M_FallingShadow.M_FallingShadow"));
 	if (PlaneFinder.Succeeded()) { ShadowMesh = PlaneFinder.Object; }
@@ -87,16 +87,14 @@ float ACTFallingSpawnVolume::PickInterval() const
 	return FMath::FRandRange(MinInterval, MaxInterval);
 }
 
-// ============================================================
 // 스폰 (서버)
-// ============================================================
 
 float ACTFallingSpawnVolume::FindGroundZ(const FVector& From) const
 {
 	const FVector BoxExtent = SpawnBox->GetScaledBoxExtent();
 	const float BoxBottomZ = SpawnBox->GetComponentLocation().Z - BoxExtent.Z;
 
-	// 박스 맨 위에서 아래로 충분히 멀리 검사합니다. (박스 높이의 몇 배 + 여유)
+	// 맨 위에서 아래로 충분히 멀리 검사
 	const float TraceDistance = BoxExtent.Z * 2.f + 20000.f;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CTFallingGround), /*bTraceComplex=*/false);
 	Params.AddIgnoredActor(this);
@@ -116,7 +114,7 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 	if (!HasAuthority() || !World) { return nullptr; }
 	if (Entries.Num() >= MaxFallingActors) { return nullptr; }
 
-	// 액터 클래스와 스태틱 메시를 한 묶음으로 보고 무작위로 하나를 고릅니다. (비어 있는 칸은 건너뜀)
+	// 클래스, 메시 한 묶음에서 무작위 (빈 칸 제외)
 	TArray<TSubclassOf<AActor>> ClassCandidates;
 	for (const TSubclassOf<AActor>& Candidate : ActorClasses)
 	{
@@ -144,13 +142,13 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 	const FRotator SpawnRotation = bRandomYaw ? FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f) : FRotator::ZeroRotator;
 	const FTransform SpawnTransform(SpawnRotation, SpawnLocation);
 
-	// 시작부터 복제되도록 BeginPlay 전에 설정합니다. (어떤 액터든 모든 화면에 보이게)
+	// 시작부터 복제되게 BeginPlay 전 설정
 	AActor* Spawned = World->SpawnActorDeferred<AActor>(ChosenClass, SpawnTransform, this, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Spawned) { return nullptr; }
 
 	Spawned->SetReplicates(true);
 	Spawned->SetReplicateMovement(true);
-	// 스태틱 메시를 골랐다면 낙하용 액터에 메시와 크기를 넣습니다. (FinishSpawning 전이라 모든 화면에 함께 전달됨)
+	// 메시, 크기 주입 (FinishSpawning 전)
 	if (ACTFallingProp* Prop = Cast<ACTFallingProp>(Spawned))
 	{
 		const float ScaleLow = FMath::Min(StaticMeshScaleMin, StaticMeshScaleMax);
@@ -164,13 +162,13 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 	}
 	Spawned->FinishSpawning(SpawnTransform);
 
-	// 떨어지는 동안의 충돌 설정 (클라이언트는 액터가 도착하면 TickVisuals에서 적용)
+	// 낙하 충돌 (클라는 TickVisuals에서 적용)
 	if (bControlCollision)
 	{
 		ApplyCollision(Spawned, CollisionWhileFalling);
 	}
 
-	// 크기와 바닥 위치로 그림자를 정합니다.
+	// 크기, 바닥으로 그림자 결정
 	FVector BoundsOrigin, BoundsExtent;
 	Spawned->GetActorBounds(/*bOnlyCollidingComponents=*/false, BoundsOrigin, BoundsExtent);
 
@@ -184,8 +182,7 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 	const float GroundZ = FindGroundZ(SpawnLocation);
 	Entry.GroundLocation = FVector(SpawnLocation.X, SpawnLocation.Y, GroundZ);
 
-	// ----- 선형보간(Lerp) 낙하 정보 -----
-	// 액터의 기준점에서 바닥 면까지의 거리를 구해서, 바닥에 닿았을 때 기준점이 있어야 할 높이(EndZ)를 정합니다.
+	// 선형보간 낙하: 착지 시 기준점 높이(EndZ)
 	const float PivotToBottom = Spawned->GetActorLocation().Z - (BoundsOrigin.Z - BoundsExtent.Z);
 
 	FServerFall Fall;
@@ -195,7 +192,7 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 	Fall.XY = FVector2D(SpawnLocation.X, SpawnLocation.Y);
 	Fall.Duration = FMath::Max((Fall.StartZ - Fall.EndZ) / FMath::Max(Fall.Speed, 1.f), 0.05f);
 
-	// 기울어진 채 시작해서 바닥에 닿을 때 반듯해지는 회전 (물리처럼 보이게 하는 연출)
+	// 기울어 시작해 착지 때 반듯해짐
 	const float TiltPitch = FMath::FRandRange(-FallTiltDegrees, FallTiltDegrees);
 	const float TiltRoll = FMath::FRandRange(-FallTiltDegrees, FallTiltDegrees);
 	const float SpinYaw = FMath::FRandRange(-FallSpinDegrees, FallSpinDegrees);
@@ -212,14 +209,12 @@ AActor* ACTFallingSpawnVolume::SpawnOne()
 
 	Entries.Add(Entry);
 	ForceNetUpdate();
-	SyncLocalVisuals(); // 방장(서버) 화면에도 그림자를 만듭니다.
+	SyncLocalVisuals(); // 서버 화면용
 
 	return Spawned;
 }
 
-// ============================================================
 // 매 프레임
-// ============================================================
 
 void ACTFallingSpawnVolume::Tick(float DeltaSeconds)
 {
@@ -237,13 +232,13 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 {
 	bool bChanged = false;
 
-	// ----- 떨어뜨리기 -----
+	// 낙하
 	for (int32 Index = Entries.Num() - 1; Index >= 0; --Index)
 	{
 		const FCTFallEntry Entry = Entries[Index];
 		AActor* Falling = Entry.Actor;
 
-		// 도중에 사라진 액터는 목록에서 뺍니다.
+		// 사라진 액터 제거
 		FServerFall* Fall = ServerFalls.Find(Entry.Id);
 		if (!IsValid(Falling) || !Fall)
 		{
@@ -253,18 +248,18 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 			continue;
 		}
 
-		// 시작 높이에서 바닥까지 시간에 따라 선형보간(Lerp)합니다. 기울기도 같은 비율로 반듯해집니다.
+		// 시작~바닥 선형보간, 기울기 동시
 		Fall->Elapsed += DeltaSeconds;
 		const float Alpha = FMath::Clamp(Fall->Elapsed / Fall->Duration, 0.f, 1.f);
 		const float NewZ = FMath::Lerp(Fall->StartZ, Fall->EndZ, Alpha);
 		const FQuat NewRotation = FQuat::Slerp(Fall->StartRotation, Fall->EndRotation, Alpha);
 		Falling->SetActorLocationAndRotation(FVector(Fall->XY.X, Fall->XY.Y, NewZ), NewRotation, /*bSweep=*/false);
 
-		// 지금 액터가 차지한 영역
+		// 액터 점유 영역
 		FVector BoundsOrigin, BoundsExtent;
 		Falling->GetActorBounds(/*bOnlyCollidingComponents=*/false, BoundsOrigin, BoundsExtent);
 
-		// 떨어지는 액터에 맞은 캐릭터는 튕겨냅니다.
+		// 적중 캐릭터 튕김
 		if (bKnockbackOnHit)
 		{
 			ApplyHitKnockback(Entry, Falling, BoundsOrigin, BoundsExtent);
@@ -272,7 +267,7 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 
 		if (Alpha >= 1.f)
 		{
-			// 착지한 뒤의 충돌 설정 (클라이언트는 목록에서 사라질 때 같은 설정을 적용)
+			// 착지 충돌 (클라는 목록 제거 시 적용)
 			if (bControlCollision)
 			{
 				ApplyCollision(Falling, CollisionAfterLanding);
@@ -300,7 +295,7 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 		SyncLocalVisuals();
 	}
 
-	// ----- 새로 떨어뜨리기 -----
+	// 새로 낙하
 	if (!bSpawning) { return; }
 
 	if (bOnlySpawnWhilePlaying)
@@ -312,7 +307,7 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 	TimeToNextSpawn -= DeltaSeconds;
 	if (TimeToNextSpawn <= 0.f)
 	{
-		// 가득 차 있으면 SpawnOne이 실패하고, 다음 프레임에 다시 시도합니다.
+		// 가득 차면 다음 프레임 재시도
 		if (SpawnOne())
 		{
 			TimeToNextSpawn = PickInterval();
@@ -335,7 +330,7 @@ void ACTFallingSpawnVolume::TickVisuals()
 
 		const AActor* Falling = Entry.Actor;
 
-		// 클라이언트에서는 액터가 늦게 도착할 수 있어서, 도착하면 머티리얼과 충돌 설정을 적용합니다.
+		// 클라는 액터가 늦게 오면 그때 적용
 		if (!Fall->bMaterialApplied && Falling)
 		{
 			ApplyMaterial(Entry.Actor, Entry.MaterialIndex);
@@ -349,7 +344,7 @@ void ACTFallingSpawnVolume::TickVisuals()
 
 		if (!Fall->ShadowComponent || !Fall->ShadowMaterialInstance) { continue; }
 
-		// 가까워질수록 그림자가 진해지고 커집니다.
+		// 가까울수록 진하고 큼
 		float Progress = 0.f;
 		const float Drop = Entry.StartZ - Entry.GroundLocation.Z;
 		if (Falling && Drop > KINDA_SMALL_NUMBER)
@@ -360,15 +355,13 @@ void ACTFallingSpawnVolume::TickVisuals()
 		const float Opacity = FMath::Lerp(ShadowMinOpacity, ShadowMaxOpacity, Progress);
 		Fall->ShadowMaterialInstance->SetScalarParameterValue(ShadowOpacityParameterName, Opacity);
 
-		// Plane 메시는 한 변이 100cm라서 (반지름 × 2) ÷ 100 이 크기 배율입니다.
+		// Plane은 100cm, 배율 = 지름 ÷ 100
 		const float Scale = Entry.ShadowRadius * 2.f / 100.f * FMath::Lerp(ShadowStartScale, 1.f, Progress);
 		Fall->ShadowComponent->SetWorldScale3D(FVector(Scale, Scale, 1.f));
 	}
 }
 
-// ============================================================
 // 그림자 / 머티리얼 (모든 화면)
-// ============================================================
 
 void ACTFallingSpawnVolume::OnRep_Entries()
 {
@@ -389,13 +382,13 @@ void ACTFallingSpawnVolume::SyncLocalVisuals()
 {
 	if (GetNetMode() == NM_DedicatedServer) { return; }
 
-	// 끝난 것의 그림자를 지웁니다.
+	// 끝난 그림자 제거
 	for (auto It = LocalFalls.CreateIterator(); It; ++It)
 	{
 		const int32 Id = It.Key();
 		if (!Entries.ContainsByPredicate([Id](const FCTFallEntry& Entry) { return Entry.Id == Id; }))
 		{
-			// 클라이언트: 목록에서 빠졌다는 것은 바닥에 닿았다는 뜻이라, 착지 충돌을 적용합니다.
+			// 목록에서 빠짐 = 착지, 충돌 적용
 			if (bControlCollision && !HasAuthority())
 			{
 				if (AActor* LandedActor = It.Value().Actor.Get())
@@ -408,7 +401,7 @@ void ACTFallingSpawnVolume::SyncLocalVisuals()
 		}
 	}
 
-	// 새로 떨어지는 것의 그림자를 만듭니다.
+	// 새 그림자 생성
 	for (const FCTFallEntry& Entry : Entries)
 	{
 		if (LocalFalls.Contains(Entry.Id)) { continue; }
@@ -425,7 +418,7 @@ void ACTFallingSpawnVolume::SyncLocalVisuals()
 			Shadow->SetCastShadow(false);
 			Shadow->RegisterComponent();
 
-			// 월드 좌표에 그대로 놓습니다. (볼륨이 움직여도 그림자는 바닥에 고정)
+			// 월드 좌표 고정
 			const FVector Location(Entry.GroundLocation.X, Entry.GroundLocation.Y, Entry.GroundLocation.Z + ShadowHeightOffset);
 			Shadow->SetWorldLocationAndRotation(Location, FRotator::ZeroRotator);
 			Shadow->SetWorldScale3D(FVector(Entry.ShadowRadius * 2.f / 100.f * ShadowStartScale, Entry.ShadowRadius * 2.f / 100.f * ShadowStartScale, 1.f));
@@ -493,7 +486,7 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 	UWorld* World = GetWorld();
 	if (!World || !Falling) { return; }
 
-	// 액터가 차지한 상자 안에 있는 폰(캐릭터)을 찾습니다.
+	// 영역 안의 폰 검색
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CTFallingHit), /*bTraceComplex=*/false);
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(Falling);
@@ -510,14 +503,14 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 	for (const FOverlapResult& Overlap : Overlaps)
 	{
 		ACTCharacter* Character = Cast<ACTCharacter>(Overlap.GetActor());
-		if (!Character || Character->IsGhost()) { continue; } // 유령은 맞지 않습니다.
+		if (!Character || Character->IsGhost()) { continue; } // 유령 제외
 
-		// 바로 전에 맞은 캐릭터는 건너뜁니다.
+		// 직전 적중자 제외
 		const double* LastHit = LastHitTimes.Find(Character);
 		if (LastHit && Now - *LastHit < HitCooldownSeconds) { continue; }
 		LastHitTimes.Add(Character, Now);
 
-		// 박스 중심에서 캐릭터 쪽 가로 방향으로 밀어냅니다. (정확히 위에 있으면 무작위 방향)
+		// 중심에서 캐릭터 쪽으로 (바로 위면 무작위)
 		FVector Direction = Character->GetActorLocation() - BoundsOrigin;
 		Direction.Z = 0.f;
 		if (Direction.IsNearlyZero())
@@ -526,8 +519,8 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 		}
 		Direction = Direction.GetSafeNormal();
 
-		// 정한 거리만큼 날아가도록 속도를 계산합니다.
-		// 위로 UpSpeed로 떠서 다시 내려올 때까지의 시간(공중 시간) = 2 × UpSpeed ÷ 중력, 가로 속도 = 거리 ÷ 공중 시간
+		// 거리 맞춰 속도 계산
+		// 가로 속도 = 거리 ÷ 공중 시간 (2 × 상승속도 ÷ 중력)
 		const float Gravity = FMath::Max(FMath::Abs(Character->GetCharacterMovement()->GetGravityZ()), 1.f);
 		const float UpSpeed = FMath::Max(HitKnockbackUpSpeed, 1.f);
 		const float AirTime = FMath::Max(2.f * UpSpeed / Gravity, 0.05f);
@@ -547,7 +540,7 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 		OnCharacterHit.Broadcast(Character, Falling);
 	}
 
-	// 오래된 기록 정리 (사라진 캐릭터)
+	// 사라진 캐릭터 기록 정리
 	for (auto It = LastHitTimes.CreateIterator(); It; ++It)
 	{
 		if (!It.Key().IsValid()) { It.RemoveCurrent(); }

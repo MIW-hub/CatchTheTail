@@ -15,10 +15,10 @@ ACTFallingProp::ACTFallingProp()
 	SetRootComponent(MeshComponent);
 	MeshComponent->SetMobility(EComponentMobility::Movable);
 
-	// 충돌은 스폰 볼륨이 떨어지는 동안 / 착지한 뒤로 나누어 정해 줍니다. (기본은 막힘)
+	// 충돌은 스폰 볼륨이 낙하/착지 때 지정
 	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 
-	// 카메라는 막지 않습니다. (벽에 쓰는 충돌과 달리, 떨어진 물체 때문에 카메라가 당겨지지 않게)
+	// 카메라 차단 안 함
 	MeshComponent->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 }
 

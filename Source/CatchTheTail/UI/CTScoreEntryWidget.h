@@ -21,7 +21,6 @@ public:
 
 	// 표시 갱신 (Rank는 1부터)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
-	// bAllowCrown: 1등에게 왕관을 보여줄지 (모두 동점이면 false)
 	void RefreshEntry(int32 Rank, bool bIsLocalPlayer, bool bAllowCrown = true);
 
 protected:

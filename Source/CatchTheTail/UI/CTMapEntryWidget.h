@@ -14,16 +14,14 @@ class UWidget;
 // 항목을 눌렀을 때 (맵 번호)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTMapEntryClickedSignature, int32, MapIndex);
 
-/**
- * 맵 선택 창의 항목 한 칸. 이미지, 이름, 설명을 보여 주고 누르면 선택합니다. 이름이 맞는 위젯만 만들어 두면 자동으로 연결됩니다. (모두 선택 사항)
- */
+// 맵 선택 창 항목 한 칸
 UCLASS(Abstract)
 class CATCHTHETAIL_API UCTMapEntryWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
-	// 항목 채우기. bSelected면 지금 선택된 맵
+	// 항목 채우기
 	void SetEntry(int32 InMapIndex, const FCTMapInfo& Info, bool bSelected);
 
 	// 선택 표시만 바꿈
@@ -57,7 +55,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MapDescription;
 
-	// 선택됐을 때만 보일 표시 (테두리, 체크 등)
+	// 선택 표시
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Widget_Selected;
 

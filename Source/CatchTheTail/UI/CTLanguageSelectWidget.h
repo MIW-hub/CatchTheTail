@@ -10,10 +10,7 @@ class UButton;
 // 언어를 골라 확인함
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCTLanguageConfirmedSignature);
 
-/**
- * 언어 선택 화면. 이름 입력 다음에 처음 한 번 나옵니다.
- * 언어 버튼을 누르면 바로 그 언어로 바뀌고(화면 문구도 즉시), 확인을 누르면 저장하고 다음 화면으로 넘어갑니다.
- */
+// 언어 선택 화면
 UCLASS(Abstract)
 class CATCHTHETAIL_API UCTLanguageSelectWidget : public UUserWidget
 {

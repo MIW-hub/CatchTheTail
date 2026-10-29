@@ -26,11 +26,11 @@ struct FCTSettingsData
 	bool bMuteAll = false;
 
 	// 언어
-	// 문화 코드 (ko, en, ja). 비어 있으면 처음 실행으로 보고 영어
+	// 문화 코드. 비면 처음 실행(영어)
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	FString Language;
 
-	// 언어 선택 화면에서 직접 고른 적이 있는가. false면 처음 한 번 언어 선택 화면을 보여줌
+	// 언어 선택 화면을 거쳤는가
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bLanguageChosen = false;
 

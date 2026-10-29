@@ -47,11 +47,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Menu")
 	void BP_OnPanelChanged(ECTMenuPanel NewPanel);
 
-	/**
-	 * 설정 패널에 자동으로 넣을 설정 화면 (WBP_CTSettingsWidget).
-	 * Panel_Settings가 패널(Canvas, Overlay, Box 등)이면 코드가 이 위젯을 만들어 그 안에 넣고, 닫기 버튼을 메인 메뉴로 연결합니다.
-	 * 이미 Panel_Settings 안에 직접 배치해 두었다면 비워 두세요.
-	 */
+	// 설정 패널에 넣을 설정 화면
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Menu")
 	TSubclassOf<UCTSettingsWidget> SettingsWidgetClass;
 
@@ -90,7 +86,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Quit;
 
-	// 방 코드 입장 (온라인 기능이 막혀 있으면 비활성)
+	// 방 코드 입장
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> EditableTextBox_RoomCode;
 
@@ -125,10 +121,10 @@ protected:
 	TObjectPtr<UTextBlock> Text_PlayerName;
 
 private:
-	// 설정 화면을 만들어 Panel_Settings에 넣음
+	// Panel_Settings에 설정 화면 생성
 	void CreateSettingsWidget();
 
-	// 온라인 기능을 쓸 수 없으면 관련 버튼을 막고 이유를 툴팁으로 표시
+	// 온라인 불가 시 버튼 막고 사유 툴팁
 	void ApplyOnlineAvailability();
 
 	UFUNCTION()
@@ -161,7 +157,7 @@ private:
 	UFUNCTION()
 	void HandleMessage(FText Message);
 
-	// 이름이 바뀌면 오른쪽 위 이름 표시 갱신
+	// 이름 표시 갱신
 	UFUNCTION()
 	void HandlePlayerNameChanged();
 

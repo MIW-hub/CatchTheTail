@@ -11,7 +11,7 @@
 
 namespace
 {
-	// 사람이 안에 있는지 다시 확인하는 간격(초)
+	// 인원 확인 간격(초)
 	constexpr float OccupantCheckInterval = 0.1f;
 }
 
@@ -32,7 +32,7 @@ ACTBush::ACTBush()
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetRelativeScale3D(FVector(3.f, 3.f, 2.f));
 
-	// 임시 모양 (블루프린트에서 풀 메시로 교체)
+	// 임시 모양
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereFinder(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	if (SphereFinder.Succeeded())
 	{
@@ -53,7 +53,7 @@ void ACTBush::BeginPlay()
 	MeshBaseRotation = Mesh->GetRelativeRotation();
 	ShakePhase = FMath::FRandRange(0.f, 6.28f); // 부쉬마다 다른 박자
 
-	// 임시 모양일 때만 초록색 (메시를 바꿨으면 그 머티리얼 그대로)
+	// 임시 모양일 때만 초록
 	if (Mesh->GetNumMaterials() > 0 && Mesh->GetMaterial(0) && Mesh->GetMaterial(0)->GetName().Contains(TEXT("BasicShapeMaterial")))
 	{
 		if (UMaterialInstanceDynamic* Material = Mesh->CreateAndSetMaterialInstanceDynamic(0))
@@ -77,7 +77,7 @@ void ACTBush::Tick(float DeltaSeconds)
 		}
 	}
 
-	// 흔들림 (모든 화면). 들키면 빠르고 크게
+	// 흔들림. 들키면 빠르고 크게
 	if (GetNetMode() != NM_DedicatedServer)
 	{
 		const float Speed = bAlerted ? AlertShakeSpeed : IdleShakeSpeed;
@@ -92,7 +92,7 @@ void ACTBush::ServerRefreshOccupants()
 {
 	const double Now = GetWorld()->GetTimeSeconds();
 
-	// 지금 안에 있는 (유령 아닌) 캐릭터
+	// 유령 제외 내부 캐릭터
 	TArray<AActor*> Overlapping;
 	Trigger->GetOverlappingActors(Overlapping, ACTCharacter::StaticClass());
 
@@ -106,7 +106,7 @@ void ACTBush::ServerRefreshOccupants()
 		}
 	}
 
-	// 방장이 부쉬를 끈 판에서는 아무도 숨을 수 없음
+	// 방장이 끈 판은 숨기 불가
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
 	if (GameInstance && GameInstance->HasStoredMatchSettings() && !GameInstance->GetStoredMatchSettings().IsBushEnabled())
 	{
@@ -124,7 +124,7 @@ void ACTBush::ServerRefreshOccupants()
 		}
 	}
 
-	// 들어온 사람 (다른 부쉬에 이미 있으면 그쪽 유지)
+	// 들어온 사람 (다른 부쉬에 있으면 유지)
 	for (ACTCharacter* Character : Inside)
 	{
 		if (Occupants.Contains(Character)) { continue; }
@@ -134,7 +134,7 @@ void ACTBush::ServerRefreshOccupants()
 		Character->SetCurrentBush(this);
 	}
 
-	// 오래 숨은 사람이 있으면 들킴
+	// 오래 숨으면 들킴
 	bool bNewAlerted = false;
 	for (const TPair<TWeakObjectPtr<ACTCharacter>, double>& Pair : Occupants)
 	{

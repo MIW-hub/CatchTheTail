@@ -77,7 +77,7 @@ void UCTSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	LoadSettings();
 
-	// 테스트용: -CTTestMusicVolume=0.2 -CTTestSfxVolume=0.5 (저장하지 않음)
+	// 테스트용 볼륨 옵션 (저장 안 함)
 	float TestVolume = 0.f;
 	if (FParse::Value(FCommandLine::Get(), TEXT("CTTestMusicVolume="), TestVolume)) { Data.MusicVolume = FMath::Clamp(TestVolume, 0.f, 1.f); }
 	if (FParse::Value(FCommandLine::Get(), TEXT("CTTestSfxVolume="), TestVolume)) { Data.SfxVolume = FMath::Clamp(TestVolume, 0.f, 1.f); }
@@ -179,13 +179,13 @@ void UCTSettingsSubsystem::ApplyAudio()
 {
 	UGameInstance* GameInstance = GetGameInstance();
 
-	// 배경음은 사운드 믹스 대신 지금 나오는 배경음에 직접 볼륨을 줌 (음소거 포함)
+	// 배경음은 실행 중 곡에 직접 볼륨 (음소거 포함)
 	if (UCTAudioSubsystem* Audio = GameInstance ? GameInstance->GetSubsystem<UCTAudioSubsystem>() : nullptr)
 	{
 		Audio->RefreshMusicVolume();
 	}
 
-	// 효과음은 사운드 믹스로 (버튼 소리, 발소리 등 여러 곳에서 나서)
+	// 효과음은 사운드 믹스로
 	UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
 	if (!World) { return; } // 맵 열릴 때 컨트롤러가 다시 적용
 
@@ -269,13 +269,13 @@ FString UCTSettingsSubsystem::GetLanguageDisplayName(const FString& CultureCode)
 
 FString UCTSettingsSubsystem::GetLanguage() const
 {
-	// 실행 옵션 -CTLanguage=ja 로 언어를 강제 (테스트용)
+	// -CTLanguage 로 언어 강제 (테스트용)
 	FString Forced;
 	if (FParse::Value(FCommandLine::Get(), TEXT("CTLanguage="), Forced) && IsSupportedLanguage(Forced)) { return Forced; }
 
 	if (IsSupportedLanguage(Data.Language)) { return Data.Language; }
 
-	// 저장값이 없으면(처음 실행) 영어. 컴퓨터 언어는 따르지 않음
+	// 저장값 없으면 영어 (시스템 언어 무시)
 	return FString(TEXT("en"));
 }
 
@@ -308,7 +308,7 @@ void UCTSettingsSubsystem::ApplyLanguage()
 	const FString Code = GetLanguage();
 
 #if WITH_EDITOR
-	// 에디터에서는 에디터 화면 언어는 두고 게임 문구만 바꿈
+	// 에디터는 게임 문구만 변경
 	if (GIsEditor)
 	{
 		FTextLocalizationManager::Get().EnableGameLocalizationPreview(Code);
@@ -321,8 +321,7 @@ void UCTSettingsSubsystem::ApplyLanguage()
 
 void UCTSettingsSubsystem::ResetToDefaults()
 {
-	// 키 포함 초기화. 컨텍스트 정리는 ApplyKeyBindingsToLocalPlayer
-	// 언어는 초기화하지 않고 유지
+	// 키 포함 초기화. 언어는 유지
 	const FString KeepLanguage = Data.Language;
 	const bool bKeepChosen = Data.bLanguageChosen;
 	Data = FCTSettingsData();
