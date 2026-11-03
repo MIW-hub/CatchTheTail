@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "../Type/CTTypes.h"
+#include "../Core/CTAudioSettings.h"
 #include "CTCharacter.generated.h"
 
 class USpringArmComponent;
@@ -150,6 +151,10 @@ public:
 	// 전원 화면 행동 연출 (서버 호출)
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayAction(ECTCharacterAction Action, bool bSuccess);
+
+	// 서버 호출: 기믹에 맞은 소리를 전원 화면에서 재생
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayHitSfx(ECTSfx Sfx);
 
 	// 서버 호출: 날아가는 방향(수평)에 따라 넘어지는 연출을 고름. 보는 방향으로 날아가면 앞으로 엎어지고, 반대면 뒤로 넘어짐
 	void PlayKnockedDown(const FVector& KnockDirection);

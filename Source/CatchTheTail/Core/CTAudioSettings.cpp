@@ -32,6 +32,11 @@ UCTAudioSettings::UCTAudioSettings()
 	Footstep      = SoundPath(TEXT("SFX_Footstep"));
 	Jump          = SoundPath(TEXT("SFX_Jump"));
 	Land          = SoundPath(TEXT("SFX_Land"));
+	BarrelFuse    = SoundPath(TEXT("SFX_Barrel_Fuse"));
+	Explosion     = SoundPath(TEXT("SFX_Explosion"));
+	VehicleHit    = SoundPath(TEXT("SFX_Vehicle_Hit"));
+	PropHit       = SoundPath(TEXT("SFX_Prop_Hit"));
+	LogHit        = SoundPath(TEXT("SFX_Log_Hit"));
 }
 
 USoundBase* UCTAudioSettings::LoadSfx(ECTSfx Sfx) const
@@ -51,6 +56,11 @@ USoundBase* UCTAudioSettings::LoadSfx(ECTSfx Sfx) const
 	case ECTSfx::Footstep:      return Footstep.LoadSynchronous();
 	case ECTSfx::Jump:          return Jump.LoadSynchronous();
 	case ECTSfx::Land:          return Land.LoadSynchronous();
+	case ECTSfx::BarrelFuse:    return BarrelFuse.LoadSynchronous();
+	case ECTSfx::Explosion:     return Explosion.LoadSynchronous();
+	case ECTSfx::VehicleHit:    return VehicleHit.LoadSynchronous();
+	case ECTSfx::PropHit:       return PropHit.LoadSynchronous();
+	case ECTSfx::LogHit:        return LogHit.LoadSynchronous();
 	}
 	return nullptr;
 }

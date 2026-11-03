@@ -163,6 +163,7 @@ void ACTRollingLog::ApplyHits(const FVector& Location, const FVector& Direction,
 		const FVector Push = (Lateral * Side * 0.85f + Direction * 0.15f).GetSafeNormal();
 
 		Character->LaunchCharacter(Push * KnockbackSideSpeed + FVector(0.f, 0.f, KnockbackUpSpeed), /*bXYOverride=*/true, /*bZOverride=*/true);
+		Character->MulticastPlayHitSfx(ECTSfx::LogHit);
 
 		if (bPlayPushedReaction)
 		{

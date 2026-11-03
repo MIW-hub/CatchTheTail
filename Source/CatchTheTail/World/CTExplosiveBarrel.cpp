@@ -2,6 +2,7 @@
 #include "CTExplosiveBarrel.h"
 #include "CTTailPickup.h"
 #include "../Core/CTGameState.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Player/CTCharacter.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -172,6 +173,16 @@ void ACTExplosiveBarrel::Respawn()
 	}
 }
 
+void ACTExplosiveBarrel::PlayDefaultSfx(ECTSfx Sfx) const
+{
+	const UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_DedicatedServer) { return; }
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlaySfxAtLocation(Sfx, GetActorLocation());
+	}
+}
+
 void ACTExplosiveBarrel::OnRep_State()
 {
 	ApplyStateVisuals(AppliedState);
@@ -192,11 +203,13 @@ void ACTExplosiveBarrel::ApplyStateVisuals(ECTBarrelState OldState)
 	if (State == ECTBarrelState::Burning)
 	{
 		if (FuseSound) { UGameplayStatics::PlaySoundAtLocation(this, FuseSound, GetActorLocation()); }
+		else { PlayDefaultSfx(ECTSfx::BarrelFuse); }
 		BP_OnFuseStarted();
 	}
 	else if (State == ECTBarrelState::Exploded && OldState != ECTBarrelState::Exploded)
 	{
 		if (ExplosionSound) { UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation()); }
+		else { PlayDefaultSfx(ECTSfx::Explosion); }
 		BP_OnExploded();
 	}
 }

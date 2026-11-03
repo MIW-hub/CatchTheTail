@@ -106,6 +106,7 @@ void ACTRoadVehicle::ApplyHits(const FVector& Location, const FQuat& Rotation)
 		const FVector Push = Launch.GetSafeNormal2D();
 
 		Character->LaunchCharacter(FVector(Launch.X, Launch.Y, KnockbackUpSpeed), /*bXYOverride=*/true, /*bZOverride=*/true);
+		Character->MulticastPlayHitSfx(ECTSfx::VehicleHit);
 
 		if (bPlayPushedReaction)
 		{

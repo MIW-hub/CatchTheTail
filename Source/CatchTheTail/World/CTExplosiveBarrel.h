@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "../Core/CTAudioSettings.h"
 #include "CTExplosiveBarrel.generated.h"
 
 class ACTCharacter;
@@ -136,6 +137,9 @@ private:
 
 	UFUNCTION()
 	void OnRep_State();
+
+	// 지정한 소리가 없을 때 쓰는 기본 소리 (모든 화면)
+	void PlayDefaultSfx(ECTSfx Sfx) const;
 
 	// 서버: 도화선 시작 / 폭발 / 다시 나타남
 	void StartFuse();

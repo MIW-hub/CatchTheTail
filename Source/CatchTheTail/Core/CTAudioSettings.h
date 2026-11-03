@@ -23,7 +23,12 @@ enum class ECTSfx : uint8
 	Victory        UMETA(DisplayName = "Victory"),          // 승리
 	Footstep       UMETA(DisplayName = "Footstep"),         // 발소리
 	Jump           UMETA(DisplayName = "Jump"),             // 점프
-	Land           UMETA(DisplayName = "Land")              // 착지
+	Land           UMETA(DisplayName = "Land"),             // 착지
+	BarrelFuse     UMETA(DisplayName = "Barrel Fuse"),      // 드럼통 도화선
+	Explosion      UMETA(DisplayName = "Explosion"),        // 드럼통 폭발
+	VehicleHit     UMETA(DisplayName = "Vehicle Hit"),      // 차에 치임
+	PropHit        UMETA(DisplayName = "Prop Hit"),         // 낙하물에 맞음
+	LogHit         UMETA(DisplayName = "Log Hit")           // 통나무에 맞음
 };
 
 // 배경음 종류
@@ -101,6 +106,21 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Movement")
 	TSoftObjectPtr<USoundBase> Land;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Gimmick")
+	TSoftObjectPtr<USoundBase> BarrelFuse;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Gimmick")
+	TSoftObjectPtr<USoundBase> Explosion;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Gimmick")
+	TSoftObjectPtr<USoundBase> VehicleHit;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Gimmick")
+	TSoftObjectPtr<USoundBase> PropHit;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Gimmick")
+	TSoftObjectPtr<USoundBase> LogHit;
 
 	// 최대 크기로 들리는 거리(cm)
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|World", meta = (ClampMin = "0"))

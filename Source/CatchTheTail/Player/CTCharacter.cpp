@@ -1054,6 +1054,15 @@ void ACTCharacter::HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterru
 	PlayAnimMontage(GetUp, ActionMontagePlayRate);
 }
 
+void ACTCharacter::MulticastPlayHitSfx_Implementation(ECTSfx Sfx)
+{
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlaySfxAtLocation(Sfx, GetActorLocation());
+	}
+}
+
 void ACTCharacter::PlayKnockedDown(const FVector& KnockDirection)
 {
 	if (!HasAuthority()) { return; }

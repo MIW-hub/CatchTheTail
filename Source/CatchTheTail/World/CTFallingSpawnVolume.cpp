@@ -736,6 +736,7 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 
 		const FVector LaunchVelocity = Direction * HorizontalSpeed + FVector(0.f, 0.f, UpSpeed);
 		Character->LaunchCharacter(LaunchVelocity, /*bXYOverride=*/true, /*bZOverride=*/true);
+		Character->MulticastPlayHitSfx(ECTSfx::PropHit);
 
 		if (bPlayPushedReaction)
 		{
