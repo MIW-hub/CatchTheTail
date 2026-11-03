@@ -1,10 +1,14 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTHUDWidget.h"
 #include "CTScoreEntryWidget.h"
+#include "CTDirectionArrow.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTPlayerState.h"
 #include "Blueprint/WidgetTree.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
@@ -57,6 +61,8 @@ void UCTHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		NoticeRemaining -= InDeltaTime;
 		if (NoticeRemaining <= 0.f) { SetShown(Text_Notice, false); }
 	}
+
+	UpdateDirectionArrow(InDeltaTime);
 
 	UpdateTimeDisplay();
 	UpdateSkillSlots();
@@ -264,18 +270,15 @@ void UCTHUDWidget::UpdateSkillSlot(UImage* Overlay, UTextBlock* Text, float Rema
 	{
 		if (bRunning || bCoolingDown)
 		{
-			// 10초 미만은 소수점 한 자리
-			FNumberFormattingOptions Format;
-			Format.MinimumFractionalDigits = Remaining < 10.f ? 1 : 0;
-			Format.MaximumFractionalDigits = Remaining < 10.f ? 1 : 0;
-			Text->SetText(FText::AsNumber(Remaining, &Format));
+			// 정수 초 (올림)
+			Text->SetText(FText::AsNumber(FMath::CeilToInt(Remaining)));
 			Text->SetColorAndOpacity(FSlateColor(bRunning ? RunActiveTextColor : CooldownTextColor));
-			SetShown(Text, true);
+			Text->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 		else
 		{
 			Text->SetText(FText::GetEmpty());
-			SetShown(Text, false);
+			Text->SetVisibility(ESlateVisibility::Hidden); // 칸 폭은 유지
 		}
 	}
 }
@@ -309,28 +312,12 @@ void UCTHUDWidget::UpdateSkillSlots()
 
 void UCTHUDWidget::RefreshHunter(bool bForce)
 {
-	const ACTPlayerState* MyPlayerState = BoundMyPlayerState.Get();
-	const ECTColor MyColor = MyPlayerState ? MyPlayerState->GetAssignedColor() : ECTColor::None;
-
-	// 나를 목표로 가진 사람의 색
-	ECTColor HunterColor = ECTColor::None;
-	if (MyColor != ECTColor::None)
-	{
-		for (const ACTPlayerState* PlayerState : GetSortedPlayers(BoundGameState.Get()))
-		{
-			if (PlayerState != MyPlayerState && PlayerState->GetTargetColor() == MyColor)
-			{
-				HunterColor = PlayerState->GetAssignedColor();
-				break;
-			}
-		}
-	}
-
-	if (!bForce && bHunterInitialized && HunterColor == LastHunterColor) { return; }
-
+	// 나를 노리는 사람은 알 수 없음. 전화로 거리만 알아낼 수 있어서 화면에는 표시하지 않음
+	if (bHunterInitialized && !bForce) { return; }
 	bHunterInitialized = true;
-	LastHunterColor = HunterColor;
-	ApplyColorToWidgets(HunterColor, Text_HunterColor, Image_Hunter, NSLOCTEXT("CT", "UI_NoHunter", "-"));
+
+	if (Text_HunterColor) { Text_HunterColor->SetVisibility(ESlateVisibility::Collapsed); }
+	if (Image_Hunter) { Image_Hunter->SetVisibility(ESlateVisibility::Collapsed); }
 }
 
 void UCTHUDWidget::RefreshMyState()
@@ -344,6 +331,7 @@ void UCTHUDWidget::RefreshMyState()
 
 	ApplyColorToWidgets(MyColor, Text_MyColor, Image_My, NSLOCTEXT("CT", "UI_NoMyColor", "-"));
 	ApplyColorToWidgets(TargetColor, Text_TargetColor, Image_TargetColor, NSLOCTEXT("CT", "UI_NoTarget", "목표 없음"));
+	if (Text_TargetColor) { Text_TargetColor->SetColorAndOpacity(FSlateColor(TargetNameTextColor)); }
 	RefreshHunter(/*bForce=*/true);
 
 	if (Text_TailCount)
@@ -365,6 +353,12 @@ void UCTHUDWidget::RefreshMyState()
 	{
 		bLastIsGhost = bIsGhost;
 		BP_OnMyGhostChanged(bIsGhost);
+
+		// 기권자는 되살아날 수 없으므로 안내하지 않음
+		if (bIsGhost && !MyPlayerState->IsForfeited())
+		{
+			ShowNotice(NSLOCTEXT("CT", "Ghost_RelocateHint", "F키: 무작위 위치로 한 번 이동 (유령은 다음 라운드에 부활)"), 8.f);
+		}
 	}
 
 	BP_OnMyStateChanged(MyPlayerState);
@@ -511,6 +505,59 @@ UTextBlock* UCTHUDWidget::EnsureNoticeText()
 
 	Text_Notice = Text;
 	return Text_Notice;
+}
+
+UCTDirectionArrow* UCTHUDWidget::EnsureDirectionArrow()
+{
+	if (DirectionArrow) { return DirectionArrow; }
+
+	// 안내 문구와 같이 루트가 캔버스일 때 화면 위쪽 가운데(문구 아래)에 만듦
+	UCanvasPanel* Canvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->RootWidget) : nullptr;
+	if (!Canvas) { return nullptr; }
+
+	DirectionArrow = WidgetTree->ConstructWidget<UCTDirectionArrow>(UCTDirectionArrow::StaticClass(), TEXT("DirectionArrow"));
+	if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(DirectionArrow))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.5f, 0.3f));
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		CanvasSlot->SetSize(FVector2D(130.f, 130.f));
+		CanvasSlot->SetPosition(FVector2D::ZeroVector);
+	}
+	SetShown(DirectionArrow, false);
+	return DirectionArrow;
+}
+
+void UCTHUDWidget::ShowDirectionArrow(const FVector& TargetLocation, float Seconds)
+{
+	UCTDirectionArrow* Arrow = EnsureDirectionArrow();
+	if (!Arrow) { return; }
+
+	ArrowTargetLocation = TargetLocation;
+	ArrowRemaining = FMath::Max(Seconds, 0.1f);
+	SetShown(Arrow, true);
+	UpdateDirectionArrow(0.f);
+}
+
+void UCTHUDWidget::UpdateDirectionArrow(float DeltaSeconds)
+{
+	if (!DirectionArrow || ArrowRemaining <= 0.f) { return; }
+
+	ArrowRemaining -= DeltaSeconds;
+	if (ArrowRemaining <= 0.f)
+	{
+		SetShown(DirectionArrow, false);
+		return;
+	}
+
+	// 카메라가 바라보는 방향에서 목표까지 얼마나 돌아야 하는가
+	const APlayerController* Controller = GetOwningPlayer();
+	const APawn* Pawn = GetOwningPlayerPawn();
+	if (!Controller || !Controller->PlayerCameraManager || !Pawn) { return; }
+
+	const FVector ToTarget = ArrowTargetLocation - Pawn->GetActorLocation();
+	const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(ToTarget.Y, ToTarget.X));
+	const float CameraYaw = Controller->PlayerCameraManager->GetCameraRotation().Yaw;
+	DirectionArrow->SetAngleDegrees(FRotator::NormalizeAxis(TargetYaw - CameraYaw));
 }
 
 void UCTHUDWidget::ShowNotice(const FText& Message, float Seconds)

@@ -36,10 +36,12 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ACTPlayerState, AssignedColor);
-	DOREPLIFETIME(ACTPlayerState, TargetColor);
+	// 목표 색은 본인에게만 알림. 다른 사람이 누구를 노리는지, 누가 나를 노리는지는 클라이언트가 알 수 없음
+	DOREPLIFETIME_CONDITION(ACTPlayerState, TargetColor, COND_OwnerOnly);
 	DOREPLIFETIME(ACTPlayerState, TailCount);
-	DOREPLIFETIME(ACTPlayerState, PhoneUsesLeft);
+	DOREPLIFETIME(ACTPlayerState, PhoneReadyServerTime);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
+	DOREPLIFETIME(ACTPlayerState, bForfeited);
 	DOREPLIFETIME(ACTPlayerState, bReady);
 	DOREPLIFETIME(ACTPlayerState, bIsHost);
 }
@@ -99,8 +101,19 @@ void ACTPlayerState::SetIsGhost(bool bNewIsGhost)
 	if (bIsGhost == bNewIsGhost) { return; }
 
 	bIsGhost = bNewIsGhost;
+	if (bNewIsGhost) { bGhostRelocateUsed = false; } // 새 유령 상태마다 한 번씩
 	ForceNetUpdate();
 	OnRep_IsGhost();
+}
+
+void ACTPlayerState::SetForfeited(bool bNewForfeited)
+{
+	if (!HasAuthority()) { return; }
+	if (bForfeited == bNewForfeited) { return; }
+
+	bForfeited = bNewForfeited;
+	ForceNetUpdate();
+	OnRep_Lobby();
 }
 
 void ACTPlayerState::SetReady(bool bNewReady)
@@ -198,15 +211,8 @@ void ACTPlayerState::NotifyPawnGhostState()
 	}
 }
 
-void ACTPlayerState::SetPhoneUsesLeft(int32 NewUses)
+void ACTPlayerState::SetPhoneReadyServerTime(double NewReadyTime)
 {
 	if (!HasAuthority()) { return; }
-	PhoneUsesLeft = FMath::Max(NewUses, 0);
-}
-
-bool ACTPlayerState::ConsumePhoneUse()
-{
-	if (!HasAuthority() || PhoneUsesLeft <= 0) { return false; }
-	--PhoneUsesLeft;
-	return true;
+	PhoneReadyServerTime = NewReadyTime;
 }

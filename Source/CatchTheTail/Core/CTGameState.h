@@ -85,6 +85,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	bool CanStartLobby() const;
 
+	// 경기 중이고 기권이 열리는 시각이 지났는가
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	bool CanForfeitNow() const;
+
+	// 기권이 열릴 때까지 남은 초. 이미 열렸거나 경기 중이 아니면 0
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	float GetForfeitUnlockRemainingSeconds() const;
+
 	double GetRoundEndServerTime() const { return RoundEndServerTime; }
 	double GetGameEndServerTime() const { return GameEndServerTime; }
 
@@ -112,6 +120,9 @@ public:
 	void SetReturnToLobbyTime(double NewServerTime);
 	void SetRoundInfo(int32 NewRoundNumber, double NewRoundEndServerTime);
 	void SetGameInfo(double NewGameEndServerTime, float NewRoundDurationSeconds, float NewCountdownSeconds);
+
+	// 기권이 열리는 서버 시각
+	void SetForfeitUnlockTime(double NewServerTime);
 
 	// SetPhase(Finished)보다 먼저 호출
 	void SetGameResult(const TArray<ACTPlayerState*>& NewWinners, bool bNewIsTie);
@@ -160,6 +171,10 @@ protected:
 	// 게임 종료 서버 시각
 	UPROPERTY(Replicated)
 	double GameEndServerTime = 0.0;
+
+	// 기권이 열리는 서버 시각 (0이면 아직 정해지지 않음)
+	UPROPERTY(Replicated)
+	double ForfeitUnlockServerTime = 0.0;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|Game")
 	float RoundDurationSeconds = 60.f;

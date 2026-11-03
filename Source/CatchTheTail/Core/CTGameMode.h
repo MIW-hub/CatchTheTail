@@ -33,6 +33,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void StartGame();
 
+	// 전화 재사용 대기(초), 0이면 전화 사용 불가
+	float GetPhoneCooldownSeconds() const { return PhoneCooldownSeconds; }
+
 	// 시간 종료 시 자동 호출
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void EndGame();
@@ -42,6 +45,12 @@ public:
 
 	// 서버, 점수 변경 + 유령 처리
 	bool HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
+
+	// 서버, 기권 요청. 경기 중이고 기권이 열린 뒤에만 가능. 꼬리를 잃고 순위에서 빠져 유령으로 남음
+	bool HandleForfeit(ACTPlayerState* Forfeiter);
+
+	// 서버, 유령이 F키로 무작위 PlayerStart 로 이동. 유령 상태마다 한 번만 가능하며 유령 상태는 그대로이고 부활은 다음 라운드 시작 때
+	bool HandleGhostRelocate(ACTPlayerState* Ghost);
 
 	// 블루프린트 이벤트
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
@@ -75,13 +84,24 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	int32 InitialTailCount = 1;
 
-	// 전화부스 한 판 사용 횟수 (플레이어마다)
+	// 전화를 한 번 건 뒤 다시 걸기까지의 대기 시간(초, 플레이어마다). 0이면 전화 사용 불가
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Gimmick", meta = (ClampMin = "0"))
-	int32 PhoneUsesPerGame = 2;
+	float PhoneCooldownSeconds = 30.f;
 
 	// 꼬리가 이 수보다 적으면 새 라운드에 채움, 0이면 안 채움
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	int32 MinTailCountAtRoundStart = 1;
+
+	// 꼬리를 잡으면 상대가 가진 꼬리를 모두 가져옴 (끄면 1개만)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")
+	bool bTakeAllTailsOnGrab = true;
+
+	// 유령이 이동할 시작점에서 이 거리 안에 다른 캐릭터가 있으면 그 시작점은 피함 (cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
+	float GhostRelocateClearRadius = 200.f;
+	// 전체 경기 시간의 이 비율이 지나면 기권할 수 있음 (0.5 = 절반)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0", ClampMax = "1"))
+	float ForfeitAvailableRatio = 0.5f;
 
 	// 종료 후 자동 로비 복귀 시간(초), 0이면 없음
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
@@ -120,13 +140,12 @@ private:
 	// 전원 추격 버프 재계산
 	void RefreshAllChaseBuffs();
 
-	// 관전자 제외 플레이어
+	// 관전자와 기권한 플레이어를 뺀, 경기에 참여 중인 플레이어
 	TArray<ACTPlayerState*> CollectPlayers() const;
 
 	// 대기 로비로 Seamless Travel
 	void ReturnToLobby();
 
-	FTimerHandle ReturnToLobbyTimerHandle;
-	FTimerHandle FlowTimerHandle;
+	FTimerHandle ReturnToLobbyTimerHandle;	FTimerHandle FlowTimerHandle;
 	FTimerHandle AutoStartTimerHandle;
 };

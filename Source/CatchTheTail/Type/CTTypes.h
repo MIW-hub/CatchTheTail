@@ -51,7 +51,16 @@ enum class ECTCharacterAction : uint8
 	Grab   UMETA(DisplayName = "Grab"),   // 잡기 (왼손)
 	Push   UMETA(DisplayName = "Push"),   // 밀기 (오른손)
 	Caught UMETA(DisplayName = "Caught"), // 꼬리를 잡힘
-	Pushed UMETA(DisplayName = "Pushed")  // 밀려남
+	Pushed UMETA(DisplayName = "Pushed"), // 밀려남 (앞으로 엎어짐)
+	PushedBack UMETA(DisplayName = "Pushed Back") // 밀려남 (뒤로 넘어짐)
+};
+
+// 전화부스에서 알아보는 대상
+UENUM(BlueprintType)
+enum class ECTPhoneQuery : uint8
+{
+	Target UMETA(DisplayName = "Target"), // 내가 잡을 사람
+	Hunter UMETA(DisplayName = "Hunter")  // 나를 쫓는 사람
 };
 
 // 속도 버프. 배율 = 1 + 값의 합

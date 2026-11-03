@@ -106,7 +106,16 @@ void UCTSettingsWidget::RefreshAll()
 	}
 	if (Panel_ChangeName)
 	{
-		Panel_ChangeName->SetVisibility(Settings->CanChangePlayerName() ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		Panel_ChangeName->SetVisibility((Settings->CanChangePlayerName() && !bNameChangeHidden) ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (bNameChangeHidden)
+	{
+		// 이름 영역이 패널 밖에 따로 놓여 있어도 함께 숨김
+		UWidget* NameWidgets[] = { Button_ChangeNameOpen, Row_NameChange, Button_ChangeName, EditableTextBox_NewName, Text_NameMessage };
+		for (UWidget* NameWidget : NameWidgets)
+		{
+			if (NameWidget) { NameWidget->SetVisibility(ESlateVisibility::Collapsed); }
+		}
 	}
 
 	RefreshLanguage();
@@ -287,10 +296,16 @@ void UCTSettingsWidget::HandleKeyRebound(FName ActionId, FKey NewKey)
 	BuildControlRows();
 }
 
+void UCTSettingsWidget::SetNameChangeHidden(bool bHidden)
+{
+	bNameChangeHidden = bHidden;
+	RefreshAll();
+}
+
 void UCTSettingsWidget::HandleChangeNameClicked()
 {
 	UCTSettingsSubsystem* Settings = GetSettings();
-	if (!Settings) { return; }
+	if (!Settings || bNameChangeHidden) { return; }
 
 	const FString Input = EditableTextBox_NewName ? EditableTextBox_NewName->GetText().ToString() : FString();
 
@@ -315,6 +330,8 @@ void UCTSettingsWidget::HandleChangeNameOpenClicked()
 
 void UCTSettingsWidget::SetNameChangeOpen(bool bOpen)
 {
+	if (bNameChangeHidden) { bOpen = false; }
+
 	if (Row_NameChange)
 	{
 		Row_NameChange->SetVisibility(bOpen ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);

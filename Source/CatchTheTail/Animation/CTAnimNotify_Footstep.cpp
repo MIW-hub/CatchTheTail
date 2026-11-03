@@ -1,6 +1,7 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTAnimNotify_Footstep.h"
 #include "../Core/CTAudioSubsystem.h"
+#include "../Player/CTCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -12,6 +13,10 @@ void UCTAnimNotify_Footstep::Notify(USkeletalMeshComponent* MeshComp, UAnimSeque
 	// 에디터 미리보기나 전용 서버에서는 소리를 내지 않음
 	UWorld* World = MeshComp ? MeshComp->GetWorld() : nullptr;
 	if (!World || !World->IsGameWorld() || World->GetNetMode() == NM_DedicatedServer) { return; }
+
+	// 유령은 발소리를 내지 않음
+	const ACTCharacter* Character = Cast<ACTCharacter>(MeshComp->GetOwner());
+	if (Character && Character->IsGhost()) { return; }
 
 	UGameInstance* GameInstance = World->GetGameInstance();
 	UCTAudioSubsystem* Audio = GameInstance ? GameInstance->GetSubsystem<UCTAudioSubsystem>() : nullptr;

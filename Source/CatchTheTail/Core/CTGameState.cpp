@@ -22,6 +22,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, MatchSettings);
 	DOREPLIFETIME(ACTGameState, ReturnToLobbyServerTime);
 	DOREPLIFETIME(ACTGameState, GameEndServerTime);
+	DOREPLIFETIME(ACTGameState, ForfeitUnlockServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
 	DOREPLIFETIME(ACTGameState, CountdownSeconds);
 	DOREPLIFETIME(ACTGameState, Winners);
@@ -64,6 +65,17 @@ float ACTGameState::GetRoundRemainingSeconds() const
 {
 	if (Phase != ECTGamePhase::Playing) { return 0.f; }
 	return static_cast<float>(FMath::Max(0.0, RoundEndServerTime - GetServerWorldTimeSeconds()));
+}
+
+bool ACTGameState::CanForfeitNow() const
+{
+	return Phase == ECTGamePhase::Playing && ForfeitUnlockServerTime > 0.0 && GetServerWorldTimeSeconds() >= ForfeitUnlockServerTime;
+}
+
+float ACTGameState::GetForfeitUnlockRemainingSeconds() const
+{
+	if (Phase != ECTGamePhase::Playing) { return 0.f; }
+	return static_cast<float>(FMath::Max(0.0, ForfeitUnlockServerTime - GetServerWorldTimeSeconds()));
 }
 
 float ACTGameState::GetGameRemainingSeconds() const
@@ -214,6 +226,14 @@ void ACTGameState::SetGameInfo(double NewGameEndServerTime, float NewRoundDurati
 	GameEndServerTime = NewGameEndServerTime;
 	RoundDurationSeconds = NewRoundDurationSeconds;
 	CountdownSeconds = NewCountdownSeconds;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetForfeitUnlockTime(double NewServerTime)
+{
+	if (!HasAuthority()) { return; }
+
+	ForfeitUnlockServerTime = NewServerTime;
 	ForceNetUpdate();
 }
 

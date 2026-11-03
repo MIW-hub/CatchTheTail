@@ -18,6 +18,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
 	static int32 MakeWidgetTextsLocalizable(UBlueprint* WidgetBlueprint);
 
+	// 로비 위젯의 경기 설정 항목 이름/값 글자를 코드의 현재 문구로 다시 채움 (문구가 바뀐 뒤 번역 충돌 방지). 바꾼 개수 반환
+	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
+	static int32 RefreshMatchSettingTexts(UBlueprint* WidgetBlueprint);
+
+	// 머티리얼 그래프의 코멘트 박스(MaterialExpressionComment) 크기 지정. 파이썬에서는 크기를 못 바꿔서 둠
+	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
+	static void SetMaterialCommentSize(UObject* CommentNode, int32 Width, int32 Height);
+
 	// 폰트에 보조 폰트 추가. 이미 있으면 false
 	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
 	static bool AddFallbackFontFace(UFont* TargetFont, UObject* FontFaceAsset, FName EntryName);

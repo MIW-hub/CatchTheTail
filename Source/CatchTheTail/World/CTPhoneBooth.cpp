@@ -1,19 +1,26 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTPhoneBooth.h"
+#include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
+#include "../Player/CTPlayerController.h"
 #include "../Player/CTPlayerState.h"
+#include "../UI/CTHUDWidget.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "EngineUtils.h"
 #include "GameFramework/PlayerState.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
 {
-	// 부스 확인 간격(초)
+	// 통화 진행 확인 간격(초)
 	constexpr float ServerCheckInterval = 0.1f;
+
+	// 설정을 못 읽었을 때 쓰는 쿨타임(초)
+	constexpr float FallbackCooldownSeconds = 30.f;
 }
 
 ACTPhoneBooth::ACTPhoneBooth()
@@ -44,6 +51,9 @@ void ACTPhoneBooth::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 들어온 사람 화면에 사용법 안내 (모든 화면에서 겹침이 계산되므로 조종하는 쪽만 반응)
+	Trigger->OnComponentBeginOverlap.AddUniqueDynamic(this, &ACTPhoneBooth::HandleBeginOverlap);
+
 	// 임시 모양일 때만 빨강
 	if (Mesh->GetNumMaterials() > 0 && Mesh->GetMaterial(0) && Mesh->GetMaterial(0)->GetName().Contains(TEXT("BasicShapeMaterial")))
 	{
@@ -64,13 +74,25 @@ void ACTPhoneBooth::Tick(float DeltaSeconds)
 	if (TickAccumulator >= ServerCheckInterval)
 	{
 		TickAccumulator = 0.f;
-		ServerTick(GetWorld()->GetTimeSeconds());
+		ServerTick();
 	}
 }
 
 bool ACTPhoneBooth::IsCharacterInside(const ACTCharacter* Character) const
 {
 	return Character && Trigger->IsOverlappingActor(Character);
+}
+
+ACTPhoneBooth* ACTPhoneBooth::FindBoothContaining(const ACTCharacter* Character)
+{
+	UWorld* World = Character ? Character->GetWorld() : nullptr;
+	if (!World) { return nullptr; }
+
+	for (TActorIterator<ACTPhoneBooth> It(World); It; ++It)
+	{
+		if (It->IsCharacterInside(Character)) { return *It; }
+	}
+	return nullptr;
 }
 
 bool ACTPhoneBooth::CanUsePhone(const ACTCharacter* Character)
@@ -82,55 +104,71 @@ bool ACTPhoneBooth::CanUsePhone(const ACTCharacter* Character)
 	return CTGameState && PlayerState
 		&& CTGameState->GetPhase() == ECTGamePhase::Playing
 		&& !PlayerState->IsGhost()
+		&& !PlayerState->IsForfeited()
 		&& PlayerState->GetAssignedColor() != ECTColor::None;
 }
 
-void ACTPhoneBooth::ServerTick(double Now)
+void ACTPhoneBooth::HandleBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	// 사용 중: 나가거나 유령이면 취소, 끝나면 결과
-	if (ACTCharacter* Current = CurrentUser.Get())
+	const ACTCharacter* Character = Cast<ACTCharacter>(OtherActor);
+	if (!Character || !Character->IsLocallyControlled() || !CanUsePhone(Character)) { return; }
+
+	const ACTPlayerController* Controller = Cast<ACTPlayerController>(Character->GetController());
+	if (UCTHUDWidget* HUD = Controller ? Controller->GetHUDWidget() : nullptr)
 	{
-		if (!IsCharacterInside(Current) || !CanUsePhone(Current)) { CancelUse(); }
-		else if (Now >= UseEndTime) { FinishUse(Now); }
-		return;
-	}
-	CurrentUser.Reset();
-
-	// 나간 사람은 목록에서 뺌
-	for (auto It = WaitForExit.CreateIterator(); It; ++It)
-	{
-		if (!It->IsValid() || !IsCharacterInside(It->Get())) { It.RemoveCurrent(); }
-	}
-
-	if (Now < CooldownEndTime) { return; }
-
-	TArray<AActor*> Overlapping;
-	Trigger->GetOverlappingActors(Overlapping, ACTCharacter::StaticClass());
-	for (AActor* Actor : Overlapping)
-	{
-		ACTCharacter* Character = Cast<ACTCharacter>(Actor);
-		if (!Character || !CanUsePhone(Character) || WaitForExit.Contains(Character)) { continue; }
-
-		BeginUse(Character, Now);
-		return;
+		HUD->ShowNotice(NSLOCTEXT("CT", "Phone_EnterPrompt", "F키로 전화 걸기"), EnterPromptSeconds);
 	}
 }
 
-void ACTPhoneBooth::BeginUse(ACTCharacter* Character, double Now)
+void ACTPhoneBooth::ServerTick()
 {
-	ACTPlayerState* PlayerState = Character->GetPlayerState<ACTPlayerState>();
-	if (!PlayerState) { return; }
-
-	// 횟수 소진은 한 번만 안내
-	if (PlayerState->GetPhoneUsesLeft() <= 0)
+	ACTCharacter* Current = CurrentUser.Get();
+	if (!Current)
 	{
-		WaitForExit.Add(Character);
-		Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_NoUses", "전화를 더 쓸 수 없습니다."), NoticeSeconds);
+		CurrentUser.Reset();
+		return;
+	}
+
+	// 나가거나 유령이 되면 취소, 끝나면 결과
+	if (!IsCharacterInside(Current) || !CanUsePhone(Current)) { CancelUse(); }
+	else if (GetWorld()->GetTimeSeconds() >= UseEndTime) { FinishUse(); }
+}
+
+void ACTPhoneBooth::ServerRequestCall(ACTCharacter* Character, ECTPhoneQuery Query)
+{
+	UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	ACTPlayerState* PlayerState = Character ? Character->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!HasAuthority() || !CTGameState || !PlayerState) { return; }
+
+	// 서버 재검사: 부스 안, 경기 중, 이미 통화 중이 아님
+	if (!IsCharacterInside(Character) || !CanUsePhone(Character) || Character->IsBoothLocked()) { return; }
+
+	const ACTGameMode* GameMode = World->GetAuthGameMode<ACTGameMode>();
+	const float CooldownSeconds = GameMode ? GameMode->GetPhoneCooldownSeconds() : FallbackCooldownSeconds;
+	if (CooldownSeconds <= 0.f)
+	{
+		Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_Disabled", "이번 경기에서는 전화를 쓸 수 없습니다."), NoticeSeconds);
+		return;
+	}
+
+	if (CurrentUser.IsValid())
+	{
+		Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_Busy", "다른 사람이 통화 중입니다."), NoticeSeconds);
+		return;
+	}
+
+	const double CooldownRemaining = PlayerState->GetPhoneReadyServerTime() - CTGameState->GetServerWorldTimeSeconds();
+	if (CooldownRemaining > 0.0)
+	{
+		Character->ClientShowNotice(FText::Format(NSLOCTEXT("CT", "Phone_Cooldown", "아직 전화를 걸 수 없습니다. ({0}초)"),
+			FText::AsNumber(FMath::CeilToInt(CooldownRemaining))), NoticeSeconds);
 		return;
 	}
 
 	CurrentUser = Character;
-	UseEndTime = Now + UseDurationSeconds;
+	CurrentQuery = Query;
+	UseEndTime = World->GetTimeSeconds() + UseDurationSeconds;
 	Character->SetBoothLocked(true);
 	Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_Calling", "전화 거는 중..."), UseDurationSeconds);
 	BP_OnUseStarted(Character);
@@ -147,55 +185,76 @@ void ACTPhoneBooth::CancelUse()
 	}
 }
 
-void ACTPhoneBooth::FinishUse(double Now)
+void ACTPhoneBooth::FinishUse()
 {
 	ACTCharacter* Character = CurrentUser.Get();
 	CurrentUser.Reset();
 	if (!Character) { return; }
 
 	Character->SetBoothLocked(false);
-	WaitForExit.Add(Character);
-	CooldownEndTime = Now + BoothCooldownSeconds;
 
 	ACTPlayerState* MyState = Character->GetPlayerState<ACTPlayerState>();
 	const ACTGameState* CTGameState = GetWorld()->GetGameState<ACTGameState>();
+	const bool bAskTarget = CurrentQuery == ECTPhoneQuery::Target;
 
-	// 목표 = 목표 색의 비유령
-	ACTCharacter* Target = nullptr;
+	// 알아낼 사람: 목표 = 목표 색을 가진 사람, 헌터 = 내 색을 목표로 가진 사람 (유령 제외)
+	ACTCharacter* Found = nullptr;
 	if (MyState && CTGameState)
 	{
 		for (APlayerState* OtherState : CTGameState->PlayerArray)
 		{
 			const ACTPlayerState* Other = Cast<ACTPlayerState>(OtherState);
-			if (Other && Other != MyState && !Other->IsGhost() && Other->GetAssignedColor() == MyState->GetTargetColor())
+			if (!Other || Other == MyState || Other->IsGhost()) { continue; }
+
+			const bool bMatches = bAskTarget
+				? Other->GetAssignedColor() == MyState->GetTargetColor()
+				: Other->GetTargetColor() == MyState->GetAssignedColor();
+			if (bMatches)
 			{
-				Target = Cast<ACTCharacter>(Other->GetPawn());
-				break;
+				Found = Cast<ACTCharacter>(Other->GetPawn());
+				if (Found) { break; }
 			}
 		}
 	}
 
-	if (!Target || !MyState)
+	if (!Found || !MyState)
 	{
-		// 횟수 소모 없음
-		Character->ClientShowNotice(NSLOCTEXT("CT", "Phone_NoTarget", "목표를 찾을 수 없습니다."), NoticeSeconds);
+		// 쿨타임 소모 없음
+		Character->ClientShowNotice(bAskTarget
+			? NSLOCTEXT("CT", "Phone_NoTarget", "목표를 찾을 수 없습니다.")
+			: NSLOCTEXT("CT", "Phone_NoHunter", "헌터를 찾을 수 없습니다."), NoticeSeconds);
 		BP_OnUseFinished(Character, false);
 		return;
 	}
 
-	MyState->ConsumePhoneUse();
-	const int32 UsesLeft = MyState->GetPhoneUsesLeft();
+	const ACTGameMode* GameMode = GetWorld()->GetAuthGameMode<ACTGameMode>();
+	const float CooldownSeconds = GameMode ? GameMode->GetPhoneCooldownSeconds() : FallbackCooldownSeconds;
+	MyState->SetPhoneReadyServerTime(CTGameState->GetServerWorldTimeSeconds() + CooldownSeconds);
 
-	// 거리는 구간만 (방향 없음)
-	const float DistanceMeters = FVector::Dist(Character->GetActorLocation(), Target->GetActorLocation()) / 100.f;
+	// 거리는 구간으로만, 방향은 목표를 물었을 때만 화살표로 알려줌
+	const float DistanceMeters = FVector::Dist(Character->GetActorLocation(), Found->GetActorLocation()) / 100.f;
 	const int32 Step = FMath::Max(FMath::RoundToInt(DistanceStepMeters), 1);
 	const int32 Rounded = FMath::RoundToInt(DistanceMeters / Step) * Step;
+	const bool bNear = Rounded < Step;
 
-	const FText Result = Rounded < Step
-		? FText::Format(NSLOCTEXT("CT", "Phone_ResultNear", "목표가 {0}m 이내에 있습니다. (남은 횟수 {1})"), FText::AsNumber(Step), FText::AsNumber(UsesLeft))
-		: FText::Format(NSLOCTEXT("CT", "Phone_Result", "목표가 약 {0}m 거리에 있습니다. (남은 횟수 {1})"), FText::AsNumber(Rounded), FText::AsNumber(UsesLeft));
+	FText Result;
+	if (bAskTarget)
+	{
+		Result = bNear
+			? FText::Format(NSLOCTEXT("CT", "Phone_ResultNear", "목표가 {0}m 이내에 있습니다."), FText::AsNumber(Step))
+			: FText::Format(NSLOCTEXT("CT", "Phone_Result", "목표가 약 {0}m 거리에 있습니다."), FText::AsNumber(Rounded));
+	}
+	else
+	{
+		Result = bNear
+			? FText::Format(NSLOCTEXT("CT", "Phone_HunterNear", "헌터가 {0}m 이내에 있습니다."), FText::AsNumber(Step))
+			: FText::Format(NSLOCTEXT("CT", "Phone_HunterResult", "헌터가 약 {0}m 거리에 있습니다."), FText::AsNumber(Rounded));
+	}
 
-	Character->ClientShowNotice(Result, NoticeSeconds);
-	Target->ClientShowNotice(NSLOCTEXT("CT", "Phone_Found", "누군가 당신을 찾았습니다!"), NoticeSeconds);
+	Character->ClientShowPhoneResult(Result, NoticeSeconds, /*bShowArrow=*/bAskTarget, Found->GetActorLocation());
+	if (bAskTarget)
+	{
+		Found->ClientShowNotice(NSLOCTEXT("CT", "Phone_Found", "누군가 당신을 찾았습니다!"), NoticeSeconds);
+	}
 	BP_OnUseFinished(Character, true);
 }

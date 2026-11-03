@@ -6,7 +6,10 @@
 #include "../Player/CTPlayerController.h"
 #include "CatchTheTail/Player/CTCharacter.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
 
 
@@ -34,9 +37,9 @@ void ACTGameMode::InitGameState()
 	GameDurationSeconds = Settings.GameMinutes * 60.f;
 	RoundDurationSeconds = static_cast<float>(Settings.RoundSeconds);
 	InitialTailCount = Settings.InitialTails;
-	PhoneUsesPerGame = Settings.PhoneUses;
+	PhoneCooldownSeconds = static_cast<float>(Settings.PhoneUses);
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 경기 설정 적용: %d분, 라운드 %d초, 시작 꼬리 %d, 전화 %d회, 부쉬 %s"),
+	UE_LOG(LogTemp, Log, TEXT("[CT] 경기 설정 적용: %d분, 라운드 %d초, 시작 꼬리 %d, 전화 쿨타임 %d초, 부쉬 %s"),
 		Settings.GameMinutes, Settings.RoundSeconds, Settings.InitialTails, Settings.PhoneUses, Settings.IsBushEnabled() ? TEXT("켜기") : TEXT("끄기"));
 }
 
@@ -102,6 +105,9 @@ void ACTGameMode::Logout(AController* Exiting)
 
 void ACTGameMode::HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer)
 {
+	// PIE 종료, 맵 이동으로 월드가 정리되는 중의 로그아웃은 게임 종료로 처리하지 않음 (결과 위젯 생성 중 크래시 방지)
+	if (!GetWorld() || GetWorld()->bIsTearingDown) { return; }
+
 	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
@@ -181,17 +187,24 @@ void ACTGameMode::StartGame()
 	// 이전 결과 초기화
 	CTGameState->SetGameResult({}, false);
 
+	// 이전 판의 기권 기록 해제 (기권한 플레이어는 CollectPlayers에서 빠지므로 따로 처리)
+	for (APlayerState* PlayerState : CTGameState->PlayerArray)
+	{
+		if (ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState)) { CTPlayerState->SetForfeited(false); }
+	}
+
 	// 플레이어 초기화
 	for (ACTPlayerState* PlayerState : CollectPlayers())
 	{
 		PlayerState->SetColors(ECTColor::None, ECTColor::None); // 직전 색 없음
 		PlayerState->SetTailCount(InitialTailCount);
 		PlayerState->SetIsGhost(false);
-		PlayerState->SetPhoneUsesLeft(PhoneUsesPerGame);
+		PlayerState->SetPhoneReadyServerTime(0.0); // 시작하자마자 한 번은 걸 수 있음
 	}
 
 	const double Now = CTGameState->GetServerWorldTimeSeconds();
 	CTGameState->SetGameInfo(Now + GameDurationSeconds, RoundDurationSeconds, CountdownSeconds);
+	CTGameState->SetForfeitUnlockTime(Now + GameDurationSeconds * ForfeitAvailableRatio);
 	CTGameState->SetRoundInfo(0, Now);
 	CTGameState->SetPhase(ECTGamePhase::Playing);
 
@@ -440,9 +453,10 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	if (Grabber->GetTargetColor() == ECTColor::None) { return false; }
 	if (Victim->GetAssignedColor() != Grabber->GetTargetColor()) { return false; }
 
-	// 잡은 쪽 +1, 잡힌 쪽 -1 후 유령
-	Grabber->AddTailCount(1);
-	Victim->AddTailCount(-1);
+	// 잡힌 쪽은 꼬리를 잃고 유령. 잡은 쪽은 빼앗은 만큼 얻음 (최소 1개)
+	const int32 Taken = bTakeAllTailsOnGrab ? FMath::Max(Victim->GetTailCount(), 1) : 1;
+	Grabber->AddTailCount(Taken);
+	Victim->SetTailCount(FMath::Max(Victim->GetTailCount() - Taken, 0));
 	Victim->SetIsGhost(true);
 
 	// 잡힘 연출, 다른 경로도 동일 재생
@@ -453,6 +467,89 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] %s 이(가) %s 의 꼬리를 잡음"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());
 	OnTailGrabbed(Grabber, Victim);
+	return true;
+}
+
+bool ACTGameMode::HandleForfeit(ACTPlayerState* Forfeiter)
+{
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || !Forfeiter || Forfeiter->IsOnlyASpectator()) { return false; }
+
+	// 경기 중, 기권이 열린 뒤, 한 번만
+	if (!CTGameState->CanForfeitNow() || Forfeiter->IsForfeited()) { return false; }
+
+	// 꼬리를 모두 잃고 유령으로 남음. 이후 CollectPlayers에서 빠져 색 배정, 순위, 승자 계산에서 제외됨
+	Forfeiter->SetForfeited(true);
+	Forfeiter->SetTailCount(0);
+	Forfeiter->SetColors(ECTColor::None, ECTColor::None);
+	Forfeiter->SetIsGhost(true);
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] %s 기권"), *Forfeiter->GetPlayerName());
+
+	RefreshAllChaseBuffs();
+
+	// 이탈과 같이 처리: 남은 사람끼리 목표 색 재연결, 혼자 남으면 종료
+	HandlePlayerLeftDuringGame(Forfeiter);
+	return true;
+}
+
+bool ACTGameMode::HandleGhostRelocate(ACTPlayerState* Ghost)
+{
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+
+	// 유령이고 기권하지 않은 플레이어만
+	if (!Ghost || !Ghost->IsGhost() || Ghost->IsForfeited() || Ghost->IsOnlyASpectator()) { return false; }
+
+	ACTCharacter* Character = Cast<ACTCharacter>(Ghost->GetPawn());
+	UWorld* World = GetWorld();
+	if (!Character || !World) { return false; }
+
+	// 유령 상태마다 한 번만
+	if (Ghost->HasUsedGhostRelocate())
+	{
+		Character->ClientShowNotice(NSLOCTEXT("CT", "Ghost_RelocateUsed", "이동은 유령 상태에서 한 번만 쓸 수 있어요."), 3.f);
+		return false;
+	}
+
+	// 다른 캐릭터가 서 있지 않은 시작점을 우선 무작위로 고름, 모두 사용 중이면 아무 곳이나
+	TArray<APlayerStart*> Starts;
+	TArray<APlayerStart*> FreeStarts;
+	for (TActorIterator<APlayerStart> It(World); It; ++It)
+	{
+		APlayerStart* Start = *It;
+		Starts.Add(Start);
+
+		bool bOccupied = false;
+		for (TActorIterator<ACTCharacter> CharIt(World); CharIt; ++CharIt)
+		{
+			if (*CharIt != Character && FVector::DistSquared(CharIt->GetActorLocation(), Start->GetActorLocation()) < FMath::Square(GhostRelocateClearRadius))
+			{
+				bOccupied = true;
+				break;
+			}
+		}
+		if (!bOccupied) { FreeStarts.Add(Start); }
+	}
+
+	const TArray<APlayerStart*>& Candidates = FreeStarts.Num() > 0 ? FreeStarts : Starts;
+	if (Candidates.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] PlayerStart 가 없어 유령 부활 위치를 고를 수 없습니다."));
+		return false;
+	}
+
+	const APlayerStart* Spot = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+	Character->TeleportTo(Spot->GetActorLocation(), Spot->GetActorRotation(), false, true);
+	Character->GetCharacterMovement()->StopMovementImmediately();
+	if (AController* Controller = Character->GetController())
+	{
+		Controller->SetControlRotation(Spot->GetActorRotation());
+	}
+
+	// 유령 상태는 그대로, 부활은 다음 라운드 시작 때 (이동한 자리에서)
+	Ghost->MarkGhostRelocateUsed();
+	UE_LOG(LogTemp, Log, TEXT("[CT] %s 유령 이동: %s"), *Ghost->GetPlayerName(), *Spot->GetName());
 	return true;
 }
 
@@ -478,7 +575,7 @@ TArray<ACTPlayerState*> ACTGameMode::CollectPlayers() const
 		for (APlayerState* PlayerState : GameState->PlayerArray)
 		{
 			ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
-			if (CTPlayerState && !CTPlayerState->IsOnlyASpectator())
+			if (CTPlayerState && !CTPlayerState->IsOnlyASpectator() && !CTPlayerState->IsForfeited())
 			{
 				Result.Add(CTPlayerState);
 			}

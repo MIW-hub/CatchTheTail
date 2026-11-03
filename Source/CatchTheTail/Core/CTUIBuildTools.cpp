@@ -17,6 +17,7 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/ProgressBar.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
 #include "Components/ScrollBox.h"
@@ -531,6 +532,420 @@ int32 UCTUIBuildTools::BuildHudSkillSlots(UBlueprint* WidgetBlueprint, UMaterial
 #endif
 }
 
+#if WITH_EDITOR
+namespace
+{
+	const FLinearColor HudDarkText(0.2f, 0.06f, 0.24f, 1.f);
+	const FLinearColor HudOutline(0.33f, 0.02f, 0.22f, 1.f);
+
+	// 외곽선 있는 굵은 글자 (카드 밖/분홍 바탕 위에 올리는 글자)
+	UTextBlock* MakeHudText(const TCHAR* Name, const TCHAR* Source, float Size, const FLinearColor& Color, ETextJustify::Type Justify, int32 Outline, const FLinearColor& OutlineColor = HudOutline)
+	{
+		UTextBlock* Text = Make<UTextBlock>(Name);
+		Text->SetText(Loc(Name, Source));
+		FSlateFontInfo Font = MakeFont(TEXT("Bold"), 0);
+		Font.Size = Size;
+		Font.OutlineSettings.OutlineSize = Outline;
+		Font.OutlineSettings.OutlineColor = OutlineColor;
+		Text->SetFont(Font);
+		Text->SetColorAndOpacity(FSlateColor(Color));
+		Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Text->SetJustification(Justify);
+		return Text;
+	}
+
+	UImage* MakeHudImage(const TCHAR* Name, const TCHAR* TextureName, const FVector2D& Size)
+	{
+		UImage* Image = Make<UImage>(Name);
+		FSlateBrush Brush;
+		const FString Full(TextureName);
+		Brush.SetResourceObject(LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/2D/UI/%s.%s"), *Full, *FPaths::GetBaseFilename(Full))));
+		Brush.DrawAs = ESlateBrushDrawType::Image;
+		Brush.ImageSize = Size;
+		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	}
+
+	UCanvasPanelSlot* PlaceHud(UCanvasPanel* Parent, UWidget* Widget, FVector2D Pos, FVector2D Size, FVector2D Anchor, FVector2D Align)
+	{
+		UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Parent->AddChild(Widget));
+		CanvasSlot->SetAnchors(FAnchors(Anchor.X, Anchor.Y));
+		CanvasSlot->SetAlignment(Align);
+		CanvasSlot->SetPosition(Pos);
+		if (Size.X > 0.f || Size.Y > 0.f) { CanvasSlot->SetSize(Size); }
+		else { CanvasSlot->SetAutoSize(true); }
+		return CanvasSlot;
+	}
+
+	// 변수 위젯은 이름-GUID 표 등록 필요
+	void RegisterWidgetGuids(UBlueprint* WidgetBlueprint)
+	{
+		const FMapProperty* GuidMapProperty = CastField<FMapProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetVariableNameToGuidMap")));
+		if (!GuidMapProperty) { return; }
+
+		FScriptMapHelper GuidMap(GuidMapProperty, GuidMapProperty->ContainerPtrToValuePtr<void>(WidgetBlueprint));
+		// 지워진 위젯의 GUID 제거
+		for (int32 Index = GuidMap.GetMaxIndex() - 1; Index >= 0; --Index)
+		{
+			if (!GuidMap.IsValidIndex(Index)) { continue; }
+			const FName* Existing = reinterpret_cast<const FName*>(GuidMap.GetKeyPtr(Index));
+			if (!Tree->FindWidget(*Existing)) { GuidMap.RemoveAt(Index); }
+		}
+
+		TArray<UWidget*> All;
+		Tree->GetAllWidgets(All);
+		for (UWidget* Widget : All)
+		{
+			FName Key = Widget->GetFName();
+			if (Widget->bIsVariable && GuidMap.FindMapPairIndexFromHash(&Key) == INDEX_NONE)
+			{
+				FGuid Guid = FGuid::NewGuid();
+				GuidMap.AddPair(&Key, &Guid);
+			}
+		}
+	}
+
+	bool OpenTree(UBlueprint* WidgetBlueprint, const TCHAR* Name)
+	{
+		const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+		Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+		if (!Tree) { return false; }
+		WidgetCount = 0;
+		BlueprintName = Name;
+
+		TArray<UWidget*> OldWidgets;
+		Tree->GetAllWidgets(OldWidgets);
+		for (UWidget* Old : OldWidgets) { Tree->RemoveWidget(Old); }
+		Tree->RootWidget = nullptr;
+		return true;
+	}
+
+	int32 CloseTree(UBlueprint* WidgetBlueprint)
+	{
+		RegisterWidgetGuids(WidgetBlueprint);
+		BlueprintName = TEXT("WBP_CTSettingsWidget");
+		WidgetBlueprint->Modify();
+		WidgetBlueprint->MarkPackageDirty();
+		const int32 Created = WidgetCount;
+		Tree = nullptr;
+		return Created;
+	}
+}
+#endif
+
+int32 UCTUIBuildTools::BuildHudLayout(UBlueprint* WidgetBlueprint, UMaterialInterface* CooldownMaterial)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTHUDWidget"))) { return -1; }
+
+	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_HUD"));
+	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Canvas;
+
+	const FLinearColor White = FLinearColor::White;
+	const FVector2D TopLeft(0.f, 0.f), TopCenter(0.5f, 0.f), TopRight(1.f, 0.f), BottomLeft(0.f, 1.f), BottomRight(1.f, 1.f), Center(0.5f, 0.5f);
+
+	auto NewGroup = [](const TCHAR* Name)
+	{
+		UCanvasPanel* Group = Make<UCanvasPanel>(Name);
+		Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		return Group;
+	};
+
+	// 긴 번역 문구가 칸을 넘으면 칸에 맞게 줄어드는 상자 (커지지는 않음)
+	auto FitBox = [](const TCHAR* Name, UWidget* Child)
+	{
+		UScaleBox* Box = Make<UScaleBox>(Name);
+		Box->SetStretch(EStretch::ScaleToFit);
+		Box->SetStretchDirection(EStretchDirection::DownOnly);
+		Box->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UScaleBoxSlot* BoxSlot = Cast<UScaleBoxSlot>(Box->AddChild(Child));
+		BoxSlot->SetHorizontalAlignment(HAlign_Left);
+		BoxSlot->SetVerticalAlignment(VAlign_Center);
+		return Box;
+	};
+
+	// 왼쪽 위: 타겟 카드
+	{
+		UCanvasPanel* Group = NewGroup(TEXT("Group_Target"));
+		PlaceHud(Canvas, Group, FVector2D(40.f, 28.f), FVector2D(200.f, 107.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudImage(TEXT("Image_TargetPanel"), TEXT("UI_Target"), FVector2D(200.f, 107.f)), FVector2D::ZeroVector, FVector2D(200.f, 107.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(TEXT("Label_Target"), TEXT("타겟"), 15, White, ETextJustify::Center, 1), FVector2D(101.118622f, 12.816816f), FVector2D(0.f, 0.f), TopLeft, Center);
+
+		UTextBlock* Name = MakeHudText(TEXT("Text_TargetColor"), TEXT("목표 없음"), 26, HudDarkText, ETextJustify::Left, 0);
+		PlaceHud(Group, FitBox(TEXT("Fit_TargetColor"), Name), FVector2D(64.f, 28.f), FVector2D(116.f, 36.f), TopLeft, TopLeft);
+
+		UImage* Dot = Make<UImage>(TEXT("Image_TargetColor"));
+		Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+		PlaceHud(Group, Dot, FVector2D(16.f, 28.f), FVector2D(30.f, 30.f), TopLeft, TopLeft);
+	}
+
+	// 위 가운데: 시간 카드
+	{
+		UCanvasPanel* Group = NewGroup(TEXT("Group_Time"));
+		PlaceHud(Canvas, Group, FVector2D(0.f, 28.f), FVector2D(216.f, 109.f), TopCenter, TopCenter);
+		PlaceHud(Group, MakeHudImage(TEXT("Image_TimePanel"), TEXT("UI_Time"), FVector2D(216.f, 109.f)), FVector2D::ZeroVector, FVector2D(216.f, 109.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("라운드 1"), 15, White, ETextJustify::Center, 1), FVector2D(109.f, 12.f), FVector2D(130.f, 28.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(TEXT("Text_GameTime"), TEXT("5:00"), 31.5f, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(108.f, 44.f), FVector2D(200.f, 62.f), TopLeft, Center);
+
+		UHorizontalBox* EndRow = Make<UHorizontalBox>(TEXT("Row_RoundEnd"));
+		EndRow->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UHorizontalBoxSlot* EndLabel = EndRow->AddChildToHorizontalBox(MakeHudText(TEXT("Label_RoundEnd"), TEXT("라운드 종료"), 15, White, ETextJustify::Left, 0));
+		EndLabel->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		EndRow->AddChildToHorizontalBox(MakeHudText(TEXT("Text_RoundTime"), TEXT("0:30"), 15, White, ETextJustify::Left, 0));
+		PlaceHud(Group, EndRow, FVector2D(107.63063f, 83.135132f), FVector2D::ZeroVector, TopLeft, Center);
+	}
+
+	// 오른쪽 위: 순위표 카드 (줄이 늘면 아래로 커짐)
+	{
+		UBorder* Card = Make<UBorder>(TEXT("Card_Scoreboard"));
+		Card->SetBrush(ImageBrush(TEXT("UI_Ranking"), FMargin(0.14f, 0.4f, 0.14f, 0.14f), White));
+		Card->SetPadding(FMargin(10.f, 3.f, 10.f, 14.f));
+		Card->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		UVerticalBox* Inner = Make<UVerticalBox>(TEXT("Layout_Scoreboard"));
+		Inner->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Card->AddChild(Inner);
+
+		UHorizontalBox* Header = Make<UHorizontalBox>(TEXT("Row_ScoreboardHeader"));
+		Header->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UHorizontalBoxSlot* CrownSlot = Header->AddChildToHorizontalBox(Sized(TEXT("Size_ScoreboardCrown"), MakeHudImage(TEXT("Image_ScoreboardCrown"), TEXT("ico/ico_crown"), FVector2D(28.f, 28.f)), 28.f, 28.f));
+		CrownSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		CrownSlot->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* TitleSlot = Header->AddChildToHorizontalBox(MakeHudText(TEXT("Label_Scoreboard"), TEXT("순위표"), 15, White, ETextJustify::Left, 2));
+		TitleSlot->SetVerticalAlignment(VAlign_Center);
+		UVerticalBoxSlot* HeaderSlot = AddV(Inner, Sized(TEXT("Size_ScoreboardHeader"), Header, 0.f, 28.f), 6.f);
+		HeaderSlot->SetHorizontalAlignment(HAlign_Center);
+		HeaderSlot->SetVerticalAlignment(VAlign_Center);
+
+		const FLinearColor ColumnColor(0.42f, 0.25f, 0.48f, 1.f);
+		UHorizontalBox* Columns = Make<UHorizontalBox>(TEXT("Row_ScoreboardColumns"));
+		Columns->SetVisibility(ESlateVisibility::HitTestInvisible);
+		AddH(Columns, Sized(TEXT("Size_ColumnRank"), MakeHudText(TEXT("Label_ColumnRank"), TEXT("순위"), 14, ColumnColor, ETextJustify::Center, 0), 52.f, 0.f), 0.f, false);
+		AddH(Columns, MakeHudText(TEXT("Label_ColumnPlayer"), TEXT("플레이어"), 14, ColumnColor, ETextJustify::Left, 0), 0.f, true);
+		AddH(Columns, Sized(TEXT("Size_ColumnTail"), MakeHudText(TEXT("Label_ColumnTail"), TEXT("꼬리"), 14, ColumnColor, ETextJustify::Right, 0), 56.f, 0.f), 0.f, false);
+		AddV(Inner, Columns, 2.f);
+
+		UImage* Line = Make<UImage>(TEXT("Image_ScoreboardLine"));
+		Line->SetColorAndOpacity(FLinearColor(0.33f, 0.02f, 0.22f, 1.f));
+		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
+		AddV(Inner, Sized(TEXT("Size_ScoreboardLine"), Line, 0.f, 2.f), 4.f);
+
+		UVerticalBox* Rows = Make<UVerticalBox>(TEXT("VerticalBox_Scoreboard"));
+		Rows->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		AddV(Inner, Rows, 0.f);
+
+		USizeBox* Width = Sized(TEXT("Size_Scoreboard"), Card, 280.f, 0.f);
+		PlaceHud(Canvas, Width, FVector2D(-40.f, 28.f), FVector2D::ZeroVector, TopRight, TopRight);
+	}
+
+	// 왼쪽 아래: 내 꼬리
+	{
+		UCanvasPanel* Group = NewGroup(TEXT("Group_Tails"));
+		PlaceHud(Canvas, Group, FVector2D(40.f, -30.f), FVector2D(265.f, 70.f), BottomLeft, BottomLeft);
+		PlaceHud(Group, MakeHudImage(TEXT("Image_TailsPanel"), TEXT("UI_Tail"), FVector2D(265.f, 70.f)), FVector2D::ZeroVector, FVector2D(265.f, 70.f), TopLeft, TopLeft);
+		PlaceHud(Group, FitBox(TEXT("Fit_Tails"), MakeHudText(TEXT("Label_Tails"), TEXT("내 꼬리"), 22, White, ETextJustify::Left, 2)), FVector2D(76.f, 24.f), FVector2D(110.f, 32.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(TEXT("Text_TailCount"), TEXT("0"), 28, HudDarkText, ETextJustify::Center, 0), FVector2D(184.f, -8.f), FVector2D(66.f, 57.543545f), TopLeft, TopLeft);
+	}
+
+	// 오른쪽 아래: 키 안내 + 쿨타임 (키 칸 위에 시계 방향 덮개, 이름 옆에 남은 시간)
+	{
+		UHorizontalBox* Keys = Make<UHorizontalBox>(TEXT("Layout_Keys"));
+		Keys->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		struct FKeyHint { const TCHAR* Key; const TCHAR* Label; const TCHAR* Id; const TCHAR* KeyTexture; float KeyWidth; const TCHAR* Cool; const TCHAR* CoolText; };
+		const FKeyHint Hints[] = {
+			{ TEXT("Q"),     TEXT("꼬리잡기"), TEXT("Grab"), TEXT("UI_keyButton"),   41.f, TEXT("Image_CoolTime_1"), TEXT("Text_GrabCooldown") },
+			{ TEXT("E"),     TEXT("밀기"),     TEXT("Push"), TEXT("UI_keyButton"),   41.f, TEXT("Image_CoolTime_2"), TEXT("Text_PushCooldown") },
+			{ TEXT("SHIFT"), TEXT("달리기"),   TEXT("Run"),  TEXT("UI_KetButton_2"), 88.f, TEXT("Image_CoolTime"),   TEXT("Text_RunCooldown") },
+		};
+
+		for (const FKeyHint& Hint : Hints)
+		{
+			const FString Id(Hint.Id);
+			UHorizontalBox* Item = Make<UHorizontalBox>(*FString::Printf(TEXT("Row_Key%s"), *Id));
+			Item->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+			UOverlay* KeyOverlay = Make<UOverlay>(*FString::Printf(TEXT("Overlay_Key%s"), *Id));
+			KeyOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+			UOverlaySlot* KeyImageSlot = KeyOverlay->AddChildToOverlay(MakeHudImage(*FString::Printf(TEXT("Image_Key%s"), *Id), Hint.KeyTexture, FVector2D(Hint.KeyWidth, 36.f)));
+			KeyImageSlot->SetHorizontalAlignment(HAlign_Fill);
+			KeyImageSlot->SetVerticalAlignment(VAlign_Fill);
+
+			UImage* Cool = MakeHudImage(Hint.Cool, Hint.KeyTexture, FVector2D(Hint.KeyWidth, 36.f));
+			if (CooldownMaterial)
+			{
+				FSlateBrush Brush = Cool->GetBrush();
+				Brush.SetResourceObject(CooldownMaterial);
+				Cool->SetBrush(Brush);
+			}
+			Cool->SetVisibility(ESlateVisibility::Collapsed);
+			UOverlaySlot* CoolSlot = KeyOverlay->AddChildToOverlay(Cool);
+			CoolSlot->SetHorizontalAlignment(HAlign_Fill);
+			CoolSlot->SetVerticalAlignment(VAlign_Fill);
+
+			UOverlaySlot* KeyTextSlot = KeyOverlay->AddChildToOverlay(MakeHudText(*FString::Printf(TEXT("Text_Key%s"), *Id), Hint.Key, 15, White, ETextJustify::Center, 2, FLinearColor(0.f, 0.15f, 0.4f, 1.f)));
+			KeyTextSlot->SetHorizontalAlignment(HAlign_Center);
+			KeyTextSlot->SetVerticalAlignment(VAlign_Center);
+			KeyTextSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 5.f));
+
+			UHorizontalBoxSlot* KeySlot = Item->AddChildToHorizontalBox(Sized(*FString::Printf(TEXT("Size_Key%s"), *Id), KeyOverlay, Hint.KeyWidth, 36.f));
+			KeySlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+			KeySlot->SetVerticalAlignment(VAlign_Center);
+
+			UHorizontalBoxSlot* LabelSlot = Item->AddChildToHorizontalBox(MakeHudText(*FString::Printf(TEXT("Label_Key%s"), *Id), Hint.Label, 20, White, ETextJustify::Left, 2, FLinearColor(0.f, 0.f, 0.f, 0.85f)));
+			LabelSlot->SetVerticalAlignment(VAlign_Center);
+
+			UTextBlock* CoolText = MakeHudText(Hint.CoolText, TEXT(""), 20, White, ETextJustify::Left, 2, FLinearColor(0.f, 0.f, 0.f, 0.9f));
+			CoolText->SetVisibility(ESlateVisibility::Hidden);
+			// 고정 폭 칸: 숫자가 나타나거나 사라져도 줄 길이가 변하지 않음
+			UHorizontalBoxSlot* CoolTextSlot = Item->AddChildToHorizontalBox(Sized(*FString::Printf(TEXT("Size_Cool%s"), *Id), CoolText, 34.f, 0.f));
+			CoolTextSlot->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+			CoolTextSlot->SetVerticalAlignment(VAlign_Center);
+
+			UHorizontalBoxSlot* ItemSlot = Keys->AddChildToHorizontalBox(Item);
+			ItemSlot->SetPadding(FMargin(20.f, 0.f, 0.f, 0.f));
+		}
+		PlaceHud(Canvas, Keys, FVector2D(-40.f, -34.f), FVector2D::ZeroVector, BottomRight, BottomRight);
+	}
+
+	// 상태 문구 (대기/카운트다운 안내)
+	{
+		UTextBlock* Phase = MakeHudText(TEXT("Text_Phase"), TEXT("플레이어를 기다리는 중"), 28, White, ETextJustify::Center, 3, FLinearColor(0.f, 0.f, 0.f, 0.85f));
+		PlaceHud(Canvas, Phase, FVector2D(0.f, 160.f), FVector2D(800.f, 40.f), TopCenter, TopCenter);
+	}
+
+	// 가운데 카운트다운
+	{
+		UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Widget_Countdown"));
+		Group->SetVisibility(ESlateVisibility::Collapsed);
+		PlaceHud(Canvas, Group, FVector2D(0.f, -80.f), FVector2D(360.f, 240.f), Center, Center);
+		PlaceHud(Group, MakeHudText(TEXT("Text_Countdown"), TEXT("5"), 130, White, ETextJustify::Center, 5), FVector2D(0.f, -36.f), FVector2D(360.f, 170.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(TEXT("Label_Countdown"), TEXT("라운드 시작"), 30, White, ETextJustify::Center, 3, FLinearColor(0.f, 0.f, 0.f, 0.85f)), FVector2D(0.f, 180.f), FVector2D(360.f, 44.f), TopLeft, TopLeft);
+	}
+
+	// 유령 안내
+	{
+		UTextBlock* Ghost = MakeHudText(TEXT("Widget_Ghost"), TEXT("유령 상태 · 다음 라운드에 부활"), 26, White, ETextJustify::Center, 3, FLinearColor(0.f, 0.f, 0.f, 0.85f));
+		Ghost->SetVisibility(ESlateVisibility::Collapsed);
+		PlaceHud(Canvas, Ghost, FVector2D(0.f, -170.f), FVector2D(800.f, 40.f), FVector2D(0.5f, 1.f), FVector2D(0.5f, 1.f));
+	}
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
+int32 UCTUIBuildTools::KeyUnlocalizedTexts(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* ExistingTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!ExistingTree) { return -1; }
+
+	int32 Changed = 0;
+	TArray<UWidget*> All;
+	ExistingTree->GetAllWidgets(All);
+	for (UWidget* Widget : All)
+	{
+		UTextBlock* TextBlock = Cast<UTextBlock>(Widget);
+		if (!TextBlock) { continue; }
+
+		const FText Current = TextBlock->GetText();
+		const FString Source = Current.ToString();
+		bool bHasHangul = false;
+		for (const TCHAR Char : Source) { if (Char >= 0xAC00 && Char <= 0xD7A3) { bHasHangul = true; break; } }
+		const TOptional<FString> Namespace = FTextInspector::GetNamespace(Current);
+		if (!bHasHangul || (Namespace.IsSet() && !Namespace->IsEmpty())) { continue; }
+
+		const FString Key = FString::Printf(TEXT("%s.%s"), *WidgetBlueprint->GetName(), *Widget->GetName());
+		TextBlock->SetText(FText::ChangeKey(FTextKey(TEXT("CT_UI")), FTextKey(Key), FText::FromString(Source)));
+		++Changed;
+	}
+
+	if (Changed > 0)
+	{
+		WidgetBlueprint->Modify();
+		WidgetBlueprint->MarkPackageDirty();
+	}
+	return Changed;
+#else
+	return -1;
+#endif
+}
+
+int32 UCTUIBuildTools::BuildHudScoreEntry(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTHudScoreEntryWidget"))) { return -1; }
+
+	const FLinearColor Yellow(0.99f, 0.85f, 0.21f, 1.f);
+
+	UOverlay* Root = Make<UOverlay>(TEXT("Root_HudScoreEntry"));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	// 내 줄 표시: 연한 분홍 바탕
+	UImage* Highlight = Make<UImage>(TEXT("Widget_LocalHighlight"));
+	Highlight->SetColorAndOpacity(FLinearColor(1.f, 0.31f, 0.64f, 0.22f));
+	Highlight->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlaySlot* HighlightSlot = Root->AddChildToOverlay(Highlight);
+	HighlightSlot->SetHorizontalAlignment(HAlign_Fill);
+	HighlightSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_HudScoreEntry"));
+	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* RowSlot = Root->AddChildToOverlay(Sized(TEXT("Size_HudScoreEntry"), Row, 0.f, 34.f));
+	RowSlot->SetHorizontalAlignment(HAlign_Fill);
+	RowSlot->SetVerticalAlignment(VAlign_Fill);
+
+	// 순위 배지
+	UTextBlock* Rank = MakeHudText(TEXT("Text_Rank"), TEXT("1"), 18, HudDarkText, ETextJustify::Center, 0);
+	UBorder* Badge = MakeCard(TEXT("Card_HudRank"), Rank, Yellow, FMargin(0.f, 0.f, 0.f, 0.f));
+	UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(Sized(TEXT("Size_HudRank"), Badge, 34.f, 26.f));
+	BadgeSlot->SetPadding(FMargin(8.f, 0.f, 10.f, 0.f));
+	BadgeSlot->SetVerticalAlignment(VAlign_Center);
+
+	// 색 점
+	UImage* Dot = Make<UImage>(TEXT("Image_ColorIcon"));
+	Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UHorizontalBoxSlot* DotSlot = Row->AddChildToHorizontalBox(Sized(TEXT("Size_HudColorIcon"), Dot, 18.f, 18.f));
+	DotSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	DotSlot->SetVerticalAlignment(VAlign_Center);
+
+	UTextBlock* Name = MakeHudText(TEXT("Text_PlayerName"), TEXT("PLAYER"), 17, HudDarkText, ETextJustify::Left, 0);
+	Name->SetAutoWrapText(false);
+	UHorizontalBoxSlot* NameSlot = Row->AddChildToHorizontalBox(Name);
+	NameSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	NameSlot->SetVerticalAlignment(VAlign_Center);
+
+	UImage* Crown = MakeHudImage(TEXT("Image_Crown"), TEXT("ico/ico_crown"), FVector2D(22.f, 22.f));
+	Crown->SetVisibility(ESlateVisibility::Collapsed);
+	UHorizontalBoxSlot* CrownSlot = Row->AddChildToHorizontalBox(Sized(TEXT("Size_HudCrown"), Crown, 22.f, 22.f));
+	CrownSlot->SetPadding(FMargin(4.f, 0.f, 4.f, 0.f));
+	CrownSlot->SetVerticalAlignment(VAlign_Center);
+
+	UTextBlock* Ghost = MakeHudText(TEXT("Widget_GhostMark"), TEXT("유령"), 13, FLinearColor(0.45f, 0.35f, 0.5f, 1.f), ETextJustify::Center, 0);
+	Ghost->SetVisibility(ESlateVisibility::Collapsed);
+	UHorizontalBoxSlot* GhostSlot = Row->AddChildToHorizontalBox(Ghost);
+	GhostSlot->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
+	GhostSlot->SetVerticalAlignment(VAlign_Center);
+
+	UTextBlock* Tails = MakeHudText(TEXT("Text_TailCount"), TEXT("0"), 18, HudDarkText, ETextJustify::Right, 0);
+	UHorizontalBoxSlot* TailSlot = Row->AddChildToHorizontalBox(Sized(TEXT("Size_HudTailCount"), Tails, 50.f, 0.f));
+	TailSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	TailSlot->SetVerticalAlignment(VAlign_Center);
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
 FString UCTUIBuildTools::DescribeWidgetTree(UBlueprint* WidgetBlueprint)
 {
 	FString Result;
@@ -561,7 +976,7 @@ FString UCTUIBuildTools::DescribeWidgetTree(UBlueprint* WidgetBlueprint)
 		}
 		if (const UTextBlock* TextBlock = Cast<UTextBlock>(Widget))
 		{
-			Result += FString::Printf(TEXT(" text=\"%s\""), *TextBlock->GetText().ToString());
+			Result += FString::Printf(TEXT(" text=\"%s\" font=%.0f wrap=%d"), *TextBlock->GetText().ToString(), TextBlock->GetFont().Size, TextBlock->GetAutoWrapText() ? 1 : 0);
 		}
 		Result += TEXT("\n");
 	}
@@ -1096,5 +1511,232 @@ bool UCTUIBuildTools::BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint)
 	return true;
 #else
 	return false;
+#endif
+}
+
+int32 UCTUIBuildTools::BuildLoadingScreen(UBlueprint* WidgetBlueprint, UTexture2D* BackgroundTexture)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return 0; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!Tree) { return 0; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLoadingWidget");
+
+	TArray<UWidget*> OldWidgets;
+	Tree->GetAllWidgets(OldWidgets);
+	for (UWidget* Old : OldWidgets) { Tree->RemoveWidget(Old); }
+	Tree->RootWidget = nullptr;
+
+	UOverlay* Root = Make<UOverlay>(TEXT("Root_Loading"));
+	Root->SetVisibility(ESlateVisibility::Visible);
+	Tree->RootWidget = Root;
+
+	// 배경: 화면을 꽉 채우되 비율은 유지
+	UImage* Background = Make<UImage>(TEXT("Image_LoadingBackground"));
+	FSlateBrush BackgroundBrush;
+	BackgroundBrush.SetResourceObject(BackgroundTexture);
+	BackgroundBrush.DrawAs = ESlateBrushDrawType::Image;
+	if (BackgroundTexture)
+	{
+		BackgroundBrush.ImageSize = FVector2D(BackgroundTexture->GetSizeX(), BackgroundTexture->GetSizeY());
+	}
+	Background->SetBrush(BackgroundBrush);
+	Background->SetColorAndOpacity(BackgroundTexture ? FLinearColor::White : FLinearColor(0.012f, 0.02f, 0.04f, 1.f));
+	Background->SetVisibility(ESlateVisibility::Visible);
+
+	UScaleBox* BackgroundScale = Make<UScaleBox>(TEXT("Scale_LoadingBackground"));
+	BackgroundScale->SetStretch(EStretch::ScaleToFill);
+	BackgroundScale->SetVisibility(ESlateVisibility::Visible);
+	UScaleBoxSlot* BackgroundScaleSlot = Cast<UScaleBoxSlot>(BackgroundScale->AddChild(Background));
+	BackgroundScaleSlot->SetHorizontalAlignment(HAlign_Center);
+	BackgroundScaleSlot->SetVerticalAlignment(VAlign_Center);
+	UOverlaySlot* BackgroundSlot = Root->AddChildToOverlay(BackgroundScale);
+	BackgroundSlot->SetHorizontalAlignment(HAlign_Fill);
+	BackgroundSlot->SetVerticalAlignment(VAlign_Fill);
+
+	// 글자가 잘 보이게 어둡게 덮음. 이 이미지가 클릭도 막음
+	UImage* Dim = Make<UImage>(TEXT("Image_LoadingDim"));
+	Dim->SetColorAndOpacity(FLinearColor(0.003f, 0.006f, 0.015f, 0.6f));
+	Dim->SetVisibility(ESlateVisibility::Visible);
+	UOverlaySlot* DimSlot = Root->AddChildToOverlay(Dim);
+	DimSlot->SetHorizontalAlignment(HAlign_Fill);
+	DimSlot->SetVerticalAlignment(VAlign_Fill);
+
+	// 오른쪽 위: 참가 인원
+	UTextBlock* PlayerCount = MakeText(TEXT("Text_PlayerCount"), TEXT("참가 인원 0/8"), TEXT("Bold"), 30, TextMain, ETextJustify::Center);
+	UBorder* PlayerCountCard = MakeCard(TEXT("Card_PlayerCount"), PlayerCount, CardColor, FMargin(28.f, 14.f, 28.f, 14.f));
+	UOverlaySlot* PlayerCountSlot = Root->AddChildToOverlay(PlayerCountCard);
+	PlayerCountSlot->SetHorizontalAlignment(HAlign_Right);
+	PlayerCountSlot->SetVerticalAlignment(VAlign_Top);
+	PlayerCountSlot->SetPadding(FMargin(0.f, 48.f, 56.f, 0.f));
+
+	// 아래 가운데: 로딩 문구, 진행 막대, 게임 설명
+	UVerticalBox* Bottom = Make<UVerticalBox>(TEXT("Layout_LoadingBottom"));
+	Bottom->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	AddV(Bottom, MakeText(TEXT("Text_Loading"), TEXT("로딩 중"), TEXT("Bold"), 48, TextMain, ETextJustify::Center), 20.f);
+
+	UProgressBar* Progress = Make<UProgressBar>(TEXT("ProgressBar_Loading"));
+	Progress->SetPercent(0.f);
+	Progress->SetFillColorAndOpacity(TextTitle);
+	Progress->SetVisibility(ESlateVisibility::HitTestInvisible);
+	AddV(Bottom, Sized(TEXT("Size_ProgressBar_Loading"), Progress, 0.f, 14.f), 32.f);
+
+	UVerticalBox* TipBox = Make<UVerticalBox>(TEXT("Layout_LoadingTip"));
+	TipBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	AddV(TipBox, MakeText(TEXT("Label_LoadingTip"), TEXT("TIP"), TEXT("Bold"), 20, TextTitle, ETextJustify::Center), 6.f);
+	AddV(TipBox, MakeText(TEXT("Text_Tip"), TEXT("목표 색의 플레이어에게서 꼬리를 빼앗으세요."), TEXT("Regular"), 26, TextMain, ETextJustify::Center), 0.f);
+	AddV(Bottom, MakeCard(TEXT("Card_LoadingTip"), TipBox, CardColor, FMargin(32.f, 18.f, 32.f, 20.f)), 0.f);
+
+	USizeBox* BottomSize = Sized(TEXT("Size_LoadingBottom"), Bottom, 1100.f, 0.f);
+	UOverlaySlot* BottomSlot = Root->AddChildToOverlay(BottomSize);
+	BottomSlot->SetHorizontalAlignment(HAlign_Center);
+	BottomSlot->SetVerticalAlignment(VAlign_Bottom);
+	BottomSlot->SetPadding(FMargin(40.f, 0.f, 40.f, 90.f));
+
+	BlueprintName = TEXT("WBP_CTSettingsWidget");
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+
+	const int32 Created = WidgetCount;
+	Tree = nullptr;
+	return Created;
+#else
+	return 0;
+#endif
+}
+
+int32 UCTUIBuildTools::BuildPauseMenu(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return 0; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!Tree) { return 0; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTPauseMenuWidget");
+
+	TArray<UWidget*> OldWidgets;
+	Tree->GetAllWidgets(OldWidgets);
+	for (UWidget* Old : OldWidgets) { Tree->RemoveWidget(Old); }
+	Tree->RootWidget = nullptr;
+
+	const FMargin ButtonMargin(0.101266f, 0.192771f, 0.101266f, 0.192771f);
+
+	UOverlay* Root = Make<UOverlay>(TEXT("Root_Pause"));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	auto AddFill = [Root](UWidget* Child)
+	{
+		UOverlaySlot* OverlaySlot = Root->AddChildToOverlay(Child);
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+	};
+
+	// 어두운 배경. 클릭을 막아 뒤의 게임 화면을 누르지 못하게 함
+	UImage* Dim = Make<UImage>(TEXT("Image_PauseDim"));
+	Dim->SetColorAndOpacity(FLinearColor(0.003f, 0.006f, 0.015f, 0.7f));
+	Dim->SetVisibility(ESlateVisibility::Visible);
+	AddFill(Dim);
+
+	// 화면에 맞춰 줄어드는 가운데 정렬 상자
+	auto MakeCentered = [](const TCHAR* ScaleName, UWidget* Design)
+	{
+		UScaleBox* Scale = Make<UScaleBox>(ScaleName);
+		Scale->SetStretch(EStretch::ScaleToFit);
+		Scale->SetStretchDirection(EStretchDirection::DownOnly);
+		Scale->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UScaleBoxSlot* ScaleSlot = Cast<UScaleBoxSlot>(Scale->AddChild(Design));
+		ScaleSlot->SetHorizontalAlignment(HAlign_Center);
+		ScaleSlot->SetVerticalAlignment(VAlign_Center);
+		return Scale;
+	};
+
+	// 메인 패널
+	UVerticalBox* MainLayout = Make<UVerticalBox>(TEXT("Layout_PauseMain"));
+	MainLayout->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	AddV(MainLayout, MakeText(TEXT("Label_PauseTitle"), TEXT("메뉴"), TEXT("Bold"), 44, TextMain, ETextJustify::Center), 8.f);
+	AddV(MainLayout, MakeText(TEXT("Label_PauseSubtitle"), TEXT("경기는 계속 진행 중이에요"), TEXT("Regular"), 20, TextDim, ETextJustify::Center), 32.f);
+
+	struct FMainButton { const TCHAR* Button; const TCHAR* Label; const TCHAR* Text; const TCHAR* Texture; float Gap; };
+	const FMainButton MainButtons[] = {
+		{ TEXT("Button_Resume"),   TEXT("Label_Button_Resume"),   TEXT("계속하기"), TEXT("Rectangle_4"), 16.f },
+		{ TEXT("Button_Settings"), TEXT("Label_Button_Settings"), TEXT("설정"),     TEXT("Rectangle_5"), 16.f },
+		{ TEXT("Button_Forfeit"),  TEXT("Label_Button_Forfeit"),  TEXT("기권"),     TEXT("Rectangle_5"), 6.f },
+	};
+	for (const FMainButton& Entry : MainButtons)
+	{
+		UButton* Button = MakeButton(Entry.Button, Entry.Label, Entry.Text, Entry.Texture, ButtonMargin, FLinearColor::White);
+		AddV(MainLayout, Sized(*FString::Printf(TEXT("Size_%s"), Entry.Button), Button, 0.f, 68.f), Entry.Gap);
+	}
+	AddV(MainLayout, MakeText(TEXT("Text_ForfeitInfo"), TEXT("경기 시간이 절반 지나면 기권할 수 있어요."), TEXT("Regular"), 17, TextWarn, ETextJustify::Center), 16.f);
+	UButton* QuitButton = MakeButton(TEXT("Button_Quit"), TEXT("Label_Button_Quit"), TEXT("게임 종료"), TEXT("Rectangle_5"), ButtonMargin, FLinearColor::White);
+	AddV(MainLayout, Sized(TEXT("Size_Button_Quit"), QuitButton, 0.f, 68.f), 0.f);
+
+	UBorder* MainFrame = MakeCard(TEXT("Frame_PauseMain"), MainLayout, FLinearColor(0.012f, 0.02f, 0.04f, 1.f), FMargin(48.f, 40.f, 48.f, 44.f));
+	UOverlay* MainPanel = Make<UOverlay>(TEXT("Panel_Main"));
+	MainPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	{
+		UOverlaySlot* Inner = MainPanel->AddChildToOverlay(MakeCentered(TEXT("Scale_PauseMain"), Sized(TEXT("Size_PauseMain"), MainFrame, 620.f, 0.f)));
+		Inner->SetHorizontalAlignment(HAlign_Fill);
+		Inner->SetVerticalAlignment(VAlign_Fill);
+		Inner->SetPadding(FMargin(24.f));
+	}
+	AddFill(MainPanel);
+
+	// 설정 패널: 실행 중에 설정 화면이 이 안에 들어옴
+	UOverlay* SettingsPanel = Make<UOverlay>(TEXT("Panel_Settings"));
+	SettingsPanel->SetVisibility(ESlateVisibility::Collapsed);
+	AddFill(SettingsPanel);
+
+	// 확인 팝업
+	UOverlay* ConfirmPanel = Make<UOverlay>(TEXT("Panel_Confirm"));
+	ConfirmPanel->SetVisibility(ESlateVisibility::Collapsed);
+
+	UImage* ConfirmDim = Make<UImage>(TEXT("Image_ConfirmDim"));
+	ConfirmDim->SetColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.55f));
+	ConfirmDim->SetVisibility(ESlateVisibility::Visible);
+	{
+		UOverlaySlot* DimSlot = ConfirmPanel->AddChildToOverlay(ConfirmDim);
+		DimSlot->SetHorizontalAlignment(HAlign_Fill);
+		DimSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+
+	UVerticalBox* ConfirmLayout = Make<UVerticalBox>(TEXT("Layout_Confirm"));
+	ConfirmLayout->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	AddV(ConfirmLayout, MakeText(TEXT("Text_ConfirmTitle"), TEXT("기권하시겠어요?"), TEXT("Bold"), 36, TextWarn, ETextJustify::Center), 20.f);
+	AddV(ConfirmLayout, MakeText(TEXT("Text_ConfirmBody"), TEXT("기권하면 꼬리를 모두 잃고 이번 경기의 순위에서 제외돼요."), TEXT("Regular"), 22, TextMain, ETextJustify::Center), 36.f);
+
+	UHorizontalBox* ConfirmButtons = Make<UHorizontalBox>(TEXT("Row_ConfirmButtons"));
+	ConfirmButtons->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UButton* NoButton = MakeButton(TEXT("Button_ConfirmNo"), TEXT("Label_Button_ConfirmNo"), TEXT("취소"), TEXT("Rectangle_5"), ButtonMargin, FLinearColor::White);
+	UButton* YesButton = MakeButton(TEXT("Button_ConfirmYes"), TEXT("Label_Button_ConfirmYes"), TEXT("확인"), TEXT("Rectangle_4"), ButtonMargin, FLinearColor::White);
+	AddH(ConfirmButtons, Sized(TEXT("Size_Button_ConfirmNo"), NoButton, 0.f, 64.f), 16.f, true);
+	AddH(ConfirmButtons, Sized(TEXT("Size_Button_ConfirmYes"), YesButton, 0.f, 64.f), 0.f, true);
+	AddV(ConfirmLayout, ConfirmButtons, 0.f);
+
+	UBorder* ConfirmFrame = MakeCard(TEXT("Frame_Confirm"), ConfirmLayout, FLinearColor(0.012f, 0.02f, 0.04f, 1.f), FMargin(48.f, 40.f, 48.f, 40.f));
+	{
+		UOverlaySlot* Inner = ConfirmPanel->AddChildToOverlay(MakeCentered(TEXT("Scale_Confirm"), Sized(TEXT("Size_Confirm"), ConfirmFrame, 820.f, 0.f)));
+		Inner->SetHorizontalAlignment(HAlign_Fill);
+		Inner->SetVerticalAlignment(VAlign_Fill);
+		Inner->SetPadding(FMargin(24.f));
+	}
+	AddFill(ConfirmPanel);
+
+	BlueprintName = TEXT("WBP_CTSettingsWidget");
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+
+	const int32 Created = WidgetCount;
+	Tree = nullptr;
+	return Created;
+#else
+	return 0;
 #endif
 }

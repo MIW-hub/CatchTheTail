@@ -82,7 +82,7 @@ ACTCharacter::ACTCharacter()
 	XRayMesh->SetGenerateOverlapEvents(false);
 	XRayMesh->SetCanEverAffectNavigation(false);
 	XRayMesh->SetCastShadow(false);
-	XRayMesh->SetOnlyOwnerSee(true);
+	// 보일지는 UpdateBushXRay가 화면마다 따로 정함 (내 부쉬 안 / 같은 부쉬 안 다른 플레이어)
 	XRayMesh->SetVisibility(false);
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> XRayFinder(TEXT("/Game/Material/M_Player_XRay.M_Player_XRay"));
@@ -245,6 +245,15 @@ bool ACTCharacter::CanMoveNow() const
 	// 전화부스 사용 중에는 못 움직임
 	if (bBoothLocked) { return false; }
 
+	// 잡기/밀기 동작, 넘어져 있는 동안(넘어짐~일어나기)은 그 자리에 멈춤 (입력만 막고 감속은 이동 컴포넌트가 처리)
+	if (const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		for (const UAnimMontage* Montage : { GrabMontage.Get(), PushMontage.Get(), PushedMontage.Get(), PushedBackMontage.Get(), GetUpMontage.Get(), GetUpBackMontage.Get() })
+		{
+			if (Montage && AnimInstance->Montage_IsPlaying(Montage)) { return false; }
+		}
+	}
+
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
 	// 대기 로비는 자유롭게 돌아다닐 수 있음
 	if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::Lobby) { return true; }
@@ -275,6 +284,7 @@ UAnimMontage* ACTCharacter::GetActionMontage(ECTCharacterAction Action) const
 	case ECTCharacterAction::Push:   return PushMontage;
 	case ECTCharacterAction::Caught: return CaughtMontage;
 	case ECTCharacterAction::Pushed: return PushedMontage;
+	case ECTCharacterAction::PushedBack: return PushedBackMontage ? PushedBackMontage.Get() : PushedMontage.Get();
 	default:                         return nullptr;
 	}
 }
@@ -988,7 +998,7 @@ void ACTCharacter::ServerPush_Implementation()
 
 		const FVector LaunchVelocity = Direction * PushSpeed + FVector(0.f, 0.f, PushUpSpeed);
 		OtherCharacter->LaunchCharacter(LaunchVelocity, /*bXYOverride=*/true, /*bZOverride=*/true);
-		OtherCharacter->MulticastPlayAction(ECTCharacterAction::Pushed, true);
+		OtherCharacter->PlayKnockedDown(Direction);
 	}
 }
 
@@ -1023,8 +1033,9 @@ void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 
 	PlayAnimMontage(Montage, Action == ECTCharacterAction::Push ? PushMontagePlayRate : ActionMontagePlayRate);
 
-	// 넘어진 뒤 일어나기 이어 재생
-	if (Action == ECTCharacterAction::Pushed && GetUpMontage)
+	// 넘어진 뒤 일어나기 이어 재생 (앞/뒤에 맞는 일어나기)
+	const bool bFellDown = Action == ECTCharacterAction::Pushed || Action == ECTCharacterAction::PushedBack;
+	if (bFellDown && (GetUpMontage || GetUpBackMontage))
 	{
 		if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
 		{
@@ -1037,8 +1048,23 @@ void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 
 void ACTCharacter::HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	if (bInterrupted || !GetUpMontage || IsGhost()) { return; }
-	PlayAnimMontage(GetUpMontage, ActionMontagePlayRate);
+	// 뒤로 넘어진 몽타주면 뒤쪽 일어나기, 아니면 앞쪽 일어나기
+	UAnimMontage* GetUp = (PushedBackMontage && Montage == PushedBackMontage) ? GetUpBackMontage.Get() : GetUpMontage.Get();
+	if (bInterrupted || !GetUp || IsGhost()) { return; }
+	PlayAnimMontage(GetUp, ActionMontagePlayRate);
+}
+
+void ACTCharacter::PlayKnockedDown(const FVector& KnockDirection)
+{
+	if (!HasAuthority()) { return; }
+
+	// 날아가는 방향이 보는 방향과 같으면 앞으로 엎어지고, 반대면 뒤로 넘어짐 (옆은 가까운 쪽)
+	FVector Flat = KnockDirection;
+	Flat.Z = 0.f;
+	const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
+	const bool bFallForward = Flat.IsNearlyZero() || FVector::DotProduct(Flat.GetSafeNormal(), Forward) >= 0.f;
+
+	MulticastPlayAction(bFallForward ? ECTCharacterAction::Pushed : ECTCharacterAction::PushedBack, true);
 }
 
 void ACTCharacter::UpdateGhostWalkMontage()
@@ -1267,6 +1293,18 @@ void ACTCharacter::ClientShowNotice_Implementation(const FText& Message, float S
 	}
 }
 
+void ACTCharacter::ClientShowPhoneResult_Implementation(const FText& Message, float Seconds, bool bShowArrow, FVector TargetLocation)
+{
+	if (const ACTPlayerController* CTController = Cast<ACTPlayerController>(GetController()))
+	{
+		if (UCTHUDWidget* HUD = CTController->GetHUDWidget())
+		{
+			HUD->ShowNotice(Message, Seconds);
+			if (bShowArrow) { HUD->ShowDirectionArrow(TargetLocation, Seconds); }
+		}
+	}
+}
+
 void ACTCharacter::UpdateBushVisibility()
 {
 	// 전용 서버는 화면 없음
@@ -1292,10 +1330,23 @@ void ACTCharacter::UpdateBushVisibility()
 
 void ACTCharacter::UpdateBushXRay()
 {
-	// 부쉬 안일 때 겹친 몸 켬 (내 화면만)
-	if (!IsLocallyControlled() || !XRayMesh || !GetMesh()) { return; }
+	if (GetNetMode() == NM_DedicatedServer || !XRayMesh || !GetMesh()) { return; }
 
-	const bool bWantXRay = CurrentBush != nullptr && XRayMaterial != nullptr;
+	// 부쉬 안이면 내 몸, 같은 부쉬 안 다른 플레이어 몸이 가려져도 실루엣이 보임
+	bool bWantXRay = false;
+	if (CurrentBush && XRayMaterial)
+	{
+		if (IsLocallyControlled())
+		{
+			bWantXRay = true;
+		}
+		else
+		{
+			const APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+			const ACTCharacter* Viewer = LocalController ? Cast<ACTCharacter>(LocalController->GetPawn()) : nullptr;
+			bWantXRay = Viewer && Viewer->CurrentBush == CurrentBush;
+		}
+	}
 	if (bWantXRay == bXRayActive) { return; }
 	bXRayActive = bWantXRay;
 

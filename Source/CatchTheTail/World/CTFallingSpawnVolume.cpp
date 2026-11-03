@@ -1,9 +1,12 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTFallingSpawnVolume.h"
 #include "CTFallingProp.h"
+#include "CTTailPickup.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
+#include "../Player/CTPlayerState.h"
 #include "Components/BoxComponent.h"
+#include "Components/DecalComponent.h"
 #include "Components/MeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -32,10 +35,10 @@ ACTFallingSpawnVolume::ACTFallingSpawnVolume()
 	SpawnBox->SetHiddenInGame(true);
 	SpawnBox->ShapeColor = FColor(120, 190, 255);
 
-	// 기본 그림자 메시, 머티리얼
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> PlaneFinder(TEXT("/Engine/BasicShapes/Plane.Plane"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ShadowFinder(TEXT("/Game/Material/M_FallingShadow.M_FallingShadow"));
-	if (PlaneFinder.Succeeded()) { ShadowMesh = PlaneFinder.Object; }
+	DroppedTailClass = ACTTailPickup::StaticClass();
+
+	// 기본 그림자 머티리얼 (디칼)
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ShadowFinder(TEXT("/Game/Material/M_FallingShadowDecal.M_FallingShadowDecal"));
 	if (ShadowFinder.Succeeded()) { ShadowMaterial = ShadowFinder.Object; }
 }
 
@@ -64,6 +67,12 @@ void ACTFallingSpawnVolume::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		DestroyLocalFall(Pair.Value);
 	}
 	LocalFalls.Reset();
+
+	for (const TWeakObjectPtr<AActor>& Item : LandedActors)
+	{
+		if (AActor* Actor = Item.Get()) { Actor->OnDestroyed.RemoveAll(this); }
+	}
+	LandedActors.Reset();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -267,15 +276,29 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 
 		if (Alpha >= 1.f)
 		{
+			const bool bWasSettle = Fall->bSettle;
+
 			// 착지 충돌 (클라는 목록 제거 시 적용)
 			if (bControlCollision)
 			{
 				ApplyCollision(Falling, CollisionAfterLanding);
 			}
 
-			if (LandedLifeSeconds > 0.f)
+			// 수명은 처음 착지할 때만 정함 (다시 내려와도 늘리지 않음)
+			if (!bWasSettle && LandedLifeSeconds > 0.f)
 			{
 				Falling->SetLifeSpan(LandedLifeSeconds);
+			}
+
+			if (bSettleWhenUnsupported)
+			{
+				if (!bWasSettle)
+				{
+					LandedActors.AddUnique(Falling);
+					Falling->OnDestroyed.AddUniqueDynamic(this, &ACTFallingSpawnVolume::HandleLandedActorDestroyed);
+				}
+				// 내려앉은 자리에 받침이 있는지 한 번 더 확인
+				PendingCheckActors.Add(Falling);
 			}
 
 			ServerFalls.Remove(Entry.Id);
@@ -287,6 +310,12 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 				Falling->GetRootComponent() && Cast<UPrimitiveComponent>(Falling->GetRootComponent()) ? (Cast<UPrimitiveComponent>(Falling->GetRootComponent())->GetCollisionResponseToChannel(ECC_Camera) == ECR_Ignore ? TEXT("무시") : TEXT("막음")) : TEXT("-"));
 			OnActorLanded.Broadcast(Falling, Falling->GetActorLocation());
 		}
+	}
+
+	// 받침을 잃은 낙하물 내려오기
+	if (ProcessSupportChecks())
+	{
+		bChanged = true;
 	}
 
 	if (bChanged)
@@ -317,6 +346,172 @@ void ACTFallingSpawnVolume::TickServer(float DeltaSeconds)
 			TimeToNextSpawn = 0.f;
 		}
 	}
+}
+
+// 받침을 잃은 낙하물 (서버)
+
+void ACTFallingSpawnVolume::HandleLandedActorDestroyed(AActor* DestroyedActor)
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !DestroyedActor || !World || World->bIsTearingDown) { return; }
+
+	LandedActors.Remove(DestroyedActor);
+
+	// 사라진 자리 위에 있던 낙하물을 확인할 구역
+	FVector Origin, Extent;
+	DestroyedActor->GetActorBounds(false, Origin, Extent);
+
+	FSupportRegion Region;
+	Region.Footprint = FBox2D(FVector2D(Origin.X - Extent.X, Origin.Y - Extent.Y), FVector2D(Origin.X + Extent.X, Origin.Y + Extent.Y));
+	Region.BottomZ = Origin.Z - Extent.Z;
+	PendingRegions.Add(Region);
+}
+
+bool ACTFallingSpawnVolume::ProcessSupportChecks()
+{
+	if (PendingRegions.IsEmpty() && PendingCheckActors.IsEmpty()) { return false; }
+
+	LandedActors.RemoveAll([](const TWeakObjectPtr<AActor>& Item) { return !Item.IsValid(); });
+
+	// 확인할 낙하물: 방금 착지한 것 + 사라진 자리 주변에서 같거나 더 높은 곳에 있는 것
+	TArray<AActor*> Candidates;
+	for (const TWeakObjectPtr<AActor>& Item : PendingCheckActors)
+	{
+		if (AActor* Actor = Item.Get()) { Candidates.AddUnique(Actor); }
+	}
+	PendingCheckActors.Reset();
+
+	for (const FSupportRegion& Region : PendingRegions)
+	{
+		const FBox2D Expanded = Region.Footprint.ExpandBy(SettleSearchMargin);
+		for (const TWeakObjectPtr<AActor>& Item : LandedActors)
+		{
+			AActor* Actor = Item.Get();
+			if (!Actor) { continue; }
+
+			FVector Origin, Extent;
+			Actor->GetActorBounds(false, Origin, Extent);
+			if (Origin.Z - Extent.Z < Region.BottomZ - 5.f) { continue; }
+
+			const FBox2D Footprint(FVector2D(Origin.X - Extent.X, Origin.Y - Extent.Y), FVector2D(Origin.X + Extent.X, Origin.Y + Extent.Y));
+			if (Expanded.Intersect(Footprint)) { Candidates.AddUnique(Actor); }
+		}
+	}
+	PendingRegions.Reset();
+
+	// 아래 것부터 처리해야 위 것이 아래 것의 도착 높이를 참고할 수 있음
+	auto BottomOf = [](const AActor* Actor)
+	{
+		FVector Origin, Extent;
+		Actor->GetActorBounds(false, Origin, Extent);
+		return Origin.Z - Extent.Z;
+	};
+	Candidates.Sort([&BottomOf](const AActor& A, const AActor& B) { return BottomOf(&A) < BottomOf(&B); });
+
+	bool bStarted = false;
+	for (AActor* Actor : Candidates)
+	{
+		if (StartSettleIfUnsupported(Actor)) { bStarted = true; }
+	}
+	return bStarted;
+}
+
+bool ACTFallingSpawnVolume::StartSettleIfUnsupported(AActor* Actor)
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(Actor) || !World) { return false; }
+
+	// 이미 내려오는 중이면 건너뜀
+	if (Entries.ContainsByPredicate([Actor](const FCTFallEntry& Entry) { return Entry.Actor == Actor; })) { return false; }
+
+	FVector Origin, Extent;
+	Actor->GetActorBounds(false, Origin, Extent);
+	const float BottomZ = Origin.Z - Extent.Z;
+
+	// 바닥 면 모양: 메시가 있으면 회전을 반영한 실제 크기, 없으면 경계 상자
+	FVector BoxHalf = Extent;
+	FVector BoxCenter = Origin;
+	FQuat BoxRotation = FQuat::Identity;
+	if (const UStaticMeshComponent* Mesh = Actor->FindComponentByClass<UStaticMeshComponent>())
+	{
+		if (const UStaticMesh* StaticMesh = Mesh->GetStaticMesh())
+		{
+			const FBoxSphereBounds MeshBounds = StaticMesh->GetBounds();
+			BoxHalf = MeshBounds.BoxExtent * Mesh->GetComponentScale().GetAbs();
+			BoxCenter = Mesh->GetComponentTransform().TransformPosition(MeshBounds.Origin);
+			BoxRotation = Mesh->GetComponentQuat();
+		}
+	}
+
+	// 바닥 면 바로 위에서 아래로 훑어 받침 높이를 찾음 (가장자리만 걸쳐도 받쳐진 것으로 봄)
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CTFallingSettle), /*bTraceComplex=*/false);
+	Params.AddIgnoredActor(this);
+	Params.AddIgnoredActor(Actor);
+
+	const FVector SweepStart(BoxCenter.X, BoxCenter.Y, BottomZ + 3.f);
+	const FVector SweepEnd = SweepStart - FVector(0.f, 0.f, 30000.f);
+	const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(BoxHalf.X * 0.9f, BoxHalf.Y * 0.9f, 1.f));
+
+	float SurfaceZ = SpawnBox->GetComponentLocation().Z - SpawnBox->GetScaledBoxExtent().Z;
+	FHitResult Hit;
+	if (World->SweepSingleByChannel(Hit, SweepStart, SweepEnd, BoxRotation, GroundTraceChannel, Shape, Params))
+	{
+		if (Hit.bStartPenetrating) { return false; }
+		SurfaceZ = Hit.Location.Z - 1.f;
+	}
+
+	// 먼저 내려오기 시작한 낙하물이 도착할 자리 위에는 쌓임
+	const FBox2D MyFootprint(FVector2D(Origin.X - Extent.X * 0.9f, Origin.Y - Extent.Y * 0.9f), FVector2D(Origin.X + Extent.X * 0.9f, Origin.Y + Extent.Y * 0.9f));
+	for (const TPair<int32, FServerFall>& Pair : ServerFalls)
+	{
+		const FServerFall& Other = Pair.Value;
+		if (Other.bSettle && Other.DestFootprint.Intersect(MyFootprint))
+		{
+			SurfaceZ = FMath::Max(SurfaceZ, Other.DestTopZ);
+		}
+	}
+
+	const float Gap = BottomZ - SurfaceZ;
+	if (Gap <= SettleMinGap) { return false; }
+
+	// 같은 낙하 처리에 넣음: 충돌 끄고 내려오며, 적중하면 넉백과 꼬리 손실도 같음
+	const float PivotToBottom = Actor->GetActorLocation().Z - BottomZ;
+
+	FCTFallEntry Entry;
+	Entry.Actor = Actor;
+	Entry.Id = NextEntryId++;
+	Entry.StartZ = Actor->GetActorLocation().Z;
+	Entry.ShadowRadius = FMath::Max(FMath::Max(Extent.X, Extent.Y) * ShadowRadiusMultiplier, 20.f);
+	Entry.MaterialIndex = INDEX_NONE; // 머티리얼은 그대로
+	Entry.GroundLocation = FVector(Actor->GetActorLocation().X, Actor->GetActorLocation().Y, SurfaceZ);
+
+	FServerFall Fall;
+	Fall.bSettle = true;
+	Fall.Speed = SettleFallSpeed;
+	Fall.StartZ = Actor->GetActorLocation().Z;
+	Fall.EndZ = SurfaceZ + PivotToBottom;
+	Fall.XY = FVector2D(Actor->GetActorLocation().X, Actor->GetActorLocation().Y);
+	Fall.Duration = FMath::Max((Fall.StartZ - Fall.EndZ) / FMath::Max(SettleFallSpeed, 1.f), 0.05f);
+	Fall.StartRotation = Actor->GetActorQuat();
+	Fall.EndRotation = Actor->GetActorQuat();
+	Fall.DestFootprint = FBox2D(FVector2D(Origin.X - Extent.X, Origin.Y - Extent.Y), FVector2D(Origin.X + Extent.X, Origin.Y + Extent.Y));
+	Fall.DestTopZ = SurfaceZ + Extent.Z * 2.f;
+	ServerFalls.Add(Entry.Id, Fall);
+	Entries.Add(Entry);
+
+	if (bControlCollision)
+	{
+		ApplyCollision(Actor, CollisionWhileFalling);
+	}
+
+	// 이 낙하물이 떠난 자리 위의 낙하물도 확인
+	FSupportRegion Region;
+	Region.Footprint = Fall.DestFootprint;
+	Region.BottomZ = BottomZ;
+	PendingRegions.Add(Region);
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 낙하물 재낙하: %s  %.0fcm 아래로 (받침 없음)"), *Actor->GetName(), Gap);
+	return true;
 }
 
 void ACTFallingSpawnVolume::TickVisuals()
@@ -355,9 +550,10 @@ void ACTFallingSpawnVolume::TickVisuals()
 		const float Opacity = FMath::Lerp(ShadowMinOpacity, ShadowMaxOpacity, Progress);
 		Fall->ShadowMaterialInstance->SetScalarParameterValue(ShadowOpacityParameterName, Opacity);
 
-		// Plane은 100cm, 배율 = 지름 ÷ 100
-		const float Scale = Entry.ShadowRadius * 2.f / 100.f * FMath::Lerp(ShadowStartScale, 1.f, Progress);
-		Fall->ShadowComponent->SetWorldScale3D(FVector(Scale, Scale, 1.f));
+		// 디칼 크기는 반 길이(투영 깊이, 가로, 세로)
+		const float Radius = Entry.ShadowRadius * FMath::Lerp(ShadowStartScale, 1.f, Progress);
+		Fall->ShadowComponent->DecalSize = FVector(ShadowProjectionHalfDepth, Radius, Radius);
+		Fall->ShadowComponent->MarkRenderStateDirty();
 	}
 }
 
@@ -408,25 +604,22 @@ void ACTFallingSpawnVolume::SyncLocalVisuals()
 
 		FLocalFall NewFall;
 
-		if (bShowShadow && ShadowMesh && ShadowMaterial)
+		if (bShowShadow && ShadowMaterial)
 		{
-			UStaticMeshComponent* Shadow = NewObject<UStaticMeshComponent>(this);
-			Shadow->SetStaticMesh(ShadowMesh);
+			// 디칼: 지형 모양을 따라 바닥에 그려짐. X축이 투영 방향이라 아래(-Z)를 보게 눕힘
+			UDecalComponent* Shadow = NewObject<UDecalComponent>(this);
 			Shadow->SetMobility(EComponentMobility::Movable);
-			Shadow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			Shadow->SetGenerateOverlapEvents(false);
-			Shadow->SetCastShadow(false);
 			Shadow->RegisterComponent();
 
-			// 월드 좌표 고정
-			const FVector Location(Entry.GroundLocation.X, Entry.GroundLocation.Y, Entry.GroundLocation.Z + ShadowHeightOffset);
-			Shadow->SetWorldLocationAndRotation(Location, FRotator::ZeroRotator);
-			Shadow->SetWorldScale3D(FVector(Entry.ShadowRadius * 2.f / 100.f * ShadowStartScale, Entry.ShadowRadius * 2.f / 100.f * ShadowStartScale, 1.f));
+			const FVector Location(Entry.GroundLocation.X, Entry.GroundLocation.Y, Entry.GroundLocation.Z + ShadowProjectionLift);
+			Shadow->SetWorldLocationAndRotation(Location, FRotator(-90.f, 0.f, 0.f));
+			Shadow->DecalSize = FVector(ShadowProjectionHalfDepth, Entry.ShadowRadius * ShadowStartScale, Entry.ShadowRadius * ShadowStartScale);
 
 			NewFall.ShadowComponent = Shadow;
-			NewFall.ShadowMaterialInstance = Shadow->CreateAndSetMaterialInstanceDynamicFromMaterial(0, ShadowMaterial);
+			NewFall.ShadowMaterialInstance = UMaterialInstanceDynamic::Create(ShadowMaterial, this);
 			if (NewFall.ShadowMaterialInstance)
 			{
+				Shadow->SetDecalMaterial(NewFall.ShadowMaterialInstance);
 				NewFall.ShadowMaterialInstance->SetVectorParameterValue(ShadowColorParameterName, ShadowColor);
 				NewFall.ShadowMaterialInstance->SetScalarParameterValue(ShadowOpacityParameterName, ShadowMinOpacity);
 			}
@@ -481,10 +674,25 @@ void ACTFallingSpawnVolume::ApplyCollision(AActor* Actor, const FCollisionProfil
 		}
 	}
 }
+void ACTFallingSpawnVolume::DropTailFromHit(ACTCharacter* Character, const FVector& KnockbackDirection)
+{
+	const int32 Lost = ACTTailPickup::DropTailsFromCharacter(Character, HitTailLoss, KnockbackDirection, DroppedTailClass,
+		DroppedTailLaunchSpeed, DroppedTailUpSpeed, DroppedTailPickupDelay, DroppedTailLifeSeconds, this);
+
+	if (Lost > 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[CT] 낙하 충돌: %s 꼬리 -%d"), *Character->GetName(), Lost);
+	}
+}
+
 void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor* Falling, const FVector& BoundsOrigin, const FVector& BoundsExtent)
 {
 	UWorld* World = GetWorld();
 	if (!World || !Falling) { return; }
+
+	// 경기 중에만 맞음 (카운트다운, 결과 화면에서는 떨어지는 모습만 보임)
+	const ACTGameState* CTGameState = World->GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
 	// 영역 안의 폰 검색
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CTFallingHit), /*bTraceComplex=*/false);
@@ -531,11 +739,16 @@ void ACTFallingSpawnVolume::ApplyHitKnockback(const FCTFallEntry& Entry, AActor*
 
 		if (bPlayPushedReaction)
 		{
-			Character->MulticastPlayAction(ECTCharacterAction::Pushed, true);
+			Character->PlayKnockedDown(Direction);
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("[CT] 낙하 충돌: %s 가 %s 에 맞아 튕겨남 (목표 거리 %.0f, 가로 속도 %.0f, 공중 %.2f초)"),
 			*Character->GetName(), *Falling->GetName(), HitKnockbackDistance, HorizontalSpeed, AirTime);
+
+		if (bHitDropsTail)
+		{
+			DropTailFromHit(Character, Direction);
+		}
 
 		OnCharacterHit.Broadcast(Character, Falling);
 	}

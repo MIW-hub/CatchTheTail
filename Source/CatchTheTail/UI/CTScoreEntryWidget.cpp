@@ -36,7 +36,8 @@ void UCTScoreEntryWidget::RefreshEntry(int32 Rank, bool bIsLocalPlayer, bool bAl
 	}
 	if (Widget_GhostMark)
 	{
-		Widget_GhostMark->SetVisibility(PlayerState->IsGhost() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		// 기권한 플레이어는 유령 표시 없이 꼬리 0으로만 보임
+		Widget_GhostMark->SetVisibility((PlayerState->IsGhost() && !PlayerState->IsForfeited()) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	if (Widget_LocalHighlight)
 	{

@@ -8,6 +8,7 @@
 
 class ACameraActor;
 class UCTLobbyWidget;
+class UCTLoadingWidget;
 
 // 채팅 수신 (보낸 사람 이름, 내용)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCTChatReceivedSignature, const FString&, SenderName, const FString&, Message);
@@ -65,11 +66,25 @@ protected:
 	virtual void ClientRestart_Implementation(APawn* NewPawn) override;
 	virtual void CreateUI() override;
 
+	// 대기 로비에는 자체 나가기 버튼이 있어 ESC 메뉴를 쓰지 않음
+	virtual bool CanOpenPauseMenu() const override { return false; }
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
 	TSubclassOf<UCTLobbyWidget> LobbyWidgetClass;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Lobby")
 	TObjectPtr<UCTLobbyWidget> LobbyWidget;
+
+	// 게임 시작 후 맵을 넘어가는 동안 화면을 덮는 로딩 화면
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UCTLoadingWidget> LoadingWidgetClass;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Lobby")
+	TObjectPtr<UCTLoadingWidget> LoadingWidget;
+
+	// 시작 버튼을 누른 직후, 서버 응답(시작 카운트 복제)이 오기 전까지 로딩 화면을 미리 띄워 두는 시간(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby", meta = (ClampMin = "0"))
+	float StartPendingSeconds = 1.5f;
 
 	// 로비 카메라 Pitch (고정)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby|Camera", meta = (ClampMin = "-89", ClampMax = "-10"))
@@ -116,6 +131,9 @@ private:
 
 	void HandleChatKey();
 
+	// 시작이 확정(또는 요청)되면 로딩 화면을 띄우고, 취소되면 치움
+	void UpdateLoadingScreen();
+
 	// 로비 카메라 생성
 	void ApplyLobbyCamera();
 	ACameraActor* GetOrCreateLobbyCamera();
@@ -127,6 +145,12 @@ private:
 	TObjectPtr<ACameraActor> LobbyCamera;
 
 	bool bLobbyCameraSnapped = false;
+
+	// 시작 버튼을 누른 시각 (월드 시간)
+	double StartRequestedTime = -1000.0;
+
+	// 마지막으로 본 시작 카운트 남은 시간. 끝나서 0이 된 것인지 도중에 취소된 것인지 구분용
+	float LastStartRemaining = 0.f;
 
 	double LastChatServerTime = -1000.0;
 };

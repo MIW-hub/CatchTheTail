@@ -19,6 +19,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	void ShowResult();
 
+public:
+	UCTResultWidget(const FObjectInitializer& ObjectInitializer);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;

@@ -154,6 +154,7 @@ void ACTLobbyGameMode::InitLobbyPlayer(APlayerController* NewPlayer)
 	// 직전 게임의 기록 초기화
 	NewPlayerState->SetColors(ECTColor::None, ECTColor::None);
 	NewPlayerState->SetIsGhost(false);
+	NewPlayerState->SetForfeited(false);
 	NewPlayerState->SetTailCount(LobbyTailCount);
 }
 

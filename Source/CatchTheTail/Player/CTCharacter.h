@@ -107,6 +107,10 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientShowNotice(const FText& Message, float Seconds);
 
+	// 전화 결과 (서버 호출): 안내 문구와, 원하면 TargetLocation을 가리키는 화살표
+	UFUNCTION(Client, Reliable)
+	void ClientShowPhoneResult(const FText& Message, float Seconds, bool bShowArrow, FVector TargetLocation);
+
 	// 행동별 몽타주
 	UFUNCTION(BlueprintPure, Category = "CT|Animation")
 	UAnimMontage* GetActionMontage(ECTCharacterAction Action) const;
@@ -146,6 +150,9 @@ public:
 	// 전원 화면 행동 연출 (서버 호출)
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayAction(ECTCharacterAction Action, bool bSuccess);
+
+	// 서버 호출: 날아가는 방향(수평)에 따라 넘어지는 연출을 고름. 보는 방향으로 날아가면 앞으로 엎어지고, 반대면 뒤로 넘어짐
+	void PlayKnockedDown(const FVector& KnockDirection);
 
 protected:
 	virtual void BeginPlay() override;
@@ -244,13 +251,21 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> CaughtMontage;
 
-	// 밀려남 반응
+	// 밀려남 반응 (맞은 방향으로 앞으로 엎어짐)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> PushedMontage;
 
-	// 일어나기 몽타주, 비면 바로 풀림
+	// 앞으로 엎어진 뒤 일어나기 몽타주, 비면 바로 풀림
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> GetUpMontage;
+
+	// 밀려남 반응 (맞은 방향의 반대로, 뒤로 넘어짐). 비면 PushedMontage 를 씀
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushedBackMontage;
+
+	// 뒤로 넘어진 뒤 일어나기 몽타주, 비면 바로 풀림
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GetUpBackMontage;
 
 	// 유령 걷기 반복 몽타주, 섹션명=GhostWalkLoopSection
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")

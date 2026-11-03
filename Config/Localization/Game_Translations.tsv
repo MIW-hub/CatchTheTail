@@ -20,7 +20,7 @@ Esc는 메뉴 키라서 쓸 수 없습니다.	Esc is the menu key and can't be u
 동점! 연장전	Tie! Overtime	同点！延長戦
 라운드 {0}	Round {0}	ラウンド {0}
 맵 없음	No map	マップなし
-목표 없음	No target	ターゲットなし
+목표 없음	None	なし
 밀기	Push	押す
 방 코드 보기	Show room code	ルームコードを表示
 방 코드 숨기기	Hide room code	ルームコードを隠す
@@ -81,7 +81,7 @@ W A S D	W A S D	W A S D
 게임을 종료할까요?	Quit the game?	ゲームを終了しますか？
 경기 결과	Match Results	試合結果
 기본값으로 초기화	Reset to defaults	初期設定に戻す
-내 꼬리	My Tail	自分のしっぽ
+내 꼬리	My Tail	マイしっぽ
 내 색상	My Color	自分の色
 다음에 또 만나요!	See you next time!	またね！
 닫기	Close	閉じる
@@ -159,16 +159,16 @@ b맵	Map B	マップB
 방이 가득 찼습니다.	The room is full.	ルームが満員です。
 방에 입장하지 못했습니다.	Could not join the room.	ルームに参加できませんでした。
 전화 거는 중...	Calling...	電話中...
-전화를 더 쓸 수 없습니다.	You cannot use the phone any more.	これ以上電話は使えません。
+이번 경기에서는 전화를 쓸 수 없습니다.	The phone is disabled in this match.	この試合では電話を使えません。
 목표를 찾을 수 없습니다.	Target not found.	ターゲットが見つかりません。
-목표가 {0}m 이내에 있습니다. (남은 횟수 {1})	Your target is within {0}m. ({1} uses left)	ターゲットは{0}m以内にいます。(残り{1}回)
-목표가 약 {0}m 거리에 있습니다. (남은 횟수 {1})	Your target is about {0}m away. ({1} uses left)	ターゲットは約{0}m先にいます。(残り{1}回)
+목표가 {0}m 이내에 있습니다.	Your target is within {0}m.	ターゲットは{0}m以内にいます。
+목표가 약 {0}m 거리에 있습니다.	Your target is about {0}m away.	ターゲットは約{0}m先にいます。
 누군가 당신을 찾았습니다!	Someone is looking for you!	誰かがあなたを探しています!
 경기 시간	Game Time	試合時間
 라운드 시간	Round Time	ラウンド時間
 최대 인원	Max Players	最大人数
 시작 꼬리 수	Starting Tails	開始時のしっぽの数
-전화부스 횟수	Phone Booth Uses	電話ボックスの回数
+전화 쿨타임	Phone Cooldown	電話のクールタイム
 부쉬	Bush	茂み
 {0}분	{0} min	{0}分
 {0}초	{0}s	{0}秒
@@ -181,3 +181,60 @@ b맵	Map B	マップB
 {0}분 · 라운드 {1}초 · 최대 {2}명	{0} min · Round {1}s · Max {2} players	{0}分 · ラウンド{1}秒 · 最大{2}人
 맵 설정	Map Settings	マップ設定
 경기 설정	Match Settings	試合設定
+로딩 중	Loading	読み込み中
+참가 인원 {0}/{1}	Players {0}/{1}	参加人数 {0}/{1}
+목표 색의 플레이어에게서 꼬리를 빼앗으세요.	Steal tails from players in your target color.	ターゲットの色のプレイヤーからしっぽを奪おう。
+라운드마다 목표 색이 바뀌니 화면의 색을 꼭 확인하세요.	The target color changes every round, so keep an eye on the colors on screen.	ラウンドごとにターゲットの色が変わるので、画面の色を確認しよう。
+Shift를 누르면 달릴 수 있지만 오래 달리면 지쳐요.	Hold Shift to run, but you will get tired if you run for too long.	Shiftでダッシュできますが、走り続けると疲れてしまいます。
+목표 색이 아닌 상대는 마우스 우클릭으로 밀어낼 수 있어요.	You can push players who are not your target color with a right click.	ターゲットではない相手は右クリックで押し出せます。
+꼬리를 모두 잃으면 유령이 되어 이동만 할 수 있어요.	If you lose all your tails, you become a ghost and can only move around.	しっぽをすべて失うと幽霊になり、移動しかできません。
+경기가 끝났을 때 꼬리가 가장 많은 플레이어가 승리해요.	The player with the most tails when the match ends wins.	試合終了時にしっぽが一番多いプレイヤーが勝ちです。
+부쉬 안에 들어가면 다른 플레이어의 눈을 피할 수 있어요.	Step into a bush to hide from other players.	茂みに入ると他のプレイヤーの目を避けられます。
+달리기와 밀치기 게이지를 확인하며 움직이세요.	Keep an eye on your run and push gauges as you move.	ダッシュと押すゲージを確認しながら動こう。
+메뉴	Menu	メニュー
+계속하기	Resume	続ける
+기권	Forfeit	棄権
+경기는 계속 진행 중이에요	The match is still in progress	試合は進行中です
+경기 중에만 기권할 수 있어요.	You can only forfeit during a match.	棄権できるのは試合中のみです。
+이미 기권했어요.	You have already forfeited.	すでに棄権しました。
+경기 시간이 절반 지나면 기권할 수 있어요. ({0}:{1} 후)	You can forfeit once half the match time has passed. (in {0}:{1})	試合時間が半分過ぎると棄権できます。({0}:{1}後)
+기권하면 이번 경기 순위에서 빠져요.	Forfeiting removes you from this match's ranking.	棄権するとこの試合の順位から外れます。
+기권하시겠어요?	Do you want to forfeit?	棄権しますか？
+기권하면 꼬리를 모두 잃고 이번 경기의 순위에서 제외돼요. 남은 시간에는 유령 상태로 지켜보기만 할 수 있고, 되돌릴 수 없어요.	If you forfeit, you lose all your tails and are removed from this match's ranking. For the rest of the match you can only watch as a ghost, and this cannot be undone.	棄権するとしっぽをすべて失い、この試合の順位から外れます。 残り時間は幽霊として見守ることしかできず、元に戻せません。
+게임을 종료하시겠어요?	Do you want to quit the game?	ゲームを終了しますか？
+방을 나가 메인 메뉴로 돌아가요.	Leave the room and return to the main menu.	部屋を出てメインメニューに戻ります。
+방장이 나가면 방이 닫혀 모든 플레이어의 경기가 끝나요. 진행 중인 경기 기록은 남지 않고, 다시 들어올 수 없어요.	If the host leaves, the room closes and the match ends for everyone. The match in progress will not be recorded and you cannot rejoin.	ホストが退出すると部屋が閉じ、全員の試合が終了します。 進行中の試合は記録されず、再入室もできません。
+경기 도중에 나가면 기권으로 처리돼 순위에서 빠지고, 진행 중인 경기에는 다시 들어올 수 없어요.	If you leave mid-match, it counts as a forfeit and you are removed from the ranking, and you cannot rejoin the match in progress.	試合の途中で退出すると棄権扱いになり順位から外れ、 進行中の試合には再入室できません。
+헌터를 찾을 수 없습니다.	Hunter not found.	ハンターが見つかりません。
+헌터가 {0}m 이내에 있습니다.	Your hunter is within {0}m.	ハンターは{0}m以内にいます。
+헌터가 약 {0}m 거리에 있습니다.	Your hunter is about {0}m away.	ハンターは約{0}m先にいます。
+다른 사람이 통화 중입니다.	Someone else is on the phone.	他の人が通話中です。
+아직 전화를 걸 수 없습니다. ({0}초)	You cannot call yet. ({0}s)	まだ電話をかけられません。({0}秒)
+F키로 전화 걸기	Press F to use the phone	Fキーで電話をかける
+전화 걸기	Phone	電話をかける
+좌클릭: 목표 위치 확인	Left Click: Locate Target	左クリック: ターゲットの位置を確認
+우클릭: 헌터 위치 확인	Right Click: Locate Hunter	右クリック: ハンターの位置を確認
+F 또는 ESC: 닫기	F or ESC: Close	FまたはESC: 閉じる
+지금 통화할 수 있습니다	Ready to call	今すぐ通話できます
+다음 통화까지 {0}초	Next call in {0}s	次の通話まで{0}秒
+F키: 무작위 위치로 한 번 이동 (유령은 다음 라운드에 부활)	F: Move once to a random spot (ghosts revive next round)	F：ランダムな場所へ1回だけ移動（ゴーストは次のラウンドで復活）
+이동은 유령 상태에서 한 번만 쓸 수 있어요.	You can only move once while you are a ghost.	移動はゴースト状態で1回だけ使えます。
+타겟	Target	ターゲット
+라운드 종료	Round ends	ラウンド終了
+순위표	Ranking	ランキング
+순위	Rank	順位
+플레이어	Player	プレイヤー
+꼬리	Tail	しっぽ
+꼬리잡기	Grab Tail	しっぽ取り
+경기 시간이 절반 지나면 기권할 수 있어요.	You can forfeit once half of the match time has passed.	試合時間が半分過ぎると棄権できます。
+기권하면 꼬리를 모두 잃고 이번 경기의 순위에서 제외돼요.	If you forfeit, you lose all your tails and are excluded from this match's ranking.	棄権するとしっぽをすべて失い、この試合の順位から除外されます。
+순환 도로가 감싼 작은 마을. 광장의 분수를 중심으로 공원, 시장, 카페, 배송 마당이 이어져 있어요.	A small town ringed by a loop road. A park, market, café and delivery yard surround the fountain plaza.	環状道路に囲まれた小さな町。広場の噴水を中心に、公園、市場、カフェ、配送ヤードが広がっています。
+언덕이 있는 시골 마을 맵. 부쉬에 숨고, 굴러오는 통나무를 피하며 꼬리를 노리세요.	A hilly countryside map. Hide in bushes, dodge rolling logs, and go after tails.	丘のある田舎町マップ。茂みに隠れ、転がってくる丸太を避けながらしっぽを狙いましょう。
+작은 마을	Small Town	小さな町
+참가 인원 0/8	Players 0/8	参加人数 0/8
+큐브 도시에서 벌이는 기본 맵. 하늘에서 떨어지는 물체를 조심하고, 전화부스로 목표를 찾아보세요.	The basic map in Cube City. Watch out for falling objects and use phone booths to find your target.	キューブシティで行う基本マップ。空から落ちてくる物に気をつけて、電話ボックスでターゲットを探しましょう。
+이 이름으로 시작	Start with this name	この名前で始める
+이름 변경 가능 여부는 게임 설정에 따라 달라집니다	Whether you can change your name depends on the game settings.	名前を変更できるかどうかはゲーム設定によって異なります。
+플레이어 이름을 정해 주세요	Choose your player name	プレイヤー名を決めてください
+어떤 이름으로 플레이할까요?	What name will you play with?	どんな名前でプレイしますか？
+이름 규칙을 확인해 주세요	Please check the name rules	名前のルールを確認してください

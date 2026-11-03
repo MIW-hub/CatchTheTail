@@ -39,6 +39,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void ResetSettings();
 
+	// 이름 변경 영역을 숨김. 경기 중에는 닉네임이 바뀌면 안 되어 ESC 메뉴가 숨김
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetNameChangeHidden(bool bHidden);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -209,4 +213,7 @@ private:
 
 	// 채우는 중 변경 알림 무시
 	bool bRefreshing = false;
+
+	// 이름 변경 영역 숨김 여부
+	bool bNameChangeHidden = false;
 };

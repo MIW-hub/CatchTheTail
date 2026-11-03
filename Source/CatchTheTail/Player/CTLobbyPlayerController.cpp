@@ -1,17 +1,27 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTLobbyPlayerController.h"
 #include "../Core/CTLobbyGameMode.h"
+#include "../Core/CTGameState.h"
 #include "../UI/CTLobbyWidget.h"
+#include "../UI/CTLoadingWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/World.h"
 #include "InputCoreTypes.h"
+#include "UObject/ConstructorHelpers.h"
 
 ACTLobbyPlayerController::ACTLobbyPlayerController()
 {
 	// 폰 받아도 로비 카메라 유지
 	bAutoManageActiveCameraTarget = false;
+
+	// 기본 로딩 화면 (WBP_CTLoadingWidget). 컨트롤러 블루프린트에서 바꿀 수 있음
+	static ConstructorHelpers::FClassFinder<UCTLoadingWidget> LoadingWidgetFinder(TEXT("/Game/UI/WBP_CTLoadingWidget"));
+	if (LoadingWidgetFinder.Succeeded())
+	{
+		LoadingWidgetClass = LoadingWidgetFinder.Class;
+	}
 }
 
 void ACTLobbyPlayerController::SetupInputComponent()
@@ -112,6 +122,39 @@ void ACTLobbyPlayerController::PlayerTick(float DeltaTime)
 	if (IsLocalController())
 	{
 		UpdateLobbyCamera(DeltaTime, /*bSnap=*/false);
+		UpdateLoadingScreen();
+	}
+}
+
+void ACTLobbyPlayerController::UpdateLoadingScreen()
+{
+	const UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+
+	// 서버가 시작을 확정했거나(모두), 방금 내가 시작을 눌렀으면 띄움
+	const float StartRemaining = CTGameState ? CTGameState->GetLobbyStartRemainingSeconds() : 0.f;
+	const bool bConfirmed = StartRemaining > 0.f;
+	if (bConfirmed) { LastStartRemaining = StartRemaining; }
+	const bool bPending = World && (World->GetTimeSeconds() - StartRequestedTime) < StartPendingSeconds;
+	const bool bWantLoading = bConfirmed || bPending;
+
+	if (bWantLoading && !LoadingWidget && LoadingWidgetClass)
+	{
+		LoadingWidget = CreateWidget<UCTLoadingWidget>(this, LoadingWidgetClass);
+		if (LoadingWidget)
+		{
+			// 로비 UI와 채팅보다 위에 놓아 모든 입력을 막음
+			LoadingWidget->AddToViewport(100);
+		}
+	}
+	else if (!bWantLoading && LoadingWidget)
+	{
+		// 카운트가 끝나서 0이 된 것은 맵 이동 직전이라 그대로 두고, 도중에 취소된 경우에만 치움
+		if (LastStartRemaining > 0.f && LastStartRemaining <= 0.6f) { return; }
+
+		LoadingWidget->RemoveFromParent();
+		LoadingWidget = nullptr;
+		LastStartRemaining = 0.f;
 	}
 }
 
@@ -132,6 +175,14 @@ void ACTLobbyPlayerController::RequestSetReady(bool bReady)
 
 void ACTLobbyPlayerController::RequestStartGame()
 {
+	// 이미 시작 중이면 다시 보내지 않음 (연타 방지)
+	const UWorld* World = GetWorld();
+	if (!World || LoadingWidget) { return; }
+
+	// 서버 응답이 오기 전에도 바로 로딩 화면으로 덮어 다른 버튼이 눌리지 않게 함
+	StartRequestedTime = World->GetTimeSeconds();
+	UpdateLoadingScreen();
+
 	ServerStartGame();
 }
 

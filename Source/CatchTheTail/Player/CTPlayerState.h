@@ -34,6 +34,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsGhost() const { return bIsGhost; }
 
+	// 이번 경기에서 기권함. 순위와 라운드 진행에서 빠지고 유령으로 관전만 함
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	bool IsForfeited() const { return bForfeited; }
+
 	// 대기 로비: 준비 완료
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsReady() const { return bReady; }
@@ -56,16 +60,19 @@ public:
 	// 꼬리 수 증감, 0 미만 불가
 	void AddTailCount(int32 Delta);
 	void SetIsGhost(bool bNewIsGhost);
+
+	// 서버 전용: 이번 유령 상태에서 F키 이동을 이미 썼는가 (유령이 될 때마다 초기화)
+	bool HasUsedGhostRelocate() const { return bGhostRelocateUsed; }
+	void MarkGhostRelocateUsed() { bGhostRelocateUsed = true; }
+
+	void SetForfeited(bool bNewForfeited);
 	void SetReady(bool bNewReady);
 
-	// 전화부스 남은 사용 횟수 (서버가 관리, 복제)
+	// 전화를 다시 걸 수 있게 되는 서버 시각 (GameState 서버 시간 기준, 서버가 관리, 복제)
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
-	int32 GetPhoneUsesLeft() const { return PhoneUsesLeft; }
+	double GetPhoneReadyServerTime() const { return PhoneReadyServerTime; }
 
-	void SetPhoneUsesLeft(int32 NewUses);
-
-	// 1회 사용, 없으면 false
-	bool ConsumePhoneUse();
+	void SetPhoneReadyServerTime(double NewReadyTime);
 	void SetIsHost(bool bNewIsHost);
 
 	// 값 변경 시 호출 (UI용)
@@ -83,10 +90,16 @@ protected:
 	int32 TailCount = 0;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|PlayerState")
-	int32 PhoneUsesLeft = 0;
+	double PhoneReadyServerTime = 0.0;
 
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;
+
+	// 서버만 사용, 복제 안 함
+	bool bGhostRelocateUsed = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
+	bool bForfeited = false;
 
 	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bReady = false;

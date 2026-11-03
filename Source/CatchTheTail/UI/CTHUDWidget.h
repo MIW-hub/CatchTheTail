@@ -5,6 +5,7 @@
 #include "CTUserWidget.h"
 #include "CTHUDWidget.generated.h"
 
+class UCTDirectionArrow;
 class UCTScoreEntryWidget;
 class UMaterialInstanceDynamic;
 class UVerticalBox;
@@ -18,6 +19,9 @@ class CATCHTHETAIL_API UCTHUDWidget : public UCTUserWidget
 public:
 	// 상단 안내 문구
 	void ShowNotice(const FText& Message, float Seconds);
+
+	// 월드의 한 지점을 가리키는 화살표를 잠시 보여 줌 (카메라가 돌면 같은 지점을 계속 가리킴)
+	void ShowDirectionArrow(const FVector& TargetLocation, float Seconds);
 
 protected:
 	virtual void NativeConstruct() override;
@@ -62,7 +66,11 @@ protected:
 
 	// 최대 순위 줄 수. 0이면 전부
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0"))
-	int32 MaxScoreboardEntries = 4;
+	int32 MaxScoreboardEntries = 0;
+
+	// 타겟 이름 글자색 (흰 카드 위라 색 이름 대신 어두운 색. 색은 옆 점으로 보임)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor TargetNameTextColor = FLinearColor(0.2f, 0.06f, 0.24f, 1.f);
 
 	// 위젯 (WBP 같은 이름 자동 연결)
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -182,6 +190,16 @@ private:
 
 	UTextBlock* EnsureNoticeText();
 	float NoticeRemaining = 0.f;
+
+	// 방향 화살표. 코드에서 생성
+	UCTDirectionArrow* EnsureDirectionArrow();
+	void UpdateDirectionArrow(float DeltaSeconds);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCTDirectionArrow> DirectionArrow;
+
+	FVector ArrowTargetLocation = FVector::ZeroVector;
+	float ArrowRemaining = 0.f;
 
 	ECTColor LastHunterColor = ECTColor::None;
 	bool bHunterInitialized = false;

@@ -12,7 +12,7 @@ enum class ECTMatchSetting : uint8
 	RoundSeconds  UMETA(DisplayName = "Round Seconds"),   // 색이 바뀌는 라운드 길이(초)
 	MaxPlayers    UMETA(DisplayName = "Max Players"),     // 방 최대 인원
 	InitialTails  UMETA(DisplayName = "Initial Tails"),   // 시작 꼬리 수
-	PhoneUses     UMETA(DisplayName = "Phone Uses"),      // 전화부스 사용 횟수 (0이면 사용 안 함)
+	PhoneUses     UMETA(DisplayName = "Phone Uses"),      // 전화 재사용 대기 시간(초). 0이면 사용 안 함. 로비 위젯 이름 때문에 이전 이름을 유지
 	Bush          UMETA(DisplayName = "Bush"),            // 부쉬 기믹 (0 끄기, 1 켜기)
 	Count         UMETA(Hidden)
 };
@@ -39,9 +39,9 @@ struct CATCHTHETAIL_API FCTMatchSettings
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Match")
 	int32 InitialTails = 1;
 
-	// 전화부스 사용 횟수
+	// 전화 재사용 대기 시간(초), 0이면 사용 안 함
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Match")
-	int32 PhoneUses = 2;
+	int32 PhoneUses = 30;
 
 	// 부쉬 사용 (0/1)
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Match")

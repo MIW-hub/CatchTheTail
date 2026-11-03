@@ -35,7 +35,7 @@ const TArray<int32>& FCTMatchSettings::GetOptions(ECTMatchSetting Setting)
 	static const TArray<int32> RoundSecondsOptions = { 30, 45, 60, 90, 120 };
 	static const TArray<int32> MaxPlayersOptions = { 3, 4, 5, 6, 7, 8 };
 	static const TArray<int32> InitialTailsOptions = { 1, 2, 3 };
-	static const TArray<int32> PhoneUsesOptions = { 0, 1, 2, 3 };
+	static const TArray<int32> PhoneUsesOptions = { 0, 15, 30, 45, 60 };
 	static const TArray<int32> BushOptions = { 0, 1 };
 	static const TArray<int32> None;
 
@@ -122,7 +122,7 @@ FText FCTMatchSettings::GetLabel(ECTMatchSetting Setting)
 	case ECTMatchSetting::RoundSeconds: return NSLOCTEXT("CT", "Match_RoundSeconds", "라운드 시간");
 	case ECTMatchSetting::MaxPlayers:   return NSLOCTEXT("CT", "Match_MaxPlayers", "최대 인원");
 	case ECTMatchSetting::InitialTails: return NSLOCTEXT("CT", "Match_InitialTails", "시작 꼬리 수");
-	case ECTMatchSetting::PhoneUses:    return NSLOCTEXT("CT", "Match_PhoneUses", "전화부스 횟수");
+	case ECTMatchSetting::PhoneUses:    return NSLOCTEXT("CT", "Match_PhoneUses", "전화 쿨타임");
 	case ECTMatchSetting::Bush:         return NSLOCTEXT("CT", "Match_Bush", "부쉬");
 	default: return FText::GetEmpty();
 	}
@@ -138,7 +138,7 @@ FText FCTMatchSettings::FormatValue(ECTMatchSetting Setting, int32 Value)
 	case ECTMatchSetting::InitialTails: return FText::Format(NSLOCTEXT("CT", "Match_ValueTails", "{0}개"), Value);
 	case ECTMatchSetting::PhoneUses:
 		return Value <= 0 ? NSLOCTEXT("CT", "Match_ValueNone", "사용 안 함")
-			: FText::Format(NSLOCTEXT("CT", "Match_ValueTimes", "{0}회"), Value);
+			: FText::Format(NSLOCTEXT("CT", "Match_ValueSeconds", "{0}초"), Value);
 	case ECTMatchSetting::Bush:
 		return Value != 0 ? NSLOCTEXT("CT", "Match_ValueOn", "켜기") : NSLOCTEXT("CT", "Match_ValueOff", "끄기");
 	default: return FText::GetEmpty();

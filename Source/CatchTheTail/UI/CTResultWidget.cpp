@@ -10,6 +10,18 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "UObject/ConstructorHelpers.h"
+
+UCTResultWidget::UCTResultWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// 블루프린트에서 지정이 풀려도 순위가 비지 않도록 기본 줄 위젯을 미리 지정 (블루프린트 값이 있으면 그 값이 우선)
+	static ConstructorHelpers::FClassFinder<UCTScoreEntryWidget> ScoreEntryFinder(TEXT("/Game/UI/WBP_CTScoreEntryWidget"));
+	if (ScoreEntryFinder.Succeeded())
+	{
+		ScoreEntryClass = ScoreEntryFinder.Class;
+	}
+}
 
 void UCTResultWidget::NativeConstruct()
 {
@@ -94,11 +106,18 @@ void UCTResultWidget::ShowResult()
 		Text_Winners->SetText(FText::FromString(FString::Join(WinnerNames, TEXT(", "))));
 	}
 
+	if (!VerticalBox_Ranking || !ScoreEntryClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 결과 순위를 그릴 수 없음: VerticalBox_Ranking=%s, ScoreEntryClass=%s"),
+			VerticalBox_Ranking ? TEXT("있음") : TEXT("없음"), ScoreEntryClass ? TEXT("있음") : TEXT("없음"));
+	}
+
 	if (VerticalBox_Ranking && ScoreEntryClass)
 	{
 		VerticalBox_Ranking->ClearChildren();
 
 		const TArray<ACTPlayerState*> Players = GetSortedPlayers(GameState);
+		UE_LOG(LogTemp, Log, TEXT("[CT] 결과 순위 %d명 표시"), Players.Num());
 		int32 Rank = 0;
 		int32 PreviousTailCount = INDEX_NONE;
 		for (int32 Index = 0; Index < Players.Num(); ++Index)
