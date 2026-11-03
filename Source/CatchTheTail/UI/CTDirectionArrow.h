@@ -6,6 +6,7 @@
 #include "CTDirectionArrow.generated.h"
 
 class SCTDirectionArrow;
+class UTexture2D;
 
 /**
  * 방향 화살표. 선으로 그려서 별도 이미지 없이 쓸 수 있고, 각도만 정해 주면 그 방향으로 돌아감.
@@ -26,6 +27,10 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
+	// 화살표 그림. 비면 ico_Arrow, 그것도 없으면 선으로 그림 (위쪽을 향한 그림)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|UI")
+	TObjectPtr<UTexture2D> ArrowTexture;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|UI")
 	FLinearColor ArrowColor = FLinearColor(1.f, 0.85f, 0.2f, 1.f);
 
@@ -33,6 +38,8 @@ protected:
 	float LineThickness = 9.f;
 
 private:
+	FSlateBrush ArrowBrush;
+
 	float AngleDegrees = 0.f;
 
 	TSharedPtr<SCTDirectionArrow> MyArrow;

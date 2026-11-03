@@ -231,7 +231,7 @@ void ACTPhoneBooth::FinishUse()
 	const float CooldownSeconds = GameMode ? GameMode->GetPhoneCooldownSeconds() : FallbackCooldownSeconds;
 	MyState->SetPhoneReadyServerTime(CTGameState->GetServerWorldTimeSeconds() + CooldownSeconds);
 
-	// 거리는 구간으로만, 방향은 목표를 물었을 때만 화살표로 알려줌
+	// 거리는 구간으로만, 방향은 화살표로 알려줌 (목표, 헌터 모두)
 	const float DistanceMeters = FVector::Dist(Character->GetActorLocation(), Found->GetActorLocation()) / 100.f;
 	const int32 Step = FMath::Max(FMath::RoundToInt(DistanceStepMeters), 1);
 	const int32 Rounded = FMath::RoundToInt(DistanceMeters / Step) * Step;
@@ -251,7 +251,7 @@ void ACTPhoneBooth::FinishUse()
 			: FText::Format(NSLOCTEXT("CT", "Phone_HunterResult", "헌터가 약 {0}m 거리에 있습니다."), FText::AsNumber(Rounded));
 	}
 
-	Character->ClientShowPhoneResult(Result, NoticeSeconds, /*bShowArrow=*/bAskTarget, Found->GetActorLocation());
+	Character->ClientShowPhoneResult(Result, NoticeSeconds, /*bShowArrow=*/true, Found->GetActorLocation());
 	if (bAskTarget)
 	{
 		Found->ClientShowNotice(NSLOCTEXT("CT", "Phone_Found", "누군가 당신을 찾았습니다!"), NoticeSeconds);
