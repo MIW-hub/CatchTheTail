@@ -9,6 +9,8 @@
 #include "Fonts/CompositeFont.h"
 #include "Internationalization/Text.h"
 #include "Internationalization/TextKey.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpression.h"
 #include "Materials/MaterialExpressionComment.h"
 
 namespace
@@ -116,6 +118,51 @@ void UCTLocalizationTools::SetMaterialCommentSize(UObject* CommentNode, int32 Wi
 	Box->SizeX = FMath::Max(Width, 50);
 	Box->SizeY = FMath::Max(Height, 50);
 	Box->MarkPackageDirty();
+#endif
+}
+
+int32 UCTLocalizationTools::RemoveUnusedMaterialNodes(UMaterial* Material)
+{
+#if WITH_EDITORONLY_DATA
+	if (!Material) { return -1; }
+
+	// 출력에서 거슬러 올라가며 쓰이는 노드를 모음
+	TSet<UMaterialExpression*> Used;
+	TFunction<void(UMaterialExpression*)> Walk = [&Used, &Walk](UMaterialExpression* Expression)
+	{
+		if (!Expression || Used.Contains(Expression)) { return; }
+		Used.Add(Expression);
+		for (int32 Index = 0; ; ++Index)
+		{
+			FExpressionInput* Input = Expression->GetInput(Index);
+			if (!Input) { break; }
+			Walk(Input->Expression);
+		}
+	};
+	for (int32 Property = 0; Property < MP_MAX; ++Property)
+	{
+		if (const FExpressionInput* Input = Material->GetExpressionInputForProperty(static_cast<EMaterialProperty>(Property)))
+		{
+			Walk(Input->Expression);
+		}
+	}
+
+	TArray<UMaterialExpression*> Unused;
+	for (UMaterialExpression* Expression : Material->GetExpressions())
+	{
+		if (Expression && !Used.Contains(Expression) && !Expression->IsA<UMaterialExpressionComment>())
+		{
+			Unused.Add(Expression);
+		}
+	}
+	for (UMaterialExpression* Expression : Unused)
+	{
+		Material->GetExpressionCollection().RemoveExpression(Expression);
+	}
+	if (Unused.Num() > 0) { Material->MarkPackageDirty(); }
+	return Unused.Num();
+#else
+	return -1;
 #endif
 }
 

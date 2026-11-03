@@ -26,6 +26,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
 	static void SetMaterialCommentSize(UObject* CommentNode, int32 Width, int32 Height);
 
+	// 머티리얼에서 출력 어디에도 이어지지 않은 노드를 지움 (코멘트 박스는 남김). 지운 개수를 돌려줌
+	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
+	static int32 RemoveUnusedMaterialNodes(UMaterial* Material);
+
 	// 폰트에 보조 폰트 추가. 이미 있으면 false
 	UFUNCTION(BlueprintCallable, Category = "CT|Localization")
 	static bool AddFallbackFontFace(UFont* TargetFont, UObject* FontFaceAsset, FName EntryName);
