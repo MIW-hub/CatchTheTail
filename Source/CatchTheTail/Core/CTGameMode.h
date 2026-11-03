@@ -3,20 +3,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/OnlineReplStructs.h"
 #include "../Type/CTTypes.h"
 #include "CTGameMode.generated.h"
 
 class ACTPlayerState;
 class ACTGameState;
 
-/**
- * 게임의 규칙을 책임지는 클래스 (서버에만 존재합니다).
- *
- * 하는 일
- *  1. 게임 시작 / 종료
- *  2. 1분마다 라운드 변경: 색 랜덤 배정(중복 없음), 목표 색 계산, 유령 부활
- *  3. 꼬리 잡기 성공 판정: 점수 변경, 잡힌 사람을 유령으로 만들기
- */
 UCLASS()
 class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
 {
@@ -25,24 +18,41 @@ class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
 public:
 	ACTGameMode();
 
-	virtual void PostLogin(APlayerController* NewPlayer) override;
+	// 로비에서 정한 경기 설정 적용
+	virtual void InitGameState() override;
 
-	/** 게임 시작. (로비에서 "시작" 버튼을 누르면 호출하세요) */
+	// 진행 중이면 새 입장 거절
+	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+	// 이탈 시 목표 색 정리, 혼자 남으면 종료
+	virtual void Logout(AController* Exiting) override;
+	// Seamless Travel 플레이어는 PostLogin이 없어 여기서 초기화
+	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
+
+	// 로비 시작 버튼에서 호출
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void StartGame();
 
-	/** 게임 종료 (시간이 다 되면 자동으로 호출됩니다) */
+	// 전화 재사용 대기(초), 0이면 전화 사용 불가
+	float GetPhoneCooldownSeconds() const { return PhoneCooldownSeconds; }
+
+	// 시간 종료 시 자동 호출
 	UFUNCTION(BlueprintCallable, Category = "CT|Game")
 	void EndGame();
 
-	/**
-	 * 꼬리 잡기 성공 처리. 캐릭터가 서버에서 호출합니다.
-	 * 조건을 모두 확인하고, 통과하면 점수 변경 + 잡힌 사람 유령 처리.
-	 * @return 성공하면 true
-	 */
+	// 서버, 방장 로비 복귀 요청 (종료 후만)
+	bool RequestReturnToLobby(APlayerController* Requester);
+
+	// 서버, 점수 변경 + 유령 처리
 	bool HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
-	// ===== 블루프린트 이벤트 (연출, UI 연결용) =====
+	// 서버, 기권 요청. 경기 중이고 기권이 열린 뒤에만 가능. 꼬리를 잃고 순위에서 빠져 유령으로 남음
+	bool HandleForfeit(ACTPlayerState* Forfeiter);
+
+	// 서버, 유령이 F키로 무작위 PlayerStart 로 이동. 유령 상태마다 한 번만 가능하며 유령 상태는 그대로이고 부활은 다음 라운드 시작 때
+	bool HandleGhostRelocate(ACTPlayerState* Ghost);
+
+	// 블루프린트 이벤트
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
 	void OnGameStarted();
 
@@ -52,37 +62,56 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
 	void OnTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
-	/** 게임 종료. bIsTie가 true면 동점(연장전 필요) */
+	// 게임 종료. bIsTie면 동점(연장전)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
 	void OnGameFinished(const TArray<ACTPlayerState*>& Winners, bool bIsTie);
 
 protected:
-	// ===== 설정 (블루프린트 GameMode에서 수정) =====
-	/** 전체 게임 시간(초). 사업계획서: 5~10분 = 300~600 */
+	// 설정
+	// 전체 게임 시간(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "10"))
 	float GameDurationSeconds = 300.f;
 
-	/** 한 라운드 길이(초). 끝나면 색이 다시 섞입니다. */
+	// 라운드 길이(초). 끝나면 색 재배정
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "5"))
 	float RoundDurationSeconds = 60.f;
 
-	/** 색이 바뀌기 몇 초 전부터 카운트다운을 보여줄지 */
+	// 색 변경 전 카운트다운 시간(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	float CountdownSeconds = 5.f;
 
-	/** 게임 시작 때 모두가 가지고 시작하는 꼬리 수 */
+	// 시작 꼬리 수
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
-	int32 InitialTailCount = 0;
+	int32 InitialTailCount = 1;
 
-	/**
-	 * true: 지금 게임에 있는 색들 중에서 "순서상 다음 색"을 목표로 삼습니다.
-	 *       (예: 빨강, 파랑, 분홍만 있으면 빨강→파랑→분홍→빨강)
-	 * false: 색 순서의 바로 다음 색을 그대로 씁니다. (그 색을 가진 사람이 없을 수도 있음)
-	 */
+	// 전화를 한 번 건 뒤 다시 걸기까지의 대기 시간(초, 플레이어마다). 0이면 전화 사용 불가
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Gimmick", meta = (ClampMin = "0"))
+	float PhoneCooldownSeconds = 30.f;
+
+	// 꼬리가 이 수보다 적으면 새 라운드에 채움, 0이면 안 채움
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
+	int32 MinTailCountAtRoundStart = 1;
+
+	// 꼬리를 잡으면 상대가 가진 꼬리를 모두 가져옴 (끄면 1개만)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")
+	bool bTakeAllTailsOnGrab = true;
+
+	// 유령이 이동할 시작점에서 이 거리 안에 다른 캐릭터가 있으면 그 시작점은 피함 (cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
+	float GhostRelocateClearRadius = 200.f;
+	// 전체 경기 시간의 이 비율이 지나면 기권할 수 있음 (0.5 = 절반)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0", ClampMax = "1"))
+	float ForfeitAvailableRatio = 0.5f;
+
+	// 종료 후 자동 로비 복귀 시간(초), 0이면 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
+	float ReturnToLobbyDelaySeconds = 20.f;
+
+	// true면 사용 중인 색 중 다음 색이 목표
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")
 	bool bTargetFromActiveColorsOnly = true;
 
-	/** 테스트용: 접속하면 일정 시간 뒤 게임을 자동 시작 (로비를 만들면 끄세요) */
+	// 테스트용 자동 시작. 로비 만들면 끄기
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Debug")
 	bool bAutoStartForTesting = true;
 
@@ -90,21 +119,33 @@ protected:
 	float AutoStartDelaySeconds = 5.f;
 
 private:
-	/** 새 라운드 시작: 유령 부활, 색 배정, 라운드 시간 설정 */
+	// 이탈자 반영: 남은 사람끼리 목표 색 재연결
+	void HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer);
+
+	// PostLogin / 심리스 트래블 공통 초기화
+	void InitPlayerForGame(APlayerController* NewPlayer);
+
+	// 시작 전 카운트다운. 끝나면 StartGame
+	void BeginStartCountdown();
+
+	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();
 
-	/** 사용 인원 수만큼 8색에서 중복 없이 배정, 직전 색은 가능하면 피함 */
+	// 색 배정, 직전 색 회피
 	void AssignColorsAndTargets();
 
-	/** 0.2초마다 시간 확인: 라운드가 끝났는지, 게임이 끝났는지 */
+	// 0.2초마다 라운드/게임 종료 확인
 	void TickGameFlow();
 
-	/** 모든 캐릭터의 추격 버프 다시 계산 */
+	// 전원 추격 버프 재계산
 	void RefreshAllChaseBuffs();
 
-	/** 관전자를 뺀 모든 플레이어 */
+	// 관전자와 기권한 플레이어를 뺀, 경기에 참여 중인 플레이어
 	TArray<ACTPlayerState*> CollectPlayers() const;
 
-	FTimerHandle FlowTimerHandle;
+	// 대기 로비로 Seamless Travel
+	void ReturnToLobby();
+
+	FTimerHandle ReturnToLobbyTimerHandle;	FTimerHandle FlowTimerHandle;
 	FTimerHandle AutoStartTimerHandle;
 };

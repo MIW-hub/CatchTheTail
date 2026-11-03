@@ -4,24 +4,21 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "../Type/CTTypes.h"
+#include "../Core/CTAudioSettings.h"
 #include "CTCharacter.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UCurveFloat;
+class UAnimMontage;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
+class ACTTail;
+class ACTBush;
+class UCTTongueComponent;
 struct FInputActionValue;
 
-/**
- * 플레이어 캐릭터 (로봇).
- *
- * 기능
- *  - 이동 / 점프(공중 중복 점프 불가) / 달리기 / 3인칭 추적 카메라
- *  - 잡기(좌클릭, 쿨타임 없음) / 밀기(우클릭, 쿨타임 1초)
- *  - 속도 "버프 합산" 방식: 최종 배율 = 1.0 + 달리기 0.5 + 추격 0.2 ... (유령은 -0.5)
- *  - 유령 상태: 이동만 가능
- *
- * 규칙 판정(잡기 성공, 밀기, 달리기 시작)은 모두 서버가 합니다.
- */
 UCLASS()
 class CATCHTHETAIL_API ACTCharacter : public ACharacter
 {
@@ -32,63 +29,205 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaSeconds) override;
 
-	/** 유령이면 점프 불가 */
+	// 유령 점프 불가
 	virtual bool CanJumpInternal_Implementation() const override;
 
-	// ===== 상태 읽기 =====
+	// 늦게 온 PlayerState 유령 상태 동기화
+	virtual void OnRep_PlayerState() override;
+
+	// 상태 읽기
 	UFUNCTION(BlueprintPure, Category = "CT|State")
 	bool IsGhost() const;
 
-	/** 현재 속도 배율 (1.0 + 모든 버프의 합) */
+	// 속도 배율 (1 + 버프 합)
 	UFUNCTION(BlueprintPure, Category = "CT|Speed")
 	float GetSpeedMultiplier() const;
 
 	UFUNCTION(BlueprintPure, Category = "CT|Run")
 	ECTRunState GetRunState() const { return RunState; }
 
-	/** 달리기 중이면 남은 달리기 시간, 쿨타임 중이면 남은 쿨타임 (초) */
+	// 달리기/쿨타임 남은 시간
 	UFUNCTION(BlueprintPure, Category = "CT|Run")
 	float GetRunStateRemainingSeconds() const;
 
-	// ===== 서버 전용 함수 =====
-	/** 속도 버프 추가 (같은 이름이면 값만 바꿈) */
+	// 달리기 게이지 0~1
+	UFUNCTION(BlueprintPure, Category = "CT|Run")
+	float GetRunGaugePercent() const;
+
+	// 밀기 준비도 0~1 (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetPushReadyPercent() const;
+
+	// 밀기 쿨타임 남은 시간(초) (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetPushCooldownRemainingSeconds() const;
+
+	// 잡기 준비도 0~1 (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetGrabReadyPercent() const;
+
+	// 잡기 쿨타임 남은 시간(초) (로컬만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	float GetGrabCooldownRemainingSeconds() const;
+
+	// 쿨타임 설정값 (HUD 표시용)
+	float GetRunCooldownSeconds() const { return RunCooldownSeconds; }
+	float GetGrabCooldownSeconds() const { return GrabCooldownSeconds; }
+	float GetPushCooldownSeconds() const { return PushCooldownSeconds; }
+
+	// 배율 1.0 걷기 속도
+	UFUNCTION(BlueprintPure, Category = "CT|Speed")
+	float GetBaseWalkSpeed() const { return BaseWalkSpeed; }
+
+	// 잡기/밀기 가능 여부
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	bool CanUseActions() const;
+
+	// 이동/점프/달리기 가능 여부
+	UFUNCTION(BlueprintPure, Category = "CT|State")
+	bool CanMoveNow() const;
+
+	// 부쉬 안 여부
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	bool IsInBush() const { return CurrentBush != nullptr; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	ACTBush* GetCurrentBush() const { return CurrentBush; }
+
+	// 전화부스 사용 중
+	UFUNCTION(BlueprintPure, Category = "CT|Gimmick")
+	bool IsBoothLocked() const { return bBoothLocked; }
+
+	// 서버 전용: 부쉬 출입, 부스 사용 중 잠금
+	void SetCurrentBush(ACTBush* NewBush);
+	void SetBoothLocked(bool bNewLocked);
+
+	// 조종자 화면 안내 문구 (서버 호출)
+	UFUNCTION(Client, Reliable)
+	void ClientShowNotice(const FText& Message, float Seconds);
+
+	// 전화 결과 (서버 호출): 안내 문구와, 원하면 TargetLocation을 가리키는 화살표
+	UFUNCTION(Client, Reliable)
+	void ClientShowPhoneResult(const FText& Message, float Seconds, bool bShowArrow, FVector TargetLocation);
+
+	// 행동별 몽타주
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	UAnimMontage* GetActionMontage(ECTCharacterAction Action) const;
+
+	// 서버 전용 함수
+	// 같은 이름이면 값 갱신
 	void AddSpeedBuff(FName BuffId, float Value);
 
-	/** 속도 버프 제거 */
 	void RemoveSpeedBuff(FName BuffId);
 
-	/** "추격" 버프를 켜야 하는지 다시 계산 (게임 중 + 유령 아님 → 켬) */
+	// 추격 버프 재계산
 	void RefreshChaseBuff();
 
-	/** PlayerState가 "유령 상태가 바뀌었다"고 알려줄 때 호출 (서버, 클라이언트 모두) */
+	// 유령 상태 변경 통지
 	void OnGhostStateChanged(bool bNewIsGhost);
+
+	// AssignedColor 머티리얼 반영
+	void RefreshBodyColor();
+
+	// 꼬리 수 변경 시 모양 갱신
+	void RefreshTailVisual();
+
+	// 꼬리 본 상대 변환
+	void ApplyTailOffset();
+
+	// GrabWindow 노티파이용, 서버 판정 on/off
+	void OnGrabNotifyBegin();
+	void OnGrabNotifyEnd();
+
+	// 잡기 동작 중 (서버만 정확)
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	bool IsGrabActive() const { return bGrabActive; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Tail")
+	ACTTail* GetOwnedTail() const { return OwnedTail; }
+
+	// 전원 화면 행동 연출 (서버 호출)
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayAction(ECTCharacterAction Action, bool bSuccess);
+
+	// 서버 호출: 기믹에 맞은 소리를 전원 화면에서 재생
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayHitSfx(ECTSfx Sfx);
+
+	// 서버 호출: 날아가는 방향(수평)에 따라 넘어지는 연출을 고름. 보는 방향으로 날아가면 앞으로 엎어지고, 반대면 뒤로 넘어짐
+	void PlayKnockedDown(const FVector& KnockDirection);
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// ===== 블루프린트에서 연결할 이벤트 (애니메이션, 이펙트용) =====
+	// 블루프린트에서 연결할 이벤트
+	// 행동 연출 (전원 화면)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
-	void BP_OnGrab();
-
-	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
-	void BP_OnPush();
+	void BP_OnAction(ECTCharacterAction Action, bool bSuccess);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Events")
 	void BP_OnGhostStateChanged(bool bNewIsGhost);
 
-	// ===== 컴포넌트 =====
+	// 컴포넌트
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
 
-	// ===== 입력 (블루프린트에서 Input Action 에셋을 넣어 주세요) =====
+	// 카메라
+	// 뒤 시점 거리(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "100"))
+	float CameraDistanceBehind = 450.f;
+
+	// 위 시점 거리(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "100"))
+	float CameraDistanceTop = 900.f;
+
+	// 뒤 시점 기준 Pitch
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "-89", ClampMax = "30"))
+	float BehindPitch = -10.f;
+
+	// 위 시점 기준 Pitch
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "-89", ClampMax = "0"))
+	float TopPitch = -70.f;
+
+	// 각도→거리 곡선, 없으면 SmoothStep
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
+	TObjectPtr<UCurveFloat> DistanceCurve;
+
+	// 거리 보간 속도
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0.1"))
+	float CameraDistanceInterpSpeed = 8.f;
+
+	// 카메라가 이 거리(cm)보다 가까우면 내 캐릭터 숨김, 0이면 끔
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0"))
+	float CameraHideDistance = 130.f;
+
+	// 숨김 해제 여유 거리(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "0"))
+	float CameraHideHysteresis = 30.f;
+
+	// 카메라 충돌 구 크기(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "1"))
+	float CameraProbeSize = 15.f;
+
+	// 카메라 벽 충돌 시 당김, 끄면 시점은 안 튐
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera")
+	bool bCameraCollision = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "30", ClampMax = "120"))
+	float CameraFieldOfView = 70.f;
+
+	// 입력
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> MoveAction;
 
+	// 카메라 회전, 마우스 Y Negate 필요
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> LookAction;
 
@@ -104,42 +243,181 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> PushAction;
 
-	// ===== 속도 설정 (임의값. 엔진에서 확인하며 조정하세요) =====
-	/** 기본 걷기 속도 (배율 1.0일 때) */
+	// 애니메이션 몽타주
+	// 잡기 (왼손)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GrabMontage;
+
+	// 밀기 (오른손)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushMontage;
+
+	// 꼬리 잡힘 반응
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> CaughtMontage;
+
+	// 밀려남 반응 (맞은 방향으로 앞으로 엎어짐)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushedMontage;
+
+	// 앞으로 엎어진 뒤 일어나기 몽타주, 비면 바로 풀림
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GetUpMontage;
+
+	// 밀려남 반응 (맞은 방향의 반대로, 뒤로 넘어짐). 비면 PushedMontage 를 씀
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> PushedBackMontage;
+
+	// 뒤로 넘어진 뒤 일어나기 몽타주, 비면 바로 풀림
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GetUpBackMontage;
+
+	// 유령 걷기 반복 몽타주, 섹션명=GhostWalkLoopSection
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> GhostWalkMontage;
+
+	// 유령 걷기 반복 섹션 이름
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	FName GhostWalkLoopSection = TEXT("Loop");
+
+	// 유령 걷기 몽타주 기준 속도(cm/s), 실속도 비례 재생
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "1"))
+	float GhostWalkReferenceSpeed = 300.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float GhostWalkMinPlayRate = 0.6f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float GhostWalkMaxPlayRate = 1.5f;
+
+	// 이 속도 미만이면 유령 걷기 모션 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0"))
+	float GhostWalkMinSpeed = 30.f;
+
+	// 달리기 반복 몽타주, 섹션명=RunMontageLoopSection
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> RunMontage;
+
+	// 반복 섹션 이름
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	FName RunMontageLoopSection = TEXT("Default");
+
+	// 몽타주 기준 속도(cm/s), 실속도 비례 재생
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "1"))
+	float RunMontageReferenceSpeed = 297.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float RunMontageMinPlayRate = 0.7f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float RunMontageMaxPlayRate = 2.f;
+
+	// 이 속도 미만이면 달리기 모션 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0"))
+	float RunMontageMinSpeed = 50.f;
+
+	// 행동 몽타주 재생 속도
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float ActionMontagePlayRate = 1.f;
+
+	// 혀
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Tongue")
+	TObjectPtr<UCTTongueComponent> TongueMesh;
+
+	// 꼬리
+	// 꼬리 액터 클래스, 비면 없음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
+	TSubclassOf<ACTTail> TailClass;
+
+	// 꼬리 붙일 본
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
+	FName TailSocketName = TEXT("Hips");
+
+	// 꼬리 시작 위치 (모델 좌표, +Y 앞 +Z 위)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
+	FVector TailOffsetLocation = FVector(0.f, -60.f, 29.f);
+
+	// 꼬리 회전, +Z로 이어지므로 Roll 90이면 눕힘
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
+	FRotator TailOffsetRotation = FRotator(0.f, 0.f, 90.f);
+
+	// 꼬리 전체 크기 (몸통 97cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail")
+	FVector TailOffsetScale = FVector(0.5f, 0.5f, 0.5f);
+
+	// 몸 색상
+	// 머티리얼 Vector 파라미터명
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	FName BodyColorParameterName = TEXT("BodyColor");
+
+	// 색 없을 때 색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	FLinearColor NoColorTint = FLinearColor::White;
+
+	// 유령 몸 색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	FLinearColor GhostBodyColor = FLinearColor(0.35f, 0.35f, 0.35f, 1.f);
+
+	// 색칠할 슬롯, 비면 전체
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	TArray<int32> BodyColorMaterialSlots;
+
+	// 속도 설정
+	// 기본 걷기 속도
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Speed", meta = (ClampMin = "0"))
 	float BaseWalkSpeed = 600.f;
 
-	/** 달리기 버프 값 (+0.5 → 1.5배) */
+	// 달리기 버프 (+0.5)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Speed")
 	float RunBuffValue = 0.5f;
 
-	/** 목표 추격 버프 값 (+0.2 → 1.2배) */
+	// 추격 버프 (+0.2)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Speed")
 	float ChaseBuffValue = 0.2f;
 
-	/** 유령 버프 값 (-0.5 → 0.5배) */
+	// 유령 버프 (-0.5)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Speed")
 	float GhostBuffValue = -0.5f;
 
-	// ===== 달리기 설정 =====
-	/** Shift를 누르고 있을 때 최대로 달릴 수 있는 시간(초) */
+	// 달리기 설정
+	// 최대 달리기 시간(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Run", meta = (ClampMin = "0.1"))
 	float RunDurationSeconds = 3.f;
 
-	/** 달리기가 끝난 뒤 다시 달릴 수 있을 때까지 쿨타임(초) */
+	// 달리기 쿨타임(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Run", meta = (ClampMin = "0"))
 	float RunCooldownSeconds = 5.f;
 
-	/** 3초 전에 Shift를 떼도 쿨타임을 적용할지 (true면 적용) */
+	// 일찍 뗐을 때도 쿨타임 적용
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Run")
 	bool bCooldownOnEarlyRelease = true;
 
-	// ===== 잡기 / 밀기 설정 (임의값) =====
-	/** 잡기 거리 (cm, 내 중심 ~ 상대 중심) */
+	// 잡기 / 밀기 설정
+	// 잡기 거리(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
 	float GrabDistance = 150.f;
 
-	/** 잡기 범위 각도 (정면 기준 좌우 몇 도까지) */
+	// true: Grab Window 구간만 판정, 노티파이 없으면 타이머
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat")
+	bool bUseMontageGrabWindow = true;
+
+	// 판정 최대 시간(초), 안전장치
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0.1"))
+	float GrabWindowMaxSeconds = 1.5f;
+
+	// true: 꼬리 접촉 필요, false: 정면 부채꼴
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat")
+	bool bRequireTailTouch = true;
+
+	// 잡기 입력 후 판정 시작까지(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
+	float GrabWindowDelaySeconds = 0.1f;
+
+	// 판정 지속(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0.05"))
+	float GrabActiveSeconds = 0.35f;
+
+	// 부채꼴 반각
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0", ClampMax = "180"))
 	float GrabHalfAngleDegrees = 60.f;
 
@@ -149,20 +427,61 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0", ClampMax = "180"))
 	float PushHalfAngleDegrees = 60.f;
 
-	/** 밀려나는 속도 (수평) */
+	// 밀림 거리 (피해자 키 배수)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
-	float PushSpeed = 800.f;
+	float PushDistanceInHeights = 1.f;
 
-	/** 밀 때 살짝 위로 띄우는 속도 (0이면 바닥을 따라 밀림) */
+	// 밀기 몽타주 재생 속도 (잡기 등은 ActionMontagePlayRate)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
+	float PushMontagePlayRate = 2.f;
+
+	// 밀 때 상승 속도
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
 	float PushUpSpeed = 200.f;
 
-	/** 밀기 쿨타임(초) */
+	// 밀기 쿨타임(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
-	float PushCooldownSeconds = 1.f;
+	float PushCooldownSeconds = 3.f;
+
+	// 잡기 쿨타임(초), 입력 순간부터
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
+	float GrabCooldownSeconds = 1.5f;
 
 protected:
-	// ===== 입력 처리 (내 컴퓨터에서 실행) =====
+	// 카메라 초기 설정
+	void ApplyCameraSettings();
+
+	// Pitch별 카메라 거리 보간 (로컬만)
+	void UpdateCameraDistance(float DeltaSeconds);
+
+	// 걷기/점프/착지 소리, 각자 재생
+	void UpdateMovementSounds(float DeltaSeconds);
+
+	void UpdateCameraClip();
+// 카메라 근접 시 내 캐릭터 숨김
+
+	// 부쉬 속 캐릭터 숨김 (매 프레임)
+	void UpdateBushVisibility();
+	void SetHiddenFromOwnCamera(bool bNewHidden);
+
+	// 부쉬 안일 때 내 캐릭터 실루엣
+	void UpdateBushXRay();
+
+	// 내 화면 전용 겹친 몸
+	UPROPERTY(VisibleAnywhere, Category = "CT|Camera")
+	TObjectPtr<USkeletalMeshComponent> XRayMesh;
+
+	// 겹친 몸 머티리얼 (깊이 검사 끔)
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Camera")
+	TObjectPtr<UMaterialInterface> XRayMaterial;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> XRayMaterials;
+
+	bool bXRayActive = false;
+	bool bXRaySetup = false;
+
+	// 입력 처리
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void OnRunPressed();
@@ -170,7 +489,7 @@ protected:
 	void OnGrabPressed();
 	void OnPushPressed();
 
-	// ===== 서버에게 부탁하는 함수들 (RPC) =====
+	// 서버 RPC
 	UFUNCTION(Server, Reliable)
 	void ServerSetRunInput(bool bPressed);
 
@@ -180,47 +499,139 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerPush();
 
-	/** 모두의 화면에서 잡기/밀기 연출을 재생 */
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastPlayGrab();
+	// 애니메이션
+	// 로컬에서만 몽타주 재생
+	void PlayActionMontage(ECTCharacterAction Action);
 
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastPlayPush();
+	// 잡기/밀기 몽타주 중지
+	void StopAttackMontages();
 
-	// ===== 속도 =====
+	// 달리기 몽타주 반복/정지 (매 프레임)
+	void UpdateRunMontage();
+	void UpdateGhostWalkMontage();
+
+	// 넘어짐 끝나면 일어나기 재생
+	UFUNCTION()
+	void HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	// 꼬리 / 잡기 동작 구간 (서버)
+	void SpawnTail();
+	// 타이머 방식 잡기 구간
+	void BeginGrabWindow();
+
+	// 잡기 구간 Duration초 개방
+	void StartGrabWindow(float Duration);
+
+	// GrabMontage에 노티파이 있는지
+	bool HasGrabWindowNotify() const;
+	void EndGrabWindow();
+	void TickGrabWindow();
+
+	// 구방식: 정면 부채꼴 즉시 잡기
+	bool TryGrabByCone();
+
+	UFUNCTION()
+	void OnRep_OwnedTail();
+
+	// 속도
 	void RecalculateMaxWalkSpeed();
 
 	UFUNCTION()
 	void OnRep_SpeedBuffs();
 
-	// ===== 달리기 (서버) =====
+	// 달리기 (서버)
 	void TryStartRun();
 	void StopRun(bool bEndedNaturally);
 	void ForceResetRun();
 	void OnRunDurationEnded();
 	void OnRunCooldownEnded();
 
-	// ===== 도우미 =====
-	/** 서버 기준 현재 시각 */
+	// 도우미
 	double GetServerTime() const;
 
-	/** Other가 내 정면 부채꼴(거리, 각도) 안에 있는가? (수평 기준) */
+	// Other가 정면 부채꼴 안인지
 	bool IsInFrontCone(const AActor* Other, float MaxDistance, float HalfAngleDegrees) const;
 
 private:
-	/** 지금 붙어 있는 속도 버프들 (서버가 정하고 복제) */
+	// 속도 버프 (서버 결정, 복제)
 	UPROPERTY(ReplicatedUsing = OnRep_SpeedBuffs)
 	TArray<FCTSpeedBuff> SpeedBuffs;
 
 	UPROPERTY(Replicated)
 	ECTRunState RunState = ECTRunState::Idle;
 
-	/** 달리기/쿨타임이 끝나는 서버 시각 */
+	// 달리기/쿨타임 종료 서버 시각
 	UPROPERTY(Replicated)
 	double RunStateEndTime = 0.0;
 
 	FTimerHandle RunTimerHandle;
 
-	/** 마지막으로 민 시각 (서버) */
+	// 발소리 간격 이동 거리(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "10", AllowPrivateAccess = "true"))
+	float FootstepDistance = 190.f;
+
+	// 발소리 최소 속도(cm/s)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float MinFootstepSpeed = 80.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float FootstepVolume = 0.55f;
+
+	// 착지 소리 최소 낙하 속도(cm/s)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (ClampMin = "0", AllowPrivateAccess = "true"))
+	float LandMinFallSpeed = 300.f;
+
+	// 거리 기반 발소리, 기본은 노티파이 사용
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Sound", meta = (AllowPrivateAccess = "true"))
+	bool bUseDistanceFootsteps = false;
+
+	// 발소리 이동 거리 누적
+	float FootstepDistanceAccum = 0.f;
+	bool bWasOnGroundForSound = true;
+	float LastFallSpeedForSound = 0.f;
+
+	// 근접 카메라로 숨긴 상태 (로컬)
+	bool bHiddenFromOwnCamera = false;
+
+	// 마지막 밀기 시각 (서버)
 	double LastPushTime = -1000.0;
+
+	// 마지막 밀기 입력 시각 (로컬)
+	double LocalLastPushTime = -1000.0;
+
+	// 마지막 잡기 시각 (서버)
+	double LastGrabTime = -1000.0;
+
+	// 마지막 잡기 입력 시각 (로컬)
+	double LocalLastGrabTime = -1000.0;
+
+	// 지금 들어가 있는 부쉬 (서버 결정, 복제)
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentBush)
+	TObjectPtr<ACTBush> CurrentBush;
+
+	UFUNCTION()
+	void OnRep_CurrentBush();
+
+	// 전화부스 사용 중 (서버 결정, 복제)
+	UPROPERTY(Replicated)
+	bool bBoothLocked = false;
+
+	// 지금 몸을 숨기고 있는가 (이 컴퓨터)
+	bool bBodyHiddenByBush = false;
+
+	// 꼬리 (서버 생성, 복제)
+	UPROPERTY(ReplicatedUsing = OnRep_OwnedTail)
+	TObjectPtr<ACTTail> OwnedTail;
+
+	// 잡기 구간 중 (서버)
+	bool bGrabActive = false;
+	double GrabWindowEndTime = 0.0;
+	// 이 시각까지 잡기 입력 무시 (서버)
+	double GrabLockEndTime = 0.0;
+	FTimerHandle GrabWindowStartTimerHandle;
+	FTimerHandle GrabWindowTickTimerHandle;
+
+	// 슬롯별 몸 색 동적 머티리얼
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> BodyMaterials;
 };

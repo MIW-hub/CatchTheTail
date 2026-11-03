@@ -1,10 +1,25 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTCharacter.h"
+#include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "CTPlayerState.h"
+#include "../Tail/CTTail.h"
+#include "../World/CTBush.h"
+#include "../UI/CTHUDWidget.h"
+#include "CTPlayerController.h"
+#include "../Tongue/CTTongueComponent.h"
+#include "../Animation/CTAnimNotifyState_GrabWindow.h"
+#include "EngineUtils.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
+#include "Curves/CurveFloat.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -23,14 +38,14 @@ namespace CTBuffNames
 
 ACTCharacter::ACTCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true; // 로컬 카메라 보간용
 
-	// 카메라 방향으로 몸을 돌리지 않고, "움직이는 방향"으로 몸을 돌립니다. (3인칭 추적 방식)
+	// 이동 방향으로 회전 (3인칭)
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// 공중에서 또 점프하는 것을 막습니다. (점프 최대 횟수 1)
+	// 공중 점프 방지
 	JumpMaxCount = 1;
 
 	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
@@ -41,18 +56,41 @@ ACTCharacter::ACTCharacter()
 	MoveComp->MaxWalkSpeed = BaseWalkSpeed;
 	MoveComp->BrakingDecelerationWalking = 2000.f;
 
-	// 3인칭 추적 카메라
+	// 서버 메시도 몽타주 진행 (잡기 노티파이)
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
+
+	// 3인칭 카메라, 거리는 Tick 보간
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 450.f;
+	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	CameraBoom->SocketOffset = FVector(0.f, 0.f, 60.f);
-	CameraBoom->bUsePawnControlRotation = true; // 마우스로 카메라 회전
+	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->bDoCollisionTest = bCameraCollision; // 벽 충돌 시 당김 (기본 꺼짐)
+	CameraBoom->ProbeSize = CameraProbeSize;
+	CameraBoom->ProbeChannel = ECC_Camera;
 	CameraBoom->bEnableCameraLag = true;
 	CameraBoom->CameraLagSpeed = 15.f;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+
+	// 부쉬 속 겹친 몸 (내 화면만)
+	XRayMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("XRayMesh"));
+	XRayMesh->SetupAttachment(GetMesh());
+	XRayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	XRayMesh->SetGenerateOverlapEvents(false);
+	XRayMesh->SetCanEverAffectNavigation(false);
+	XRayMesh->SetCastShadow(false);
+	// 보일지는 UpdateBushXRay가 화면마다 따로 정함 (내 부쉬 안 / 같은 부쉬 안 다른 플레이어)
+	XRayMesh->SetVisibility(false);
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> XRayFinder(TEXT("/Game/Material/M_Player_XRay.M_Player_XRay"));
+	if (XRayFinder.Succeeded()) { XRayMaterial = XRayFinder.Object; }
+
+	// 혀: Head 본에 부착
+	TongueMesh = CreateDefaultSubobject<UCTTongueComponent>(TEXT("TongueMesh"));
+	TongueMesh->SetupAttachment(GetMesh(), TEXT("Head"));
 }
 
 void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -62,11 +100,23 @@ void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTCharacter, SpeedBuffs);
 	DOREPLIFETIME(ACTCharacter, RunState);
 	DOREPLIFETIME(ACTCharacter, RunStateEndTime);
+	DOREPLIFETIME(ACTCharacter, OwnedTail);
+	DOREPLIFETIME(ACTCharacter, CurrentBush);
+	DOREPLIFETIME(ACTCharacter, bBoothLocked);
 }
 
 void ACTCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	ApplyCameraSettings();
+
+	if (HasAuthority())
+	{
+		SpawnTail();
+	}
+
+	RefreshBodyColor();
 
 	RecalculateMaxWalkSpeed();
 
@@ -80,6 +130,8 @@ void ACTCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
+	RefreshBodyColor();
+
 	if (HasAuthority())
 	{
 		RefreshChaseBuff();
@@ -88,17 +140,34 @@ void ACTCharacter::PossessedBy(AController* NewController)
 
 bool ACTCharacter::CanJumpInternal_Implementation() const
 {
-	// 유령은 점프할 수 없습니다.
 	if (IsGhost())
+	{
+		return false;
+	}
+
+	// 색 배정 전 점프 불가
+	if (!CanMoveNow())
 	{
 		return false;
 	}
 	return Super::CanJumpInternal_Implementation();
 }
 
-// ============================================================
+void ACTCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	RefreshBodyColor();
+	RefreshTailVisual();
+
+	// 유령 알림 선행 시 누락 보정
+	if (IsGhost())
+	{
+		OnGhostStateChanged(true);
+	}
+}
+
 // 상태 읽기
-// ============================================================
 
 bool ACTCharacter::IsGhost() const
 {
@@ -108,7 +177,7 @@ bool ACTCharacter::IsGhost() const
 
 float ACTCharacter::GetSpeedMultiplier() const
 {
-	// 버프 합산: 1.0(기본) + 달리기 0.5 + 추격 0.2 = 1.7
+	// 1.0 + 달리기 0.5 + 추격 0.2
 	float Multiplier = 1.f;
 	for (const FCTSpeedBuff& Buff : SpeedBuffs)
 	{
@@ -126,9 +195,101 @@ float ACTCharacter::GetRunStateRemainingSeconds() const
 	return static_cast<float>(FMath::Max(0.0, RunStateEndTime - GetServerTime()));
 }
 
-// ============================================================
+float ACTCharacter::GetRunGaugePercent() const
+{
+	switch (RunState)
+	{
+	case ECTRunState::Running:
+		return RunDurationSeconds > 0.f ? FMath::Clamp(GetRunStateRemainingSeconds() / RunDurationSeconds, 0.f, 1.f) : 0.f;
+	case ECTRunState::Cooldown:
+		return RunCooldownSeconds > 0.f ? FMath::Clamp(1.f - GetRunStateRemainingSeconds() / RunCooldownSeconds, 0.f, 1.f) : 1.f;
+	default:
+		return 1.f;
+	}
+}
+
+float ACTCharacter::GetPushReadyPercent() const
+{
+	if (PushCooldownSeconds <= 0.f || !GetWorld()) { return 1.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastPushTime;
+	return FMath::Clamp(static_cast<float>(Elapsed / PushCooldownSeconds), 0.f, 1.f);
+}
+
+float ACTCharacter::GetPushCooldownRemainingSeconds() const
+{
+	if (PushCooldownSeconds <= 0.f || !GetWorld()) { return 0.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastPushTime;
+	return FMath::Clamp(static_cast<float>(PushCooldownSeconds - Elapsed), 0.f, PushCooldownSeconds);
+}
+
+float ACTCharacter::GetGrabReadyPercent() const
+{
+	if (GrabCooldownSeconds <= 0.f || !GetWorld()) { return 1.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastGrabTime;
+	return FMath::Clamp(static_cast<float>(Elapsed / GrabCooldownSeconds), 0.f, 1.f);
+}
+
+float ACTCharacter::GetGrabCooldownRemainingSeconds() const
+{
+	if (GrabCooldownSeconds <= 0.f || !GetWorld()) { return 0.f; }
+
+	const double Elapsed = GetWorld()->GetTimeSeconds() - LocalLastGrabTime;
+	return FMath::Clamp(static_cast<float>(GrabCooldownSeconds - Elapsed), 0.f, GrabCooldownSeconds);
+}
+
+bool ACTCharacter::CanMoveNow() const
+{
+	// 전화부스 사용 중에는 못 움직임
+	if (bBoothLocked) { return false; }
+
+	// 잡기/밀기 동작, 넘어져 있는 동안(넘어짐~일어나기)은 그 자리에 멈춤 (입력만 막고 감속은 이동 컴포넌트가 처리)
+	if (const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		for (const UAnimMontage* Montage : { GrabMontage.Get(), PushMontage.Get(), PushedMontage.Get(), PushedBackMontage.Get(), GetUpMontage.Get(), GetUpBackMontage.Get() })
+		{
+			if (Montage && AnimInstance->Montage_IsPlaying(Montage)) { return false; }
+		}
+	}
+
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	// 대기 로비는 자유롭게 돌아다닐 수 있음
+	if (CTGameState && CTGameState->GetPhase() == ECTGamePhase::Lobby) { return true; }
+
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+
+	// 색 배정 전 이동 불가
+	const ACTPlayerState* CTPlayerState = GetPlayerState<ACTPlayerState>();
+	return CTPlayerState && CTPlayerState->GetAssignedColor() != ECTColor::None;
+}
+
+bool ACTCharacter::CanUseActions() const
+{
+	if (IsGhost()) { return false; }
+
+	// 부쉬 안, 전화부스 사용 중에는 잡기/밀기 불가
+	if (CurrentBush || bBoothLocked) { return false; }
+
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	return CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing;
+}
+
+UAnimMontage* ACTCharacter::GetActionMontage(ECTCharacterAction Action) const
+{
+	switch (Action)
+	{
+	case ECTCharacterAction::Grab:   return GrabMontage;
+	case ECTCharacterAction::Push:   return PushMontage;
+	case ECTCharacterAction::Caught: return CaughtMontage;
+	case ECTCharacterAction::Pushed: return PushedMontage;
+	case ECTCharacterAction::PushedBack: return PushedBackMontage ? PushedBackMontage.Get() : PushedMontage.Get();
+	default:                         return nullptr;
+	}
+}
+
 // 속도 버프
-// ============================================================
 
 void ACTCharacter::AddSpeedBuff(FName BuffId, float Value)
 {
@@ -165,8 +326,7 @@ void ACTCharacter::RemoveSpeedBuff(FName BuffId)
 
 void ACTCharacter::RecalculateMaxWalkSpeed()
 {
-	// 참고: 서버와 클라이언트가 같은 값을 써야 끊김(보정)이 적습니다.
-	// 그래서 버프 목록을 복제하고, 양쪽에서 같은 계산을 합니다.
+	// 버프 목록 복제, 양쪽 계산
 	GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed * GetSpeedMultiplier();
 }
 
@@ -183,8 +343,7 @@ void ACTCharacter::RefreshChaseBuff()
 	const bool bShouldHaveChaseBuff =
 		CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing && !IsGhost();
 
-	// 지금은 "게임 중이고 유령이 아니면 항상" 추격 버프를 켭니다.
-	// (나중에 "목표가 가까울 때만" 같은 조건이 필요하면 이 함수만 바꾸면 됩니다)
+	// 게임 중 + 유령 아님 → 추격 ON
 	if (bShouldHaveChaseBuff)
 	{
 		AddSpeedBuff(CTBuffNames::Chase, ChaseBuffValue);
@@ -201,6 +360,12 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 	{
 		if (bNewIsGhost)
 		{
+			SetCurrentBush(nullptr);
+			SetBoothLocked(false);
+		}
+
+		if (bNewIsGhost)
+		{
 			ForceResetRun();
 			AddSpeedBuff(CTBuffNames::Ghost, GhostBuffValue);
 		}
@@ -209,19 +374,32 @@ void ACTCharacter::OnGhostStateChanged(bool bNewIsGhost)
 			RemoveSpeedBuff(CTBuffNames::Ghost);
 		}
 		RefreshChaseBuff();
+
+		// 유령: 꼬리 불 끔+회색, 부활 시 복구
+		if (OwnedTail)
+		{
+			OwnedTail->SetCaught(bNewIsGhost);
+		}
+		if (bNewIsGhost)
+		{
+			EndGrabWindow();
+		}
 	}
 
 	if (bNewIsGhost)
 	{
 		StopJumping();
+		// 잡힘 몽타주 유지, 잡기/밀기만 중단
+		StopAttackMontages();
 	}
+
+	// 유령 회색, 부활 시 원래 색
+	RefreshBodyColor();
 
 	BP_OnGhostStateChanged(bNewIsGhost);
 }
 
-// ============================================================
 // 입력 연결
-// ============================================================
 
 void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -263,13 +441,162 @@ void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	}
 }
 
+void ACTCharacter::ApplyCameraSettings()
+{
+	if (!CameraBoom || !FollowCamera) { return; }
+
+	// BP 값은 생성자 이후 적용
+	CameraBoom->bDoCollisionTest = bCameraCollision;
+	CameraBoom->ProbeSize = CameraProbeSize;
+	CameraBoom->TargetArmLength = CameraDistanceBehind;
+	FollowCamera->SetFieldOfView(CameraFieldOfView);
+}
+
+void ACTCharacter::UpdateCameraClip()
+{
+	if (CameraHideDistance <= 0.f || !FollowCamera)
+	{
+		if (bHiddenFromOwnCamera) { SetHiddenFromOwnCamera(false); }
+		return;
+	}
+
+	// 숨김 해제는 더 멀어져야 (깜빡임 방지)
+	const float Distance = FVector::Dist(FollowCamera->GetComponentLocation(), GetActorLocation());
+	const float Threshold = bHiddenFromOwnCamera ? CameraHideDistance + CameraHideHysteresis : CameraHideDistance;
+	const bool bShouldHide = Distance < Threshold;
+
+	if (bShouldHide != bHiddenFromOwnCamera)
+	{
+		SetHiddenFromOwnCamera(bShouldHide);
+	}
+}
+
+void ACTCharacter::SetHiddenFromOwnCamera(bool bNewHidden)
+{
+	bHiddenFromOwnCamera = bNewHidden;
+
+	// OwnerNoSee: 조종자 화면에서만 숨김
+	auto Apply = [bNewHidden](AActor* Actor)
+	{
+		if (!Actor) { return; }
+
+		TInlineComponentArray<UPrimitiveComponent*> Primitives;
+		Actor->GetComponents(Primitives);
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			Primitive->SetOwnerNoSee(bNewHidden);
+		}
+	};
+
+	Apply(this);      // 몸, 혀
+	Apply(OwnedTail); // 꼬리
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 카메라 %s: 내 캐릭터 %s"), bNewHidden ? TEXT("가까움") : TEXT("멀어짐"), bNewHidden ? TEXT("숨김") : TEXT("보임"));
+}
+
+void ACTCharacter::UpdateMovementSounds(float DeltaSeconds)
+{
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr;
+	if (!Move || !Audio) { return; }
+
+	const bool bOnGround = Move->IsMovingOnGround();
+	const FVector Velocity = GetVelocity();
+
+	// 점프: 땅에서 떨어지면서 위로 올라갈 때
+	if (bWasOnGroundForSound && !bOnGround && Velocity.Z > 150.f && !IsGhost())
+	{
+		Audio->PlaySfxAtLocation(ECTSfx::Jump, GetActorLocation());
+	}
+
+	// 착지: 공중에서 땅에 닿을 때 (충분히 빠르게 떨어졌을 때만)
+	if (!bOnGround)
+	{
+		LastFallSpeedForSound = FMath::Max(LastFallSpeedForSound, -Velocity.Z);
+	}
+	else if (!bWasOnGroundForSound)
+	{
+		if (LastFallSpeedForSound >= LandMinFallSpeed && !IsGhost())
+		{
+			Audio->PlaySfxAtLocation(ECTSfx::Land, GetActorLocation());
+		}
+		LastFallSpeedForSound = 0.f;
+		FootstepDistanceAccum = 0.f;
+	}
+	bWasOnGroundForSound = bOnGround;
+
+	// 발소리: 땅 위에서 일정 거리를 움직일 때마다
+	const float Speed = Velocity.Size2D();
+	if (!bUseDistanceFootsteps)
+	{
+		// 발소리는 애니메이션 노티파이가 담당
+	}
+	else if (bOnGround && Speed >= MinFootstepSpeed && !IsGhost())
+	{
+		FootstepDistanceAccum += Speed * DeltaSeconds;
+		if (FootstepDistanceAccum >= FootstepDistance)
+		{
+			FootstepDistanceAccum = 0.f;
+			Audio->PlaySfxAtLocation(ECTSfx::Footstep, GetActorLocation(), FootstepVolume, FMath::FRandRange(0.92f, 1.08f));
+		}
+	}
+	else if (!bOnGround || Speed < MinFootstepSpeed)
+	{
+		// 멈추면 다음 걸음 바로 나게 절반 채움
+		FootstepDistanceAccum = FootstepDistance * 0.5f;
+	}
+}
+
+void ACTCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	UpdateRunMontage();
+	UpdateGhostWalkMontage();
+	UpdateBushVisibility();
+	UpdateBushXRay();
+	UpdateMovementSounds(DeltaSeconds);
+
+	// 로컬 전용
+	if (IsLocallyControlled())
+	{
+		UpdateCameraDistance(DeltaSeconds);
+	}
+}
+
+void ACTCharacter::UpdateCameraDistance(float DeltaSeconds)
+{
+	if (!CameraBoom || !Controller) { return; }
+
+	// 0 근처=수평, 음수 클수록 위에서 봄
+	const float Pitch = FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
+
+	// BehindPitch→0, TopPitch→1
+	const float Range = BehindPitch - TopPitch;
+	float Alpha = Range > KINDA_SMALL_NUMBER ? FMath::Clamp((BehindPitch - Pitch) / Range, 0.f, 1.f) : 0.f;
+
+	// 곡선 없으면 SmoothStep
+	Alpha = DistanceCurve ? FMath::Clamp(DistanceCurve->GetFloatValue(Alpha), 0.f, 1.f) : FMath::SmoothStep(0.f, 1.f, Alpha);
+
+	const float TargetLength = FMath::Lerp(CameraDistanceBehind, CameraDistanceTop, Alpha);
+	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetLength, DeltaSeconds, CameraDistanceInterpSpeed);
+
+	// 근접 시 내 캐릭터 숨김
+	UpdateCameraClip();
+}
+
 void ACTCharacter::Move(const FInputActionValue& Value)
 {
 	const FVector2D MoveValue = Value.Get<FVector2D>();
 
+	// 색 배정 전 이동 불가, 회전은 가능
+	if (!CanMoveNow()) { return; }
+
 	if (Controller)
 	{
-		// 카메라가 보는 방향 기준으로 앞/옆을 계산합니다. (유령도 이동 가능)
+		// 카메라 기준 방향 (유령도 이동)
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
 		const FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
@@ -289,7 +616,7 @@ void ACTCharacter::Look(const FInputActionValue& Value)
 
 void ACTCharacter::OnRunPressed()
 {
-	if (IsGhost()) { return; }
+	if (IsGhost() || !CanMoveNow()) { return; }
 	ServerSetRunInput(true);
 }
 
@@ -300,19 +627,32 @@ void ACTCharacter::OnRunReleased()
 
 void ACTCharacter::OnGrabPressed()
 {
-	if (IsGhost()) { return; }
+	if (!CanUseActions()) { return; }
+
+	// 쿨타임 중 서버 거절
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LocalLastGrabTime < GrabCooldownSeconds) { return; }
+	LocalLastGrabTime = Now;
+
+	// 서버 응답 전 선재생
+	PlayActionMontage(ECTCharacterAction::Grab);
 	ServerGrab();
 }
 
 void ACTCharacter::OnPushPressed()
 {
-	if (IsGhost()) { return; }
+	if (!CanUseActions()) { return; }
+
+	// 쿨타임 중 서버 거절
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LocalLastPushTime < PushCooldownSeconds) { return; }
+	LocalLastPushTime = Now;
+
+	PlayActionMontage(ECTCharacterAction::Push);
 	ServerPush();
 }
 
-// ============================================================
 // 달리기 (서버)
-// ============================================================
 
 void ACTCharacter::ServerSetRunInput_Implementation(bool bPressed)
 {
@@ -328,7 +668,7 @@ void ACTCharacter::ServerSetRunInput_Implementation(bool bPressed)
 
 void ACTCharacter::TryStartRun()
 {
-	if (IsGhost() || RunState != ECTRunState::Idle)
+	if (IsGhost() || bBoothLocked || RunState != ECTRunState::Idle)
 	{
 		return;
 	}
@@ -388,9 +728,7 @@ void ACTCharacter::OnRunCooldownEnded()
 	RunStateEndTime = 0.0;
 }
 
-// ============================================================
 // 잡기 / 밀기 (서버)
-// ============================================================
 
 void ACTCharacter::ServerGrab_Implementation()
 {
@@ -401,15 +739,59 @@ void ACTCharacter::ServerGrab_Implementation()
 
 	if (!CTGameMode || !CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
+	if (CurrentBush || bBoothLocked) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
-	// 손을 뻗는 연출은 잡기에 성공하든 못하든 재생합니다.
-	MulticastPlayGrab();
+	// 동작 중이면 재시작 안 함 (연타 방지)
+	const double Now = World->GetTimeSeconds();
+	if (bGrabActive || Now < GrabLockEndTime || GetWorldTimerManager().IsTimerActive(GrabWindowStartTimerHandle)) { return; }
+
+	// 쿨타임, 시계 오차로 90%
+	if (Now - LastGrabTime < GrabCooldownSeconds * 0.9f) { return; }
+	LastGrabTime = Now;
+
+	bool bSuccess = false;
+
+	if (bRequireTailTouch)
+	{
+		// 꼬리 터치 방식, 성공 여부 미정이라 false
+		if (bUseMontageGrabWindow && HasGrabWindowNotify())
+		{
+			// Grab Window 구간 동안 판정
+			GrabLockEndTime = Now + GrabMontage->GetPlayLength() / FMath::Max(ActionMontagePlayRate, 0.1f);
+		}
+		else if (GrabWindowDelaySeconds > 0.f)
+		{
+			GrabLockEndTime = Now + GrabWindowDelaySeconds + GrabActiveSeconds;
+			GetWorldTimerManager().SetTimer(
+				GrabWindowStartTimerHandle, this, &ACTCharacter::BeginGrabWindow, GrabWindowDelaySeconds, false);
+		}
+		else
+		{
+			BeginGrabWindow();
+		}
+	}
+	else
+	{
+		bSuccess = TryGrabByCone();
+	}
+
+	// 연출은 성공 여부와 무관
+	MulticastPlayAction(ECTCharacterAction::Grab, bSuccess);
+}
+
+bool ACTCharacter::TryGrabByCone()
+{
+	UWorld* World = GetWorld();
+	ACTGameMode* CTGameMode = World ? World->GetAuthGameMode<ACTGameMode>() : nullptr;
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	ACTPlayerState* MyPlayerState = GetPlayerState<ACTPlayerState>();
+	if (!CTGameMode || !CTGameState || !MyPlayerState) { return false; }
 
 	const ECTColor MyTargetColor = MyPlayerState->GetTargetColor();
-	if (MyTargetColor == ECTColor::None) { return; }
+	if (MyTargetColor == ECTColor::None) { return false; }
 
-	// 정해진 목표 색을 가진 사람만 잡을 수 있습니다.
+	// 목표 색만
 	for (APlayerState* OtherState : CTGameState->PlayerArray)
 	{
 		ACTPlayerState* OtherPlayerState = Cast<ACTPlayerState>(OtherState);
@@ -422,8 +804,152 @@ void ACTCharacter::ServerGrab_Implementation()
 
 		if (IsInFrontCone(OtherCharacter, GrabDistance, GrabHalfAngleDegrees))
 		{
-			CTGameMode->HandleTailGrabbed(MyPlayerState, OtherPlayerState);
-			break; // 목표 색은 한 명뿐이므로 더 찾지 않습니다.
+			// 잡힘 연출은 GameMode가 처리
+			return CTGameMode->HandleTailGrabbed(MyPlayerState, OtherPlayerState);
+		}
+	}
+	return false;
+}
+
+// 꼬리 / 잡기 동작 구간 (서버)
+
+void ACTCharacter::SpawnTail()
+{
+	if (!HasAuthority() || !TailClass || OwnedTail) { return; }
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	OwnedTail = GetWorld()->SpawnActor<ACTTail>(TailClass, GetActorTransform(), SpawnParams);
+	if (OwnedTail)
+	{
+		OwnedTail->AttachToComponent(
+			GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TailSocketName);
+		ApplyTailOffset();
+		OwnedTail->RefreshVisual();
+	}
+}
+
+void ACTCharacter::ApplyTailOffset()
+{
+	if (!OwnedTail) { return; }
+
+	// 본 기준 자세 보정, 기본 자세에서 TailOffset에 위치
+	const USkeletalMesh* MeshAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
+	const int32 BoneIndex = MeshAsset ? MeshAsset->GetRefSkeleton().FindBoneIndex(TailSocketName) : INDEX_NONE;
+	if (BoneIndex == INDEX_NONE)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 꼬리를 붙일 본 '%s'을(를) 캐릭터 메시에서 찾지 못했습니다."), *TailSocketName.ToString());
+		return;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = MeshAsset->GetRefSkeleton();
+	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+	FTransform BoneComponentTransform = FTransform::Identity;
+	for (int32 Index = BoneIndex; Index != INDEX_NONE; Index = RefSkeleton.GetParentIndex(Index))
+	{
+		BoneComponentTransform = BoneComponentTransform * RefPose[Index];
+	}
+
+	const FTransform Offset(TailOffsetRotation, TailOffsetLocation, TailOffsetScale);
+	OwnedTail->SetActorRelativeTransform(Offset * BoneComponentTransform.Inverse());
+}
+
+void ACTCharacter::OnRep_OwnedTail()
+{
+	// 복제 스케일이 소수 2자리로 양자화돼 오프셋 직접 재계산
+	ApplyTailOffset();
+	RefreshBodyColor();
+	RefreshTailVisual();
+}
+
+void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
+	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
+
+	if (HasAuthority() && OwnedTail)
+	{
+		OwnedTail->Destroy();
+		OwnedTail = nullptr;
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void ACTCharacter::BeginGrabWindow()
+{
+	StartGrabWindow(GrabActiveSeconds);
+}
+
+void ACTCharacter::StartGrabWindow(float Duration)
+{
+	if (!HasAuthority()) { return; }
+
+	bGrabActive = true;
+	GrabWindowEndTime = GetWorld()->GetTimeSeconds() + Duration;
+
+	GetWorldTimerManager().SetTimer(GrabWindowTickTimerHandle, this, &ACTCharacter::TickGrabWindow, 0.03f, true);
+	TickGrabWindow(); // 이미 닿은 꼬리 즉시 확인
+}
+
+bool ACTCharacter::HasGrabWindowNotify() const
+{
+	if (!GrabMontage) { return false; }
+
+	for (const FAnimNotifyEvent& NotifyEvent : GrabMontage->Notifies)
+	{
+		if (NotifyEvent.NotifyStateClass && NotifyEvent.NotifyStateClass->IsA<UCTAnimNotifyState_GrabWindow>())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void ACTCharacter::OnGrabNotifyBegin()
+{
+	// 몽타주는 전원, 판정은 서버만
+	if (!HasAuthority() || !bRequireTailTouch || !CanUseActions()) { return; }
+
+	// 끝은 OnGrabNotifyEnd, 최대 시간은 안전장치
+	StartGrabWindow(GrabWindowMaxSeconds);
+}
+
+void ACTCharacter::OnGrabNotifyEnd()
+{
+	if (!HasAuthority()) { return; }
+	EndGrabWindow();
+}
+
+void ACTCharacter::EndGrabWindow()
+{
+	bGrabActive = false;
+	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
+	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
+}
+
+void ACTCharacter::TickGrabWindow()
+{
+	UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+
+	if (!bGrabActive || IsGhost() || !CTGameState ||
+		CTGameState->GetPhase() != ECTGamePhase::Playing ||
+		World->GetTimeSeconds() > GrabWindowEndTime)
+	{
+		EndGrabWindow();
+		return;
+	}
+
+	// 닿으면 시도, 성공 시 구간 종료
+	for (TActorIterator<ACTTail> It(World); It; ++It)
+	{
+		if (It->TryTouch(this))
+		{
+			EndGrabWindow();
+			return;
 		}
 	}
 }
@@ -436,16 +962,17 @@ void ACTCharacter::ServerPush_Implementation()
 
 	if (!CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
+	if (CurrentBush || bBoothLocked) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
-	// 밀기 쿨타임 확인
+	// 쿨타임 확인
 	const double Now = World->GetTimeSeconds();
 	if (Now - LastPushTime < PushCooldownSeconds) { return; }
 	LastPushTime = Now;
 
-	MulticastPlayPush();
+	MulticastPlayAction(ECTCharacterAction::Push, true);
 
-	// 정면 부채꼴 안의 모든 상대를 밉니다. (유령은 밀 수 없음)
+	// 정면 부채꼴 전원 밀기 (유령 제외)
 	for (APlayerState* OtherState : CTGameState->PlayerArray)
 	{
 		ACTCharacter* OtherCharacter = OtherState ? Cast<ACTCharacter>(OtherState->GetPawn()) : nullptr;
@@ -457,24 +984,192 @@ void ACTCharacter::ServerPush_Implementation()
 		Direction.Z = 0.f;
 		Direction = Direction.GetSafeNormal();
 
+		// 키만큼 밀리게 속도 역산
+		float PushSpeed = 0.f;
+		const UCharacterMovementComponent* OtherMovement = OtherCharacter->GetCharacterMovement();
+		if (OtherMovement && PushUpSpeed > 0.f)
+		{
+			const float Gravity = FMath::Max(FMath::Abs(OtherMovement->GetGravityZ()), 1.f);
+			const float AirTime = 2.f * PushUpSpeed / Gravity;
+			const float BrakingK = FMath::Max(OtherMovement->GroundFriction * OtherMovement->BrakingFrictionFactor, 1.f);
+			const float Height = OtherCharacter->GetSimpleCollisionHalfHeight() * 2.f;
+			PushSpeed = Height * PushDistanceInHeights / (AirTime + 1.f / BrakingK);
+		}
+
 		const FVector LaunchVelocity = Direction * PushSpeed + FVector(0.f, 0.f, PushUpSpeed);
 		OtherCharacter->LaunchCharacter(LaunchVelocity, /*bXYOverride=*/true, /*bZOverride=*/true);
+		OtherCharacter->PlayKnockedDown(Direction);
 	}
 }
 
-void ACTCharacter::MulticastPlayGrab_Implementation()
+// 애니메이션
+
+void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action, bool bSuccess)
 {
-	BP_OnGrab();
+	// 본인 잡기/밀기는 입력 시 이미 재생
+	const bool bAlreadyPlayedLocally =
+		IsLocallyControlled() &&
+		(Action == ECTCharacterAction::Grab || Action == ECTCharacterAction::Push);
+
+	if (!bAlreadyPlayedLocally)
+	{
+		PlayActionMontage(Action);
+	}
+
+	// 동작 소리 (밀기, 잡힘)
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		if (Action == ECTCharacterAction::Push) { Audio->PlaySfxAtLocation(ECTSfx::Push, GetActorLocation()); }
+		else if (Action == ECTCharacterAction::Caught) { Audio->PlaySfxAtLocation(ECTSfx::TailLost, GetActorLocation()); }
+	}
+
+	BP_OnAction(Action, bSuccess);
 }
 
-void ACTCharacter::MulticastPlayPush_Implementation()
+void ACTCharacter::PlayActionMontage(ECTCharacterAction Action)
 {
-	BP_OnPush();
+	UAnimMontage* Montage = GetActionMontage(Action);
+	if (!Montage) { return; }
+
+	PlayAnimMontage(Montage, Action == ECTCharacterAction::Push ? PushMontagePlayRate : ActionMontagePlayRate);
+
+	// 넘어진 뒤 일어나기 이어 재생 (앞/뒤에 맞는 일어나기)
+	const bool bFellDown = Action == ECTCharacterAction::Pushed || Action == ECTCharacterAction::PushedBack;
+	if (bFellDown && (GetUpMontage || GetUpBackMontage))
+	{
+		if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			FOnMontageBlendingOutStarted Delegate;
+			Delegate.BindUObject(this, &ACTCharacter::HandlePushedMontageEnded);
+			AnimInstance->Montage_SetBlendingOutDelegate(Delegate, Montage);
+		}
+	}
 }
 
-// ============================================================
+void ACTCharacter::HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	// 뒤로 넘어진 몽타주면 뒤쪽 일어나기, 아니면 앞쪽 일어나기
+	UAnimMontage* GetUp = (PushedBackMontage && Montage == PushedBackMontage) ? GetUpBackMontage.Get() : GetUpMontage.Get();
+	if (bInterrupted || !GetUp || IsGhost()) { return; }
+	PlayAnimMontage(GetUp, ActionMontagePlayRate);
+}
+
+void ACTCharacter::MulticastPlayHitSfx_Implementation(ECTSfx Sfx)
+{
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+	{
+		Audio->PlaySfxAtLocation(Sfx, GetActorLocation());
+	}
+}
+
+void ACTCharacter::PlayKnockedDown(const FVector& KnockDirection)
+{
+	if (!HasAuthority()) { return; }
+
+	// 날아가는 방향이 보는 방향과 같으면 앞으로 엎어지고, 반대면 뒤로 넘어짐 (옆은 가까운 쪽)
+	FVector Flat = KnockDirection;
+	Flat.Z = 0.f;
+	const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
+	const bool bFallForward = Flat.IsNearlyZero() || FVector::DotProduct(Flat.GetSafeNormal(), Forward) >= 0.f;
+
+	MulticastPlayAction(bFallForward ? ECTCharacterAction::Pushed : ECTCharacterAction::PushedBack, true);
+}
+
+void ACTCharacter::UpdateGhostWalkMontage()
+{
+	// 전용 서버는 연출 불필요
+	if (!GhostWalkMontage || GetNetMode() == NM_DedicatedServer) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	// 유령+이동+지상만, 공중은 점프 모션
+	const bool bWantWalk =
+		IsGhost() &&
+		!GetCharacterMovement()->IsFalling() &&
+		GetVelocity().Size2D() > GhostWalkMinSpeed;
+
+	const bool bPlaying = AnimInstance->Montage_IsPlaying(GhostWalkMontage);
+
+	if (bWantWalk)
+	{
+		if (!bPlaying)
+		{
+			// 다른 몽타주(잡힘 등) 끝날 때까지 대기
+			const UAnimMontage* Active = AnimInstance->GetCurrentActiveMontage();
+			if (Active && Active != GhostWalkMontage) { return; }
+
+			PlayAnimMontage(GhostWalkMontage, 1.f, GhostWalkLoopSection);
+			AnimInstance->Montage_SetNextSection(GhostWalkLoopSection, GhostWalkLoopSection, GhostWalkMontage);
+		}
+
+		// 실속도에 재생 속도 맞춤 (발 미끄러짐)
+		const float Rate = FMath::Clamp(GetVelocity().Size2D() / GhostWalkReferenceSpeed, GhostWalkMinPlayRate, GhostWalkMaxPlayRate);
+		AnimInstance->Montage_SetPlayRate(GhostWalkMontage, Rate);
+	}
+	else if (bPlaying)
+	{
+		AnimInstance->Montage_Stop(GhostWalkMontage->BlendOut.GetBlendTime(), GhostWalkMontage);
+	}
+}
+
+void ACTCharacter::UpdateRunMontage()
+{
+	// 전용 서버는 연출 불필요
+	if (!RunMontage || GetNetMode() == NM_DedicatedServer) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	// 달리기+이동+지상만, 공중은 점프 모션
+	const bool bWantRunMontage =
+		RunState == ECTRunState::Running &&
+		!IsGhost() &&
+		!GetCharacterMovement()->IsFalling() &&
+		GetVelocity().Size2D() > RunMontageMinSpeed;
+
+	const bool bPlaying = AnimInstance->Montage_IsPlaying(RunMontage);
+
+	if (bWantRunMontage)
+	{
+		if (!bPlaying)
+		{
+			// 다른 몽타주 끝날 때까지 대기
+			const UAnimMontage* Active = AnimInstance->GetCurrentActiveMontage();
+			if (Active && Active != RunMontage) { return; }
+
+			PlayAnimMontage(RunMontage, 1.f, RunMontageLoopSection);
+
+			// 섹션 종료 시 자동 반복
+			AnimInstance->Montage_SetNextSection(RunMontageLoopSection, RunMontageLoopSection, RunMontage);
+		}
+
+		// 실속도에 재생 속도 맞춤 (발 미끄러짐)
+		const float Rate = FMath::Clamp(GetVelocity().Size2D() / RunMontageReferenceSpeed, RunMontageMinPlayRate, RunMontageMaxPlayRate);
+		AnimInstance->Montage_SetPlayRate(RunMontage, Rate);
+	}
+	else if (bPlaying)
+	{
+		AnimInstance->Montage_Stop(RunMontage->BlendOut.GetBlendTime(), RunMontage);
+	}
+}
+
+void ACTCharacter::StopAttackMontages()
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	for (UAnimMontage* Montage : { GrabMontage.Get(), PushMontage.Get() })
+	{
+		if (Montage && AnimInstance->Montage_IsPlaying(Montage))
+		{
+			AnimInstance->Montage_Stop(Montage->BlendOut.GetBlendTime(), Montage);
+		}
+	}
+}
+
 // 도우미
-// ============================================================
 
 double ACTCharacter::GetServerTime() const
 {
@@ -493,11 +1188,11 @@ bool ACTCharacter::IsInFrontCone(const AActor* Other, float MaxDistance, float H
 	if (!Other) { return false; }
 
 	FVector ToOther = Other->GetActorLocation() - GetActorLocation();
-	ToOther.Z = 0.f; // 높이는 무시하고 바닥 기준으로만 계산
+	ToOther.Z = 0.f; // 높이 무시
 
 	const float Distance = ToOther.Size();
 	if (Distance > MaxDistance) { return false; }
-	if (Distance < KINDA_SMALL_NUMBER) { return true; } // 거의 겹쳐 있으면 성공
+	if (Distance < KINDA_SMALL_NUMBER) { return true; } // 거의 겹침 → 성공
 
 	FVector Forward = GetActorForwardVector();
 	Forward.Z = 0.f;
@@ -505,4 +1200,179 @@ bool ACTCharacter::IsInFrontCone(const AActor* Other, float MaxDistance, float H
 
 	const float CosAngle = FVector::DotProduct(Forward, ToOther / Distance);
 	return CosAngle >= FMath::Cos(FMath::DegreesToRadians(HalfAngleDegrees));
+}
+
+// 몸 색상
+
+void ACTCharacter::RefreshTailVisual()
+{
+	if (OwnedTail)
+	{
+		OwnedTail->RefreshVisual();
+	}
+}
+
+void ACTCharacter::RefreshBodyColor()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp) { return; }
+
+	// 슬롯당 MID 1회 생성
+	const int32 SlotCount = MeshComp->GetNumMaterials();
+	if (BodyMaterials.Num() != SlotCount)
+	{
+		BodyMaterials.Reset();
+		for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
+		{
+			const bool bTargetSlot = BodyColorMaterialSlots.IsEmpty() || BodyColorMaterialSlots.Contains(SlotIndex);
+			BodyMaterials.Add(bTargetSlot && MeshComp->GetMaterial(SlotIndex)
+				? MeshComp->CreateAndSetMaterialInstanceDynamic(SlotIndex)
+				: nullptr);
+		}
+	}
+
+	const ACTPlayerState* CTPlayerState = GetPlayerState<ACTPlayerState>();
+	const ECTColor Color = CTPlayerState ? CTPlayerState->GetAssignedColor() : ECTColor::None;
+	const bool bIsGhost = CTPlayerState && CTPlayerState->IsGhost();
+
+	// 잡힌 유령 회색, 색 없으면 기본색
+	const FLinearColor Tint = bIsGhost ? GhostBodyColor
+		: (Color == ECTColor::None ? NoColorTint : ACTPlayerState::GetLinearColorOf(Color));
+
+	for (UMaterialInstanceDynamic* Material : BodyMaterials)
+	{
+		if (Material)
+		{
+			Material->SetVectorParameterValue(BodyColorParameterName, Tint);
+		}
+	}
+
+	// 부쉬 안에서 보이는 겹친 몸도 같은 색
+	for (UMaterialInstanceDynamic* Material : XRayMaterials)
+	{
+		if (Material)
+		{
+			Material->SetVectorParameterValue(BodyColorParameterName, Tint);
+		}
+	}
+
+	// 꼬리도 같은 색
+	if (OwnedTail)
+	{
+		OwnedTail->RefreshVisual();
+	}
+}
+
+// 레벨 기믹 (부쉬, 전화부스)
+
+void ACTCharacter::SetCurrentBush(ACTBush* NewBush)
+{
+	if (!HasAuthority() || CurrentBush == NewBush) { return; }
+
+	CurrentBush = NewBush;
+	OnRep_CurrentBush();
+}
+
+void ACTCharacter::OnRep_CurrentBush()
+{
+	// 몸 숨김은 UpdateBushVisibility가 판단
+	UpdateBushVisibility();
+}
+
+void ACTCharacter::SetBoothLocked(bool bNewLocked)
+{
+	if (!HasAuthority() || bBoothLocked == bNewLocked) { return; }
+
+	bBoothLocked = bNewLocked;
+	if (bNewLocked)
+	{
+		StopJumping();
+		GetCharacterMovement()->StopMovementImmediately();
+	}
+}
+
+void ACTCharacter::ClientShowNotice_Implementation(const FText& Message, float Seconds)
+{
+	if (const ACTPlayerController* CTController = Cast<ACTPlayerController>(GetController()))
+	{
+		if (UCTHUDWidget* HUD = CTController->GetHUDWidget())
+		{
+			HUD->ShowNotice(Message, Seconds);
+		}
+	}
+}
+
+void ACTCharacter::ClientShowPhoneResult_Implementation(const FText& Message, float Seconds, bool bShowArrow, FVector TargetLocation)
+{
+	if (const ACTPlayerController* CTController = Cast<ACTPlayerController>(GetController()))
+	{
+		if (UCTHUDWidget* HUD = CTController->GetHUDWidget())
+		{
+			HUD->ShowNotice(Message, Seconds);
+			if (bShowArrow) { HUD->ShowDirectionArrow(TargetLocation, Seconds); }
+		}
+	}
+}
+
+void ACTCharacter::UpdateBushVisibility()
+{
+	// 전용 서버는 화면 없음
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+
+	bool bShouldHide = false;
+	if (CurrentBush && !IsLocallyControlled())
+	{
+		// 같은 부쉬 안/유령은 숨은 몸 보임
+		const APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const ACTCharacter* Viewer = LocalController ? Cast<ACTCharacter>(LocalController->GetPawn()) : nullptr;
+		const bool bViewerSees = !Viewer || Viewer->IsGhost() || Viewer->CurrentBush == CurrentBush;
+		bShouldHide = !bViewerSees;
+	}
+
+	if (bShouldHide == bBodyHiddenByBush) { return; }
+	bBodyHiddenByBush = bShouldHide;
+
+	// 꼬리는 그대로 둠, 부착된 꼬리까지 숨기면 안 됨
+	if (GetMesh()) { GetMesh()->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
+	if (TongueMesh) { TongueMesh->SetVisibility(!bShouldHide, /*bPropagateToChildren=*/false); }
+}
+
+void ACTCharacter::UpdateBushXRay()
+{
+	if (GetNetMode() == NM_DedicatedServer || !XRayMesh || !GetMesh()) { return; }
+
+	// 부쉬 안이면 내 몸, 같은 부쉬 안 다른 플레이어 몸이 가려져도 실루엣이 보임
+	bool bWantXRay = false;
+	if (CurrentBush && XRayMaterial)
+	{
+		if (IsLocallyControlled())
+		{
+			bWantXRay = true;
+		}
+		else
+		{
+			const APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+			const ACTCharacter* Viewer = LocalController ? Cast<ACTCharacter>(LocalController->GetPawn()) : nullptr;
+			bWantXRay = Viewer && Viewer->CurrentBush == CurrentBush;
+		}
+	}
+	if (bWantXRay == bXRayActive) { return; }
+	bXRayActive = bWantXRay;
+
+	if (bWantXRay && !bXRaySetup)
+	{
+		// 최초 1회 메시 설정, 원본 포즈 추종
+		XRayMesh->SetSkeletalMesh(GetMesh()->GetSkeletalMeshAsset());
+		XRayMesh->SetLeaderPoseComponent(GetMesh());
+
+		XRayMaterials.Reset();
+		for (int32 SlotIndex = 0; SlotIndex < XRayMesh->GetNumMaterials(); ++SlotIndex)
+		{
+			XRayMaterials.Add(XRayMesh->CreateAndSetMaterialInstanceDynamicFromMaterial(SlotIndex, XRayMaterial));
+		}
+		bXRaySetup = true;
+		RefreshBodyColor(); // 색을 겹친 몸에도 적용
+	}
+
+	XRayMesh->SetVisibility(bWantXRay);
 }

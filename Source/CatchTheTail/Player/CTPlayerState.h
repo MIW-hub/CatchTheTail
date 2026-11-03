@@ -8,13 +8,9 @@
 
 class ACTPlayerState;
 
-/** 값이 바뀔 때마다 UI가 받을 수 있는 알림 */
+// 값 변경 알림
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTPlayerStateChangedSignature, ACTPlayerState*, ChangedPlayerState);
 
-/**
- * 플레이어 한 명의 게임 정보.
- * 색, 목표 색, 꼬리 수(점수), 유령 여부를 서버가 정하고 모든 클라이언트에 복제합니다.
- */
 UCLASS()
 class CATCHTHETAIL_API ACTPlayerState : public APlayerState
 {
@@ -25,7 +21,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	// ----- 읽기 -----
+	// 읽기
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	ECTColor GetAssignedColor() const { return AssignedColor; }
 
@@ -38,22 +34,48 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsGhost() const { return bIsGhost; }
 
-	/** 색 → 화면에 쓸 실제 색 값 (사업계획서 HEX 기준) */
+	// 이번 경기에서 기권함. 순위와 라운드 진행에서 빠지고 유령으로 관전만 함
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	bool IsForfeited() const { return bForfeited; }
+
+	// 대기 로비: 준비 완료
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	bool IsReady() const { return bReady; }
+
+	// 방장 (listen 서버 호스트)
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	bool IsHost() const { return bIsHost; }
+
+	// 색 → 실제 색값
 	UFUNCTION(BlueprintPure, Category = "CT|Color")
 	static FLinearColor GetLinearColorOf(ECTColor InColor);
 
-	/** 색 → 화면에 보여줄 이름 (빨강, 주황 ...) */
+	// 색 → 표시 이름
 	UFUNCTION(BlueprintPure, Category = "CT|Color")
 	static FText GetColorDisplayName(ECTColor InColor);
 
-	// ----- 쓰기 (서버에서만 동작) -----
+	// 쓰기
 	void SetColors(ECTColor NewAssignedColor, ECTColor NewTargetColor);
 	void SetTailCount(int32 NewTailCount);
-	/** 꼬리 수를 더하거나 뺍니다. 0 아래로는 내려가지 않습니다. */
+	// 꼬리 수 증감, 0 미만 불가
 	void AddTailCount(int32 Delta);
 	void SetIsGhost(bool bNewIsGhost);
 
-	/** 값이 바뀌면 호출됩니다. (서버, 클라이언트 모두) UI 연결용 */
+	// 서버 전용: 이번 유령 상태에서 F키 이동을 이미 썼는가 (유령이 될 때마다 초기화)
+	bool HasUsedGhostRelocate() const { return bGhostRelocateUsed; }
+	void MarkGhostRelocateUsed() { bGhostRelocateUsed = true; }
+
+	void SetForfeited(bool bNewForfeited);
+	void SetReady(bool bNewReady);
+
+	// 전화를 다시 걸 수 있게 되는 서버 시각 (GameState 서버 시간 기준, 서버가 관리, 복제)
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	double GetPhoneReadyServerTime() const { return PhoneReadyServerTime; }
+
+	void SetPhoneReadyServerTime(double NewReadyTime);
+	void SetIsHost(bool bNewIsHost);
+
+	// 값 변경 시 호출 (UI용)
 	UPROPERTY(BlueprintAssignable, Category = "CT|PlayerState")
 	FCTPlayerStateChangedSignature OnPlayerStateChanged;
 
@@ -67,8 +89,26 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_TailCount, BlueprintReadOnly, Category = "CT|PlayerState")
 	int32 TailCount = 0;
 
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|PlayerState")
+	double PhoneReadyServerTime = 0.0;
+
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;
+
+	// 서버만 사용, 복제 안 함
+	bool bGhostRelocateUsed = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
+	bool bForfeited = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
+	bool bReady = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
+	bool bIsHost = false;
+
+	UFUNCTION()
+	void OnRep_Lobby();
 
 	UFUNCTION()
 	void OnRep_Colors();
@@ -81,5 +121,12 @@ protected:
 
 private:
 	void NotifyChanged();
+
+	// 소리 판단용 이전 꼬리 수
+	int32 LastTailCountForSound = 0;
+	bool bLastGhostForSound = false;
+
+	// 이 PlayerState가 이 컴퓨터에서 조종하는 플레이어인가
+	bool IsLocalPlayerForSound() const;
 	void NotifyPawnGhostState();
 };

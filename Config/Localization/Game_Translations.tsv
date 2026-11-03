@@ -1,0 +1,240 @@
+-	-	-
+Esc는 메뉴 키라서 쓸 수 없습니다.	Esc is the menu key and can't be used.	Escはメニューキーのため使用できません。
+{0} 키는 이미 다른 동작에서 쓰고 있습니다.	The {0} key is already used for another action.	{0}キーはすでに別の操作に使われています。
+{0}~{1}자, 한글 / 영문 / 숫자 / _ / -	{0}–{1} characters: Korean / English / numbers / _ / -	{0}～{1}文字、ハングル / 英字 / 数字 / _ / -
+{0}초 후 로비로 돌아갑니다	Returning to the lobby in {0}s	{0}秒後にロビーへ戻ります
+게임 시작 {0}	Game starts in {0}	ゲーム開始まで {0}
+게임이 이미 진행 중이라 입장할 수 없습니다.	The game is already in progress, so you can't join.	ゲームがすでに進行中のため参加できません。
+경기 종료	Match Over	試合終了
+곧 게임이 시작되어 입장할 수 없습니다.	The game is about to start, so you can't join.	まもなくゲームが始まるため参加できません。
+곧 경기가 시작됩니다	The match starts soon	まもなく試合が始まります
+기본 맵입니다.	The default map.	基本のマップです。
+기본 설정으로 되돌렸습니다.	Settings restored to default.	設定を初期状態に戻しました。
+노랑	Yellow	黄
+달리기	Run	走る
+달리기 가능	Run ready	走れます
+달리기 불가	Can't run	走れません
+달리는 중 {0}	Running {0}	走行中 {0}
+대기	Waiting	待機
+대시	Dash	ダッシュ
+동점! 연장전	Tie! Overtime	同点！延長戦
+라운드 {0}	Round {0}	ラウンド {0}
+맵 없음	No map	マップなし
+목표 없음	None	なし
+밀기	Push	押す
+방 코드 보기	Show room code	ルームコードを表示
+방 코드 숨기기	Hide room code	ルームコードを隠す
+방 코드 입장은 준비 중입니다.	Joining by room code is coming soon.	ルームコードでの参加は準備中です。
+방 코드를 입력하세요.	Enter a room code.	ルームコードを入力してください。
+방에 접속하지 못했습니다. 주소와 방장의 방 상태를 확인하세요.	Couldn't join the room. Check the address and the host's room.	ルームに接続できませんでした。アドレスとホストのルームの状態を確認してください。
+방이 가득 차서 입장할 수 없습니다.	The room is full, so you can't join.	ルームが満員のため参加できません。
+방장	Host	ホスト
+방장이 방을 닫았거나 연결이 끊어졌습니다.	The host closed the room or the connection was lost.	ホストがルームを閉じたか、接続が切れました。
+보라	Purple	紫
+복사되었습니다	Copied	コピーしました
+분홍	Pink	ピンク
+빠른 참가는 준비 중입니다.	Quick Join is coming soon.	クイック参加は準備中です。
+빨강	Red	赤
+사용할 수 없는 키입니다.	That key can't be used.	このキーは使用できません。
+스팀 연결 후 사용할 수 있습니다.	Available after connecting to Steam.	Steamに接続すると利用できます。
+승리!	Victory!	勝利！
+시점	Look	視点
+없음	None	なし
+이 동작의 키는 바꿀 수 없습니다.	The key for this action can't be changed.	この操作のキーは変更できません。
+이동	Move	移動
+이름은 {0}~{1}자로 입력하세요.	Enter a name of {0}–{1} characters.	名前は{0}～{1}文字で入力してください。
+이름은 바꿀 수 없습니다.	Your name can't be changed.	名前は変更できません。
+이름은 한 번만 정할 수 있습니다.	You can only set your name once.	名前は一度しか決められません。
+이름을 바꿨습니다.	Name changed.	名前を変更しました。
+인원 {0}/{1} · 준비 {2}명	Players {0}/{1} · {2} ready	人数 {0}/{1} · 準備OK {2}人
+잡기	Grab	つかむ
+점프	Jump	ジャンプ
+주황	Orange	オレンジ
+준비	Ready	準備OK
+준비 취소	Cancel Ready	準備解除
+초록	Green	緑
+쿨타임 {0}	Cooldown {0}	クールタイム {0}
+타입 A	Type A	タイプA
+파랑	Blue	青
+패배	Defeat	敗北
+플레이어를 기다리는 중	Waiting for players	プレイヤーを待っています
+하늘	Sky Blue	水色
+한글, 영문, 숫자, _, - 만 쓸 수 있습니다. (공백과 특수문자 불가)	Only Korean, English, numbers, _ and - are allowed. (No spaces or special characters)	ハングル、英字、数字、_、- のみ使用できます。（スペースや特殊文字は不可）
+0	0	0
+01   내 색상과 목표 색상을 확인하세요	01   Check your color and your target color	01   自分の色とターゲットの色を確認しよう
+02   목표 색상 플레이어의 꼬리를 노리세요	02   Go after the tail of the player in your target color	02   ターゲットの色のプレイヤーのしっぽを狙おう
+03   달리기와 밀치기 게이지를 확인하세요	03   Watch your run and push gauges	03   ダッシュと押すゲージを確認しよう
+04   꼬리 수와 실시간 순위를 확인하세요	04   Check your tail count and the live ranking	04   しっぽの数とリアルタイム順位を確認しよう
+0:30	0:30	0:30
+1	1	1
+5	5	5
+5:00	5:00	5:00
+80%	80%	80%
+CATCH THE TAIL	CATCH THE TAIL	CATCH THE TAIL
+Enter : 채팅 입력 / 전송	Enter : Type / send chat	Enter : チャット入力 / 送信
+MOON PARTY GAMES	MOON PARTY GAMES	MOON PARTY GAMES
+PLAYER	PLAYER	PLAYER
+W A S D	W A S D	W A S D
+게임 방법	How to Play	遊び方
+게임 시작	Start Game	ゲーム開始
+게임 종료	Quit Game	ゲーム終了
+게임을 종료할까요?	Quit the game?	ゲームを終了しますか？
+경기 결과	Match Results	試合結果
+기본값으로 초기화	Reset to defaults	初期設定に戻す
+내 꼬리	My Tail	マイしっぽ
+내 색상	My Color	自分の色
+다음에 또 만나요!	See you next time!	またね！
+닫기	Close	閉じる
+대기 로비	Lobby	ロビー
+동작 이름	Action	操作名
+뒤로가기	Back	戻る
+라운드 1	Round 1	ラウンド 1
+라운드 시작	Round Start	ラウンド開始
+로비 나가기	Leave Lobby	ロビーを出る
+로비 채팅	Lobby Chat	ロビーチャット
+로비로 돌아가기	Back to Lobby	ロビーへ戻る
+로비에 연결하는 중	Connecting to the lobby	ロビーに接続中
+맵 선택	Select Map	マップ選択
+맵 설명	Map Description	マップ説明
+맵 이름	Map Name	マップ名
+맵 정보 확인 중	Checking map info	マップ情報を確認中
+메시지 입력 후 Enter	Type a message and press Enter	メッセージを入力してEnter
+메인 메뉴로 나가기	Exit to Main Menu	メインメニューへ
+모든 소리 끄기	Mute All	すべての音を消す
+밀치기 준비	Push Ready	押す準備OK
+방 만들기	Create Room	ルームを作る
+방 참가	Join Room	ルームに参加
+방 코드 입력	Enter room code	ルームコード入力
+방 코드를 입력한 뒤 참가 버튼을 눌러 주세요	Enter a room code, then press Join	ルームコードを入力して参加ボタンを押してください
+방을 만들거나 친구의 방 코드로 참가하세요	Create a room or join with a friend's room code	ルームを作るか、友達のルームコードで参加しよう
+배경음	Music	BGM
+변경한 설정은 자동으로 저장됩니다	Changes are saved automatically	変更した設定は自動で保存されます
+변경할 키를 누른 뒤 새 키를 입력하세요	Select the key to change, then press the new key	変更するキーを選んでから新しいキーを押してください
+복사	Copy	コピー
+빠른 참가	Quick Join	クイック参加
+사용할 이름을 입력하세요	Enter the name you'll use	使用する名前を入力してください
+새 이름 입력	Enter new name	新しい名前を入力
+색 구분 보조	Color assist	色の識別補助
+색상	Color	色
+색을 따라, 꼬리를 잡아라	Follow the colors, catch the tails	色を追って、しっぽをつかまえろ
+선택된 맵	Selected Map	選択中のマップ
+설정	Settings	設定
+소리	Sound	サウンド
+실시간 순위	Live Ranking	リアルタイム順位
+아무 키나 클릭하여 건너뛰기	Press any key to skip	どれかキーを押してスキップ
+어떤 이름으로 플레이할까요?	What name do you want to play with?	どんな名前でプレイしますか？
+유령	Ghost	ゴースト
+유령 상태 · 다음 라운드에 부활	Ghost · Respawn next round	ゴースト状態 · 次のラウンドで復活
+이 이름으로 시작	Start with this name	この名前で開始
+이름 규칙을 확인해 주세요	Please check the name rules	名前のルールを確認してください
+이름 변경	Change Name	名前変更
+이름 변경 가능 여부는 게임 설정에 따라 달라집니다	Whether you can change your name depends on the game settings	名前を変更できるかはゲーム設定によります
+잡아야 할 색상	Target Color	つかまえる色
+화면	Display	画面
+접근성	Accessibility	アクセシビリティ
+조작 방법	Controls	操作方法
+종료	Quit	終了
+참가	Join	参加
+참가 플레이어	Players	参加プレイヤー
+최고 기록 플레이어	Top Player	最高記録プレイヤー
+최종 순위	Final Ranking	最終順位
+취소	Cancel	キャンセル
+캐릭터 위 팀 표시	Team marker above character	キャラクター上のチーム表示
+플레이어 이름	Player Name	プレイヤー名
+플레이어 이름을 정해 주세요	Choose your player name	プレイヤー名を決めてください
+플레이할 맵을 선택하세요	Select a map to play	プレイするマップを選んでください
+화면 흔들림	Screen shake	画面の揺れ
+효과음	Sound effects	効果音
+a맵	Map A	マップA
+b맵	Map B	マップB
+전체 화면	Fullscreen	フルスクリーン
+언어 / Language	Language	言語 / Language
+확인	Confirm	確認
+마우스 이동	Mouse	マウス
+마우스 왼쪽 클릭	Left click	左クリック
+게임 중에 쓰는 키입니다	Keys used during the game	ゲーム中に使うキーです
+방을 찾는 중입니다...	Searching for a room...	ルームを探しています...
+해당 방 코드를 찾을 수 없습니다.	No room found with that code.	そのコードのルームが見つかりません。
+참가할 수 있는 방이 없습니다.	No open rooms to join.	参加できるルームがありません。
+방이 가득 찼습니다.	The room is full.	ルームが満員です。
+방에 입장하지 못했습니다.	Could not join the room.	ルームに参加できませんでした。
+전화 거는 중...	Calling...	電話中...
+이번 경기에서는 전화를 쓸 수 없습니다.	The phone is disabled in this match.	この試合では電話を使えません。
+목표를 찾을 수 없습니다.	Target not found.	ターゲットが見つかりません。
+목표가 {0}m 이내에 있습니다.	Your target is within {0}m.	ターゲットは{0}m以内にいます。
+목표가 약 {0}m 거리에 있습니다.	Your target is about {0}m away.	ターゲットは約{0}m先にいます。
+누군가 당신을 찾았습니다!	Someone is looking for you!	誰かがあなたを探しています!
+경기 시간	Game Time	試合時間
+라운드 시간	Round Time	ラウンド時間
+최대 인원	Max Players	最大人数
+시작 꼬리 수	Starting Tails	開始時のしっぽの数
+전화 쿨타임	Phone Cooldown	電話のクールタイム
+부쉬	Bush	茂み
+{0}분	{0} min	{0}分
+{0}초	{0}s	{0}秒
+{0}명	{0} players	{0}人
+{0}개	{0}	{0}個
+사용 안 함	Off	使用しない
+{0}회	{0} times	{0}回
+켜기	On	オン
+끄기	Off	オフ
+{0}분 · 라운드 {1}초 · 최대 {2}명	{0} min · Round {1}s · Max {2} players	{0}分 · ラウンド{1}秒 · 最大{2}人
+맵 설정	Map Settings	マップ設定
+경기 설정	Match Settings	試合設定
+로딩 중	Loading	読み込み中
+참가 인원 {0}/{1}	Players {0}/{1}	参加人数 {0}/{1}
+목표 색의 플레이어에게서 꼬리를 빼앗으세요.	Steal tails from players in your target color.	ターゲットの色のプレイヤーからしっぽを奪おう。
+라운드마다 목표 색이 바뀌니 화면의 색을 꼭 확인하세요.	The target color changes every round, so keep an eye on the colors on screen.	ラウンドごとにターゲットの色が変わるので、画面の色を確認しよう。
+Shift를 누르면 달릴 수 있지만 오래 달리면 지쳐요.	Hold Shift to run, but you will get tired if you run for too long.	Shiftでダッシュできますが、走り続けると疲れてしまいます。
+목표 색이 아닌 상대는 마우스 우클릭으로 밀어낼 수 있어요.	You can push players who are not your target color with a right click.	ターゲットではない相手は右クリックで押し出せます。
+꼬리를 모두 잃으면 유령이 되어 이동만 할 수 있어요.	If you lose all your tails, you become a ghost and can only move around.	しっぽをすべて失うと幽霊になり、移動しかできません。
+경기가 끝났을 때 꼬리가 가장 많은 플레이어가 승리해요.	The player with the most tails when the match ends wins.	試合終了時にしっぽが一番多いプレイヤーが勝ちです。
+부쉬 안에 들어가면 다른 플레이어의 눈을 피할 수 있어요.	Step into a bush to hide from other players.	茂みに入ると他のプレイヤーの目を避けられます。
+달리기와 밀치기 게이지를 확인하며 움직이세요.	Keep an eye on your run and push gauges as you move.	ダッシュと押すゲージを確認しながら動こう。
+메뉴	Menu	メニュー
+계속하기	Resume	続ける
+기권	Forfeit	棄権
+경기는 계속 진행 중이에요	The match is still in progress	試合は進行中です
+경기 중에만 기권할 수 있어요.	You can only forfeit during a match.	棄権できるのは試合中のみです。
+이미 기권했어요.	You have already forfeited.	すでに棄権しました。
+경기 시간이 절반 지나면 기권할 수 있어요. ({0}:{1} 후)	You can forfeit once half the match time has passed. (in {0}:{1})	試合時間が半分過ぎると棄権できます。({0}:{1}後)
+기권하면 이번 경기 순위에서 빠져요.	Forfeiting removes you from this match's ranking.	棄権するとこの試合の順位から外れます。
+기권하시겠어요?	Do you want to forfeit?	棄権しますか？
+기권하면 꼬리를 모두 잃고 이번 경기의 순위에서 제외돼요. 남은 시간에는 유령 상태로 지켜보기만 할 수 있고, 되돌릴 수 없어요.	If you forfeit, you lose all your tails and are removed from this match's ranking. For the rest of the match you can only watch as a ghost, and this cannot be undone.	棄権するとしっぽをすべて失い、この試合の順位から外れます。 残り時間は幽霊として見守ることしかできず、元に戻せません。
+게임을 종료하시겠어요?	Do you want to quit the game?	ゲームを終了しますか？
+방을 나가 메인 메뉴로 돌아가요.	Leave the room and return to the main menu.	部屋を出てメインメニューに戻ります。
+방장이 나가면 방이 닫혀 모든 플레이어의 경기가 끝나요. 진행 중인 경기 기록은 남지 않고, 다시 들어올 수 없어요.	If the host leaves, the room closes and the match ends for everyone. The match in progress will not be recorded and you cannot rejoin.	ホストが退出すると部屋が閉じ、全員の試合が終了します。 進行中の試合は記録されず、再入室もできません。
+경기 도중에 나가면 기권으로 처리돼 순위에서 빠지고, 진행 중인 경기에는 다시 들어올 수 없어요.	If you leave mid-match, it counts as a forfeit and you are removed from the ranking, and you cannot rejoin the match in progress.	試合の途中で退出すると棄権扱いになり順位から外れ、 進行中の試合には再入室できません。
+헌터를 찾을 수 없습니다.	Hunter not found.	ハンターが見つかりません。
+헌터가 {0}m 이내에 있습니다.	Your hunter is within {0}m.	ハンターは{0}m以内にいます。
+헌터가 약 {0}m 거리에 있습니다.	Your hunter is about {0}m away.	ハンターは約{0}m先にいます。
+다른 사람이 통화 중입니다.	Someone else is on the phone.	他の人が通話中です。
+아직 전화를 걸 수 없습니다. ({0}초)	You cannot call yet. ({0}s)	まだ電話をかけられません。({0}秒)
+F키로 전화 걸기	Press F to use the phone	Fキーで電話をかける
+전화 걸기	Phone	電話をかける
+좌클릭: 목표 위치 확인	Left Click: Locate Target	左クリック: ターゲットの位置を確認
+우클릭: 헌터 위치 확인	Right Click: Locate Hunter	右クリック: ハンターの位置を確認
+F 또는 ESC: 닫기	F or ESC: Close	FまたはESC: 閉じる
+지금 통화할 수 있습니다	Ready to call	今すぐ通話できます
+다음 통화까지 {0}초	Next call in {0}s	次の通話まで{0}秒
+F키: 무작위 위치로 한 번 이동 (유령은 다음 라운드에 부활)	F: Move once to a random spot (ghosts revive next round)	F：ランダムな場所へ1回だけ移動（ゴーストは次のラウンドで復活）
+이동은 유령 상태에서 한 번만 쓸 수 있어요.	You can only move once while you are a ghost.	移動はゴースト状態で1回だけ使えます。
+타겟	Target	ターゲット
+라운드 종료	Round ends	ラウンド終了
+순위표	Ranking	ランキング
+순위	Rank	順位
+플레이어	Player	プレイヤー
+꼬리	Tail	しっぽ
+꼬리잡기	Grab Tail	しっぽ取り
+경기 시간이 절반 지나면 기권할 수 있어요.	You can forfeit once half of the match time has passed.	試合時間が半分過ぎると棄権できます。
+기권하면 꼬리를 모두 잃고 이번 경기의 순위에서 제외돼요.	If you forfeit, you lose all your tails and are excluded from this match's ranking.	棄権するとしっぽをすべて失い、この試合の順位から除外されます。
+순환 도로가 감싼 작은 마을. 광장의 분수를 중심으로 공원, 시장, 카페, 배송 마당이 이어져 있어요.	A small town ringed by a loop road. A park, market, café and delivery yard surround the fountain plaza.	環状道路に囲まれた小さな町。広場の噴水を中心に、公園、市場、カフェ、配送ヤードが広がっています。
+언덕이 있는 시골 마을 맵. 부쉬에 숨고, 굴러오는 통나무를 피하며 꼬리를 노리세요.	A hilly countryside map. Hide in bushes, dodge rolling logs, and go after tails.	丘のある田舎町マップ。茂みに隠れ、転がってくる丸太を避けながらしっぽを狙いましょう。
+작은 마을	Small Town	小さな町
+참가 인원 0/8	Players 0/8	参加人数 0/8
+큐브 도시에서 벌이는 기본 맵. 하늘에서 떨어지는 물체를 조심하고, 전화부스로 목표를 찾아보세요.	The basic map in Cube City. Watch out for falling objects and use phone booths to find your target.	キューブシティで行う基本マップ。空から落ちてくる物に気をつけて、電話ボックスでターゲットを探しましょう。
+이 이름으로 시작	Start with this name	この名前で始める
+이름 변경 가능 여부는 게임 설정에 따라 달라집니다	Whether you can change your name depends on the game settings.	名前を変更できるかどうかはゲーム設定によって異なります。
+플레이어 이름을 정해 주세요	Choose your player name	プレイヤー名を決めてください
+어떤 이름으로 플레이할까요?	What name will you play with?	どんな名前でプレイしますか？
+이름 규칙을 확인해 주세요	Please check the name rules	名前のルールを確認してください
