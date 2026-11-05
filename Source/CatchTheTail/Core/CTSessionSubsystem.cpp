@@ -204,7 +204,7 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 	Search->bIsLanQuery = bLan;
 	if (!bLan)
 	{
-				Search->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
+		Search->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
 	}
 
 	FindHandle = Sessions->AddOnFindSessionsCompleteDelegate_Handle(FOnFindSessionsCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleFindSessionsComplete));
