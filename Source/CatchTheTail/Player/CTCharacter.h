@@ -145,6 +145,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Combat")
 	bool IsGrabActive() const { return bGrabActive; }
 
+	// AI 조종용 (서버 전용). 사람의 입력과 같은 규칙(쿨타임, 상태 검사)을 서버에서 그대로 적용함
+	void AIGrab();
+	void AIPush();
+	void AISetRun(bool bRun);
+
+	// AI가 거리를 잴 때 쓰는 값
+	float GetGrabDistance() const { return GrabDistance; }
+	float GetPushDistance() const { return PushDistance; }
+	bool IsInFrontOf(const AActor* Other, float MaxDistance, float HalfAngleDegrees) const { return IsInFrontCone(Other, MaxDistance, HalfAngleDegrees); }
+
+	// 지금 내 목소리를 보내는 중인가 (눌러서 말하기를 누르고 있음)
+	UFUNCTION(BlueprintPure, Category = "CT|Voice")
+	bool IsVoiceTransmitting() const { return bVoiceTransmitting; }
+
 	UFUNCTION(BlueprintPure, Category = "CT|Tail")
 	ACTTail* GetOwnedTail() const { return OwnedTail; }
 
@@ -242,6 +256,18 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> PushAction;
+
+	// 눌러서 말하기 (음성 채팅). 비어 있으면 /Game/Input/IA_PushToTalk
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice")
+	TObjectPtr<UInputAction> VoiceAction;
+
+	// 이 거리(cm) 안에서는 목소리가 최대 크기
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice", meta = (ClampMin = "0"))
+	float VoiceInnerRadius = 125.f;
+
+	// 최대 크기 거리에서 이만큼(cm) 더 멀어지면 안 들림
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice", meta = (ClampMin = "0"))
+	float VoiceFalloffDistance = 375.f;
 
 	// 애니메이션 몽타주
 	// 잡기 (왼손)
@@ -488,6 +514,21 @@ protected:
 	void OnRunReleased();
 	void OnGrabPressed();
 	void OnPushPressed();
+	void OnVoicePressed();
+	void OnVoiceReleased();
+
+	// 이 캐릭터 주인의 목소리를 캐릭터 위치에서 거리에 따라 들리게 함 (모든 화면)
+	void EnsureVoiceTalker();
+	bool bVoiceTalkerCreated = false;
+	bool bVoiceTransmitting = false;
+	bool bVoiceKeyHeld = false;
+
+	// 키 입력과 설정(마이크 사용, 상시 말하기)에 맞춰 전송 상태를 맞춤 (로컬)
+	void UpdateVoiceTransmit();
+
+	// 거리 감쇠
+	UPROPERTY(Transient)
+	TObjectPtr<class USoundAttenuation> VoiceAttenuation;
 
 	// 서버 RPC
 	UFUNCTION(Server, Reliable)

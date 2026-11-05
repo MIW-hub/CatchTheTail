@@ -93,6 +93,26 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCheckBox> CheckBox_Mute;
 
+	// 음성 채팅
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCheckBox> CheckBox_MicEnabled;
+
+	// 눌러서 말하기 없이 항상 전송
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCheckBox> CheckBox_MicAlwaysOn;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USlider> Slider_Voice;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_VoiceValue;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USlider> Slider_MicSensitivity;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MicSensitivityValue;
+
 	// 조작
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Controls;
@@ -181,6 +201,18 @@ private:
 
 	UFUNCTION()
 	void HandleMuteChanged(bool bIsChecked);
+
+	UFUNCTION()
+	void HandleMicEnabledChanged(bool bIsChecked);
+
+	UFUNCTION()
+	void HandleMicAlwaysOnChanged(bool bIsChecked);
+
+	UFUNCTION()
+	void HandleVoiceChanged(float Value);
+
+	UFUNCTION()
+	void HandleMicSensitivityChanged(float Value);
 
 	UFUNCTION()
 	void HandleFullscreenChanged(bool bIsChecked);

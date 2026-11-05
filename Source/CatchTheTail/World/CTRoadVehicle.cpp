@@ -39,6 +39,11 @@ void ACTRoadVehicle::BeginPlay()
 	Super::BeginPlay();
 }
 
+FVector ACTRoadVehicle::GetCarLocation() const
+{
+	return CarMesh ? CarMesh->GetComponentLocation() : GetActorLocation();
+}
+
 void ACTRoadVehicle::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

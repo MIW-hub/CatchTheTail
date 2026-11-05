@@ -11,7 +11,8 @@
 void UCTMapEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	UCTButtonHoverEffect::Attach(this);
+	// 맵 항목은 확대, 떠오름 없이 올리면 색만 조금 진해짐 (공용 확대 효과는 붙이지 않음)
+	UCTButtonHoverEffect::ApplyDarkenStyle(Button_Entry);
 
 	// 버튼 소리 (올림 / 누름)
 	UCTAudioSubsystem::ApplyUISounds(this);
@@ -51,6 +52,10 @@ void UCTMapEntryWidget::SetSelected(bool bSelected)
 	if (Widget_Selected)
 	{
 		Widget_Selected->SetVisibility(bSelected ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (Image_SelectedCheck)
+	{
+		Image_SelectedCheck->SetVisibility(bSelected ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	BP_OnSelectionChanged(bSelected);
 }

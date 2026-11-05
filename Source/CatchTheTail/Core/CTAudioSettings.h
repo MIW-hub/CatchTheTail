@@ -129,4 +129,24 @@ public:
 	// 감쇠 끝 거리(cm). 넘으면 안 들림
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|World", meta = (ClampMin = "0"))
 	float WorldSfxFalloffDistance = 2500.f;
+
+	// 발소리가 최대 크기로 들리는 거리(cm)
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Footstep", meta = (ClampMin = "0"))
+	float FootstepInnerRadius = 120.f;
+
+	// 발소리 감쇠 끝 거리(cm). 넘으면 안 들림
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Footstep", meta = (ClampMin = "0"))
+	float FootstepFalloffDistance = 800.f;
+
+	// 발소리 크기 배율 (캐릭터 쪽 볼륨에 곱함)
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Footstep", meta = (ClampMin = "0"))
+	float FootstepVolumeScale = 0.6f;
+
+	// 발소리 피치 배율. 낮을수록 둔탁하고 부드러움
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Footstep", meta = (ClampMin = "0.1"))
+	float FootstepPitchScale = 0.9f;
+
+	// 멀어질수록 고음을 깎는 저역 통과 필터의 끝 주파수(Hz). 낮을수록 멀리서 먹먹하게 들림
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Footstep", meta = (ClampMin = "100"))
+	float FootstepFarLowPassHz = 1800.f;
 };

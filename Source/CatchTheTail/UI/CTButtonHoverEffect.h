@@ -19,6 +19,9 @@ public:
 	// 모든 버튼에 적용. 중복 호출 안전
 	static void Attach(UUserWidget* Owner);
 
+	// 확대 대신 올림, 누름 때 색만 조금 진하게 (평소 모양 기준). 배경이 투명이면 검은 막을 살짝 씌움
+	static void ApplyDarkenStyle(UButton* Button);
+
 	virtual void BeginDestroy() override;
 
 private:

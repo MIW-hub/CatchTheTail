@@ -214,6 +214,11 @@ void ACTExplosiveBarrel::ApplyStateVisuals(ECTBarrelState OldState)
 	}
 }
 
+float ACTExplosiveBarrel::GetTouchRadius() const
+{
+	return TouchTrigger ? TouchTrigger->GetScaledSphereRadius() : 150.f;
+}
+
 void ACTExplosiveBarrel::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

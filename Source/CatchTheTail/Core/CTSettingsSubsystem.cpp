@@ -17,6 +17,7 @@
 #include "Internationalization/Internationalization.h"
 #include "Internationalization/TextLocalizationManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/VoiceConfig.h"
 #include "Sound/SoundClass.h"
 #include "Sound/SoundMix.h"
 
@@ -50,6 +51,7 @@ namespace
 			{ TEXT("Grab"), NSLOCTEXT("CT", "Ctl_Grab", "잡기") },
 			{ TEXT("Push"), NSLOCTEXT("CT", "Ctl_Push", "밀기") },
 			{ TEXT("Look"), NSLOCTEXT("CT", "Ctl_Look", "시점") },
+			{ TEXT("Voice"), NSLOCTEXT("CT", "Ctl_Voice", "음성 말하기") },
 		};
 		if (const FText* Found = Defaults.Find(Entry.Id)) { return *Found; }
 		return FText::FromName(Entry.Id);
@@ -109,6 +111,8 @@ void UCTSettingsSubsystem::LoadSettings()
 		Data = Saved->Data;
 		Data.MusicVolume = FMath::Clamp(Data.MusicVolume, 0.f, 1.f);
 		Data.SfxVolume = FMath::Clamp(Data.SfxVolume, 0.f, 1.f);
+		Data.VoiceVolume = FMath::Clamp(Data.VoiceVolume, 0.f, 1.f);
+		Data.MicSensitivity = FMath::Clamp(Data.MicSensitivity, 0.f, 1.f);
 	}
 }
 
@@ -175,9 +179,38 @@ void UCTSettingsSubsystem::SetTeamMarkerEnabled(bool bEnabled)
 	CommitChange();
 }
 
+void UCTSettingsSubsystem::SetMicEnabled(bool bEnabled)
+{
+	Data.bMicEnabled = bEnabled;
+	CommitChange();
+}
+
+void UCTSettingsSubsystem::SetMicAlwaysOn(bool bEnabled)
+{
+	Data.bMicAlwaysOn = bEnabled;
+	CommitChange();
+}
+
+void UCTSettingsSubsystem::SetVoiceVolume(float Volume)
+{
+	Data.VoiceVolume = FMath::Clamp(Volume, 0.f, 1.f);
+	ApplyAudio();
+	CommitChange();
+}
+
+void UCTSettingsSubsystem::SetMicSensitivity(float Sensitivity)
+{
+	Data.MicSensitivity = FMath::Clamp(Sensitivity, 0.f, 1.f);
+	ApplyAudio();
+	CommitChange();
+}
+
 void UCTSettingsSubsystem::ApplyAudio()
 {
 	UGameInstance* GameInstance = GetGameInstance();
+
+	// 마이크 감도: 이 값보다 작은 소리는 보내지 않음 (감도가 클수록 기준이 낮음. 0.9일 때 0.01)
+	UVOIPStatics::SetMicThreshold((1.f - Data.MicSensitivity) * 0.1f);
 
 	// 배경음은 실행 중 곡에 직접 볼륨 (음소거 포함)
 	if (UCTAudioSubsystem* Audio = GameInstance ? GameInstance->GetSubsystem<UCTAudioSubsystem>() : nullptr)
@@ -203,6 +236,13 @@ void UCTSettingsSubsystem::ApplyAudio()
 	if (USoundClass* SfxClass = Config()->SfxSoundClass.LoadSynchronous())
 	{
 		UGameplayStatics::SetSoundMixClassOverride(World, Mix, SfxClass, SfxVolume, 1.f, 0.f, true);
+	}
+
+	// 다른 사람 목소리 (음소거 포함)
+	const float VoiceVolume = Data.bMuteAll ? 0.f : Data.VoiceVolume;
+	if (USoundClass* VoiceClass = Config()->VoiceSoundClass.LoadSynchronous())
+	{
+		UGameplayStatics::SetSoundMixClassOverride(World, Mix, VoiceClass, VoiceVolume, 1.f, 0.f, true);
 	}
 }
 

@@ -25,6 +25,12 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	// AI가 피하기 위해 읽는 값: 지금 굴러가는 중인가(쉬는 동안은 안 보임), 통나무 위치, 굴러가는 선(월드 좌표)
+	bool IsRolling() const;
+	FVector GetLogLocation() const;
+	FVector GetPathStartWorld() const { return PathStart; }
+	FVector GetPathEndWorld() const { return GetActorTransform().TransformPosition(PathEnd); }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -118,7 +124,6 @@ private:
 
 	// 경로 시작과 끝 (월드, XY만 의미 있음)
 	FVector GetPathStart() const { return PathStart; }
-	FVector GetPathEndWorld() const { return GetActorTransform().TransformPosition(PathEnd); }
 
 	// 바닥 높이 (실패 시 이전 값)
 	float FindGroundZ(const FVector& XY, float FallbackZ) const;

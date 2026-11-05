@@ -59,6 +59,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Widget_Selected;
 
+	// 선택됐을 때만 보이는 체크 배지 (선택 사항)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Image_SelectedCheck;
+
 private:
 	UFUNCTION()
 	void HandleClicked();

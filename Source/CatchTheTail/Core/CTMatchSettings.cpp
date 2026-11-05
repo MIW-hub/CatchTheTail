@@ -11,6 +11,7 @@ int32 FCTMatchSettings::Get(ECTMatchSetting Setting) const
 	case ECTMatchSetting::InitialTails: return InitialTails;
 	case ECTMatchSetting::PhoneUses:    return PhoneUses;
 	case ECTMatchSetting::Bush:         return Bush;
+	case ECTMatchSetting::AiPlayers:    return AiPlayers;
 	default: return 0;
 	}
 }
@@ -25,6 +26,7 @@ void FCTMatchSettings::Set(ECTMatchSetting Setting, int32 NewValue)
 	case ECTMatchSetting::InitialTails: InitialTails = NewValue; break;
 	case ECTMatchSetting::PhoneUses:    PhoneUses = NewValue; break;
 	case ECTMatchSetting::Bush:         Bush = NewValue; break;
+	case ECTMatchSetting::AiPlayers:    AiPlayers = NewValue; break;
 	default: break;
 	}
 }
@@ -37,6 +39,7 @@ const TArray<int32>& FCTMatchSettings::GetOptions(ECTMatchSetting Setting)
 	static const TArray<int32> InitialTailsOptions = { 1, 2, 3 };
 	static const TArray<int32> PhoneUsesOptions = { 0, 15, 30, 45, 60 };
 	static const TArray<int32> BushOptions = { 0, 1 };
+	static const TArray<int32> AiPlayersOptions = { 0, 1, 2, 3, 4, 5, 6, 7 };
 	static const TArray<int32> None;
 
 	switch (Setting)
@@ -47,6 +50,7 @@ const TArray<int32>& FCTMatchSettings::GetOptions(ECTMatchSetting Setting)
 	case ECTMatchSetting::InitialTails: return InitialTailsOptions;
 	case ECTMatchSetting::PhoneUses:    return PhoneUsesOptions;
 	case ECTMatchSetting::Bush:         return BushOptions;
+	case ECTMatchSetting::AiPlayers:    return AiPlayersOptions;
 	default: return None;
 	}
 }
@@ -110,6 +114,7 @@ FName FCTMatchSettings::GetKey(ECTMatchSetting Setting)
 	case ECTMatchSetting::InitialTails: return TEXT("InitialTails");
 	case ECTMatchSetting::PhoneUses:    return TEXT("PhoneUses");
 	case ECTMatchSetting::Bush:         return TEXT("Bush");
+	case ECTMatchSetting::AiPlayers:    return TEXT("AiPlayers");
 	default: return NAME_None;
 	}
 }
@@ -124,6 +129,7 @@ FText FCTMatchSettings::GetLabel(ECTMatchSetting Setting)
 	case ECTMatchSetting::InitialTails: return NSLOCTEXT("CT", "Match_InitialTails", "시작 꼬리 수");
 	case ECTMatchSetting::PhoneUses:    return NSLOCTEXT("CT", "Match_PhoneUses", "전화 쿨타임");
 	case ECTMatchSetting::Bush:         return NSLOCTEXT("CT", "Match_Bush", "부쉬");
+	case ECTMatchSetting::AiPlayers:    return NSLOCTEXT("CT", "Match_AiPlayers", "AI 인원");
 	default: return FText::GetEmpty();
 	}
 }
@@ -139,6 +145,9 @@ FText FCTMatchSettings::FormatValue(ECTMatchSetting Setting, int32 Value)
 	case ECTMatchSetting::PhoneUses:
 		return Value <= 0 ? NSLOCTEXT("CT", "Match_ValueNone", "사용 안 함")
 			: FText::Format(NSLOCTEXT("CT", "Match_ValueSeconds", "{0}초"), Value);
+	case ECTMatchSetting::AiPlayers:
+		return Value <= 0 ? NSLOCTEXT("CT", "Match_ValueNone", "사용 안 함")
+			: FText::Format(NSLOCTEXT("CT", "Match_ValuePlayers", "{0}명"), Value);
 	case ECTMatchSetting::Bush:
 		return Value != 0 ? NSLOCTEXT("CT", "Match_ValueOn", "켜기") : NSLOCTEXT("CT", "Match_ValueOff", "끄기");
 	default: return FText::GetEmpty();

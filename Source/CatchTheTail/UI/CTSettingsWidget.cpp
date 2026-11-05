@@ -35,6 +35,10 @@ void UCTSettingsWidget::NativeConstruct()
 	if (Slider_Music)          { Slider_Music->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
+	if (CheckBox_MicEnabled)   { CheckBox_MicEnabled->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMicEnabledChanged); }
+	if (CheckBox_MicAlwaysOn)  { CheckBox_MicAlwaysOn->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMicAlwaysOnChanged); }
+	if (Slider_Voice)          { Slider_Voice->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleVoiceChanged); }
+	if (Slider_MicSensitivity) { Slider_MicSensitivity->OnValueChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleMicSensitivityChanged); }
 	if (CheckBox_Fullscreen)   { CheckBox_Fullscreen->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleFullscreenChanged); }
 	if (CheckBox_ScreenShake)  { CheckBox_ScreenShake->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleScreenShakeChanged); }
 	if (CheckBox_TeamColors)   { CheckBox_TeamColors->OnCheckStateChanged.AddUniqueDynamic(this, &UCTSettingsWidget::HandleTeamColorsChanged); }
@@ -57,6 +61,10 @@ void UCTSettingsWidget::NativeDestruct()
 	if (Slider_Music)          { Slider_Music->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMusicChanged); }
 	if (Slider_Sfx)            { Slider_Sfx->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleSfxChanged); }
 	if (CheckBox_Mute)         { CheckBox_Mute->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMuteChanged); }
+	if (CheckBox_MicEnabled)   { CheckBox_MicEnabled->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMicEnabledChanged); }
+	if (CheckBox_MicAlwaysOn)  { CheckBox_MicAlwaysOn->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMicAlwaysOnChanged); }
+	if (Slider_Voice)          { Slider_Voice->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleVoiceChanged); }
+	if (Slider_MicSensitivity) { Slider_MicSensitivity->OnValueChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleMicSensitivityChanged); }
 	if (CheckBox_Fullscreen)   { CheckBox_Fullscreen->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleFullscreenChanged); }
 	if (CheckBox_ScreenShake)  { CheckBox_ScreenShake->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleScreenShakeChanged); }
 	if (CheckBox_TeamColors)   { CheckBox_TeamColors->OnCheckStateChanged.RemoveDynamic(this, &UCTSettingsWidget::HandleTeamColorsChanged); }
@@ -93,6 +101,12 @@ void UCTSettingsWidget::RefreshAll()
 	SetPercentText(Text_SfxValue, Settings->GetSfxVolume());
 
 	if (CheckBox_Mute)        { CheckBox_Mute->SetIsChecked(Settings->IsMuted()); }
+	if (CheckBox_MicEnabled)  { CheckBox_MicEnabled->SetIsChecked(Settings->IsMicEnabled()); }
+	if (CheckBox_MicAlwaysOn) { CheckBox_MicAlwaysOn->SetIsChecked(Settings->IsMicAlwaysOn()); }
+	if (Slider_Voice)         { Slider_Voice->SetValue(Settings->GetVoiceVolume()); }
+	if (Slider_MicSensitivity) { Slider_MicSensitivity->SetValue(Settings->GetMicSensitivity()); }
+	SetPercentText(Text_VoiceValue, Settings->GetVoiceVolume());
+	SetPercentText(Text_MicSensitivityValue, Settings->GetMicSensitivity());
 	if (CheckBox_Fullscreen)  { CheckBox_Fullscreen->SetIsChecked(Settings->IsFullscreen()); }
 	if (CheckBox_ScreenShake) { CheckBox_ScreenShake->SetIsChecked(Settings->IsScreenShakeEnabled()); }
 	if (CheckBox_TeamColors)  { CheckBox_TeamColors->SetIsChecked(Settings->IsTeamColorAssistEnabled()); }
@@ -253,6 +267,32 @@ void UCTSettingsWidget::HandleMuteChanged(bool bIsChecked)
 {
 	if (bRefreshing) { return; }
 	if (UCTSettingsSubsystem* Settings = GetSettings()) { Settings->SetMuted(bIsChecked); }
+}
+
+void UCTSettingsWidget::HandleMicEnabledChanged(bool bIsChecked)
+{
+	if (bRefreshing) { return; }
+	if (UCTSettingsSubsystem* Settings = GetSettings()) { Settings->SetMicEnabled(bIsChecked); }
+}
+
+void UCTSettingsWidget::HandleMicAlwaysOnChanged(bool bIsChecked)
+{
+	if (bRefreshing) { return; }
+	if (UCTSettingsSubsystem* Settings = GetSettings()) { Settings->SetMicAlwaysOn(bIsChecked); }
+}
+
+void UCTSettingsWidget::HandleVoiceChanged(float Value)
+{
+	if (bRefreshing) { return; }
+	SetPercentText(Text_VoiceValue, Value);
+	if (UCTSettingsSubsystem* Settings = GetSettings()) { Settings->SetVoiceVolume(Value); }
+}
+
+void UCTSettingsWidget::HandleMicSensitivityChanged(float Value)
+{
+	if (bRefreshing) { return; }
+	SetPercentText(Text_MicSensitivityValue, Value);
+	if (UCTSettingsSubsystem* Settings = GetSettings()) { Settings->SetMicSensitivity(Value); }
 }
 
 void UCTSettingsWidget::HandleFullscreenChanged(bool bIsChecked)

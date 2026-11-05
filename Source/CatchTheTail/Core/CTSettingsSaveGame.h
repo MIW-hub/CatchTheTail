@@ -51,6 +51,23 @@ struct FCTSettingsData
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bShowTeamMarker = true;
 
+	// 음성 채팅
+	// 마이크로 말하기 (끄면 눌러도 전송 안 함)
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	bool bMicEnabled = true;
+
+	// 버튼을 누르지 않아도 계속 말하기 (켜면 눌러서 말하기 없이 상시 전송)
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	bool bMicAlwaysOn = false;
+
+	// 다른 사람 목소리 볼륨 0~1
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	float VoiceVolume = 1.0f;
+
+	// 마이크 감도 0~1. 클수록 작은 소리도 보냄
+	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
+	float MicSensitivity = 0.9f;
+
 	// 조작
 	// 바꾼 키. 행동 Id별, 안 바꾼 행동은 없음
 	UPROPERTY()

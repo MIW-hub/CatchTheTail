@@ -68,6 +68,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
 	bool IsTeamMarkerEnabled() const { return Data.bShowTeamMarker; }
 
+	// 음성 채팅
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	bool IsMicEnabled() const { return Data.bMicEnabled; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	bool IsMicAlwaysOn() const { return Data.bMicAlwaysOn; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	float GetVoiceVolume() const { return Data.VoiceVolume; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	float GetMicSensitivity() const { return Data.MicSensitivity; }
+
 	// 변경 (즉시 적용 + 저장)
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void SetMusicVolume(float Volume);
@@ -89,6 +102,18 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	void SetTeamMarkerEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetMicEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetMicAlwaysOn(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetVoiceVolume(float Volume);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void SetMicSensitivity(float Sensitivity);
 
 	// 언어
 	// 지원 문화 코드 목록
@@ -153,6 +178,10 @@ public:
 	// 이름 변경. 불허/규칙 위반 시 false + 이유
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	bool ChangePlayerName(const FString& NewName, FText& OutError);
+
+	// 행동의 현재 키 (바꾼 키 우선). HUD 키 안내용
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	FKey GetActionKey(FName ActionId) const { return GetCurrentKey(ActionId); }
 
 private:
 	void LoadSettings();

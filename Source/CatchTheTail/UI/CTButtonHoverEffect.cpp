@@ -3,11 +3,18 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Styling/SlateTypes.h"
 
 namespace
 {
 	const FString NoHoverMarker(TEXT("NoHover"));
 	const FName EffectObjectName(TEXT("CTButtonHoverEffect"));
+
+	// 확대, 떠오름 효과를 빼고 색 변화만 쓰는 버튼 이름
+	bool IsColorOnlyButton(const FString& Name)
+	{
+		return Name == TEXT("Button_SelectMap");
+	}
 }
 
 void UCTButtonHoverEffect::Attach(UUserWidget* Owner)
@@ -46,7 +53,7 @@ void UCTButtonHoverEffect::Collect(UUserWidget* Owner)
 	Owner->WidgetTree->ForEachWidget([this](UWidget* Widget)
 	{
 		UButton* Button = Cast<UButton>(Widget);
-		if (Button && !Button->GetName().Contains(NoHoverMarker))
+		if (Button && !Button->GetName().Contains(NoHoverMarker) && !IsColorOnlyButton(Button->GetName()))
 		{
 			FEntry Entry;
 			Entry.Button = Button;
@@ -93,4 +100,31 @@ bool UCTButtonHoverEffect::Tick(float DeltaTime)
 	}
 
 	return true;
+}
+
+void UCTButtonHoverEffect::ApplyDarkenStyle(UButton* Button)
+{
+	if (!Button) { return; }
+
+	auto Darken = [](FSlateBrush Brush, float Factor, float OverlayAlpha)
+	{
+		FLinearColor Tint = Brush.TintColor.GetSpecifiedColor();
+		if (Brush.DrawAs == ESlateBrushDrawType::NoDrawType || Tint.A < 0.05f)
+		{
+			Brush.DrawAs = ESlateBrushDrawType::Box;
+			Brush.SetResourceObject(nullptr);
+			Brush.TintColor = FLinearColor(0.f, 0.f, 0.f, OverlayAlpha);
+		}
+		else
+		{
+			Tint.R *= Factor; Tint.G *= Factor; Tint.B *= Factor;
+			Brush.TintColor = Tint;
+		}
+		return Brush;
+	};
+
+	FButtonStyle Style = Button->GetStyle();
+	Style.SetHovered(Darken(Style.Normal, 0.68f, 0.28f));
+	Style.SetPressed(Darken(Style.Normal, 0.56f, 0.40f));
+	Button->SetStyle(Style);
 }

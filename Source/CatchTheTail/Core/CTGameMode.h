@@ -111,10 +111,23 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")
 	bool bTargetFromActiveColorsOnly = true;
 
+	// 경기 맵에 들어온 뒤 본 경기 시작 전 카운트다운(초). 숫자와 소리가 나옴
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0.1"))
+	float GameStartCountdownSeconds = 3.f;
+
+	// AI 플레이어를 조종할 컨트롤러 클래스 (기본 ACTAIController)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI")
+	TSubclassOf<class ACTAIController> AIControllerClass;
+
+	// 로비 설정 없이 시작한 테스트용 AI 수 (로비에서 시작하면 로비 설정을 씀)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "0"))
+	int32 DebugAIPlayerCount = 0;
+
 	// 테스트용 자동 시작. 로비 만들면 끄기
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Debug")
 	bool bAutoStartForTesting = true;
 
+	// 사용 안 함 (GameStartCountdownSeconds 로 대체). 이 값이 저장된 블루프린트가 있어 남겨 둠
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Debug", meta = (ClampMin = "0"))
 	float AutoStartDelaySeconds = 5.f;
 
@@ -127,6 +140,10 @@ private:
 
 	// 시작 전 카운트다운. 끝나면 StartGame
 	void BeginStartCountdown();
+
+	// 경기 시작 때 설정한 수만큼 AI 플레이어를 만들어 시작 지점에 세움 (한 번만). 사람과 합쳐 최대 인원, 색 수를 넘지 않음
+	void SpawnAIPlayers();
+	bool bAIPlayersSpawned = false;
 
 	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();

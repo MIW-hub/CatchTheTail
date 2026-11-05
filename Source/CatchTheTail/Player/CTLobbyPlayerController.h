@@ -9,6 +9,7 @@
 class ACameraActor;
 class UCTLobbyWidget;
 class UCTLoadingWidget;
+class UCTMicIndicatorWidget;
 
 // 채팅 수신 (보낸 사람 이름, 내용)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCTChatReceivedSignature, const FString&, SenderName, const FString&, Message);
@@ -69,6 +70,8 @@ protected:
 	// 대기 로비에는 자체 나가기 버튼이 있어 ESC 메뉴를 쓰지 않음
 	virtual bool CanOpenPauseMenu() const override { return false; }
 
+	// 로비는 자체 채팅 위젯을 씀
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
 	TSubclassOf<UCTLobbyWidget> LobbyWidgetClass;
 
@@ -81,6 +84,10 @@ protected:
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|Lobby")
 	TObjectPtr<UCTLoadingWidget> LoadingWidget;
+
+	// 마이크 상태 표시 (코드로 만든 위젯)
+	UPROPERTY(Transient)
+	TObjectPtr<UCTMicIndicatorWidget> MicWidget;
 
 	// 시작 버튼을 누른 직후, 서버 응답(시작 카운트 복제)이 오기 전까지 로딩 화면을 미리 띄워 두는 시간(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby", meta = (ClampMin = "0"))

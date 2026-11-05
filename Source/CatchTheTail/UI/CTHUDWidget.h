@@ -9,6 +9,7 @@ class UCTDirectionArrow;
 class UCTScoreEntryWidget;
 class UMaterialInstanceDynamic;
 class UVerticalBox;
+class USizeBox;
 class UWidget;
 
 UCLASS(Abstract)
@@ -151,6 +152,68 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Scoreboard;
 
+	// 마이크 상태 (패널 + 아이콘 + 파장 막대). 그림은 WBP에서 지정, 막대는 흰 네모를 색칠해서 씀
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicIcon;
+
+	// 파장 막대 3개. 크기 상자의 높이를 바꿔서 움직임
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave3;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave3;
+
+	// 마이크 아이콘 아래의 눌러서 말하기 키 이름
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MicKey;
+
+	// 평소(켜짐, 말하지 않음): 흰 패널, 마젠타 아이콘과 막대
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicPanelColor = FLinearColor::White;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicIconColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+
+	// 말하는 중: 마젠타 패널(#FF2783), 흰 아이콘과 막대
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicTalkingPanelColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicTalkingIconColor = FLinearColor::White;
+
+	// 설정에서 마이크를 끔: 회색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicOffPanelColor = FLinearColor(0.62f, 0.62f, 0.62f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicOffIconColor = FLinearColor(0.3f, 0.3f, 0.3f, 1.f);
+
+	// 파장 막대 높이 범위(px)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "1"))
+	float MicWaveMinHeight = 8.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "1"))
+	float MicWaveMaxHeight = 34.f;
+
+	// 말할 때 파장이 움직이는 빠르기
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "0"))
+	float MicWaveSpeed = 11.f;
+
 	// 안내 문구. 없으면 코드에서 생성
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Notice;
@@ -175,6 +238,10 @@ private:
 
 	// 갱신
 	void UpdateTimeDisplay();
+	void UpdateMicIndicator(float DeltaSeconds);
+	FString LastMicKeyName;
+	float MicWaveTime = 0.f;
+	float MicWaveBlend = 0.f; // 0: 평소 높이, 1: 움직이는 높이
 	void UpdateSkillSlots();
 	void RefreshMyState();
 	void RefreshHunter(bool bForce);

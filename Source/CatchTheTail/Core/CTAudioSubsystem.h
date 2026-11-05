@@ -56,6 +56,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<USoundAttenuation> WorldAttenuation;
 
+	// 발소리 전용 거리 감쇠 (더 좁고, 멀수록 먹먹함)
+	UPROPERTY(Transient)
+	TObjectPtr<USoundAttenuation> FootstepAttenuation;
+
 	// 소유자 없는 컴포넌트라 강한 참조 필수
 	UPROPERTY(Transient)
 	TObjectPtr<UAudioComponent> MusicComponent;

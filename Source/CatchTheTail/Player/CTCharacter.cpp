@@ -25,7 +25,12 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "InputAction.h"
 #include "InputActionValue.h"
+#include "Net/VoiceConfig.h"
+#include "Sound/SoundAttenuation.h"
+#include "../Core/CTSettingsSubsystem.h"
+#include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -38,6 +43,10 @@ namespace CTBuffNames
 
 ACTCharacter::ACTCharacter()
 {
+	// 눌러서 말하기 입력 (프로젝트의 IA_PushToTalk)
+	static ConstructorHelpers::FObjectFinder<UInputAction> VoiceActionFinder(TEXT("/Game/Input/IA_PushToTalk.IA_PushToTalk"));
+	if (VoiceActionFinder.Succeeded()) { VoiceAction = VoiceActionFinder.Object; }
+
 	PrimaryActorTick.bCanEverTick = true; // 로컬 카메라 보간용
 
 	// 이동 방향으로 회전 (3인칭)
@@ -109,6 +118,8 @@ void ACTCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	EnsureVoiceTalker();
+
 	ApplyCameraSettings();
 
 	if (HasAuthority())
@@ -156,6 +167,8 @@ bool ACTCharacter::CanJumpInternal_Implementation() const
 void ACTCharacter::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
+
+	EnsureVoiceTalker();
 
 	RefreshBodyColor();
 	RefreshTailVisual();
@@ -435,6 +448,12 @@ void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	{
 		EnhancedInput->BindAction(GrabAction, ETriggerEvent::Started, this, &ACTCharacter::OnGrabPressed);
 	}
+	if (VoiceAction)
+	{
+		EnhancedInput->BindAction(VoiceAction, ETriggerEvent::Started, this, &ACTCharacter::OnVoicePressed);
+		EnhancedInput->BindAction(VoiceAction, ETriggerEvent::Completed, this, &ACTCharacter::OnVoiceReleased);
+		EnhancedInput->BindAction(VoiceAction, ETriggerEvent::Canceled, this, &ACTCharacter::OnVoiceReleased);
+	}
 	if (PushAction)
 	{
 		EnhancedInput->BindAction(PushAction, ETriggerEvent::Started, this, &ACTCharacter::OnPushPressed);
@@ -563,6 +582,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 	if (IsLocallyControlled())
 	{
 		UpdateCameraDistance(DeltaSeconds);
+		UpdateVoiceTransmit();
 	}
 }
 
@@ -637,6 +657,57 @@ void ACTCharacter::OnGrabPressed()
 	// 서버 응답 전 선재생
 	PlayActionMontage(ECTCharacterAction::Grab);
 	ServerGrab();
+}
+
+void ACTCharacter::OnVoicePressed()
+{
+	bVoiceKeyHeld = true;
+	UpdateVoiceTransmit();
+}
+
+void ACTCharacter::OnVoiceReleased()
+{
+	bVoiceKeyHeld = false;
+	UpdateVoiceTransmit();
+}
+
+void ACTCharacter::UpdateVoiceTransmit()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController || !IsLocallyControlled()) { return; }
+
+	// 마이크를 끈 설정이면 전송 안 함. 상시 말하기면 키 없이 전송
+	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
+	const bool bMicEnabled = !Settings || Settings->IsMicEnabled();
+	const bool bAlwaysOn = Settings && Settings->IsMicAlwaysOn();
+	const bool bWantTransmit = bMicEnabled && (bAlwaysOn || bVoiceKeyHeld);
+
+	if (bWantTransmit == bVoiceTransmitting) { return; }
+	PlayerController->ToggleSpeaking(bWantTransmit);
+	bVoiceTransmitting = bWantTransmit;
+}
+
+void ACTCharacter::EnsureVoiceTalker()
+{
+	if (bVoiceTalkerCreated || GetNetMode() == NM_DedicatedServer) { return; }
+
+	APlayerState* VoicePlayerState = GetPlayerState();
+	if (!VoicePlayerState || VoicePlayerState->IsABot()) { return; } // AI는 목소리가 없음
+
+	UVOIPTalker* Talker = UVOIPTalker::CreateTalkerForPlayer(VoicePlayerState);
+	if (!Talker) { return; }
+	bVoiceTalkerCreated = true;
+
+	// 캐릭터 위치에서 들리고, 거리가 멀면 작아지다가 안 들림
+	if (!VoiceAttenuation) { VoiceAttenuation = NewObject<USoundAttenuation>(this); }
+	VoiceAttenuation->Attenuation.bAttenuate = true;
+	VoiceAttenuation->Attenuation.bSpatialize = true;
+	VoiceAttenuation->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
+	VoiceAttenuation->Attenuation.AttenuationShapeExtents = FVector(VoiceInnerRadius, 0.f, 0.f);
+	VoiceAttenuation->Attenuation.FalloffDistance = VoiceFalloffDistance;
+
+	Talker->Settings.ComponentToAttachTo = GetRootComponent();
+	Talker->Settings.AttenuationSettings = VoiceAttenuation;
 }
 
 void ACTCharacter::OnPushPressed()
@@ -866,6 +937,9 @@ void ACTCharacter::OnRep_OwnedTail()
 
 void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// 말하는 중에 사라지면 전송 중지
+	if (IsLocallyControlled()) { OnVoiceReleased(); }
+
 	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
 	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
 
@@ -952,6 +1026,22 @@ void ACTCharacter::TickGrabWindow()
 			return;
 		}
 	}
+}
+
+void ACTCharacter::AIGrab()
+{
+	if (HasAuthority()) { ServerGrab_Implementation(); }
+}
+
+void ACTCharacter::AIPush()
+{
+	if (HasAuthority()) { ServerPush_Implementation(); }
+}
+
+void ACTCharacter::AISetRun(bool bRun)
+{
+	if (!HasAuthority()) { return; }
+	if (bRun) { TryStartRun(); } else { StopRun(/*bEndedNaturally=*/false); }
 }
 
 void ACTCharacter::ServerPush_Implementation()

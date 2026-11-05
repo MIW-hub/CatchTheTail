@@ -2,6 +2,8 @@
 #include "CTHUDWidget.h"
 #include "CTScoreEntryWidget.h"
 #include "CTDirectionArrow.h"
+#include "../Core/CTSettingsSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTPlayerState.h"
@@ -12,6 +14,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Components/SizeBox.h"
 #include "Engine/Font.h"
 #include "Components/TextBlock.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -63,6 +66,7 @@ void UCTHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	}
 
 	UpdateDirectionArrow(InDeltaTime);
+	UpdateMicIndicator(InDeltaTime);
 
 	UpdateTimeDisplay();
 	UpdateSkillSlots();
@@ -190,6 +194,60 @@ void UCTHUDWidget::HandleAnyPlayerStateChanged(ACTPlayerState* ChangedPlayerStat
 }
 
 // 갱신
+
+void UCTHUDWidget::UpdateMicIndicator(float DeltaSeconds)
+{
+	if (!Image_MicIcon && !Image_MicPanel && !Text_MicKey) { return; }
+
+	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
+	const bool bMicEnabled = !Settings || Settings->IsMicEnabled();
+
+	const APlayerController* PlayerController = GetOwningPlayer();
+	const ACTCharacter* MyCharacter = PlayerController ? Cast<ACTCharacter>(PlayerController->GetPawn()) : nullptr;
+	const bool bTalking = bMicEnabled && MyCharacter && MyCharacter->IsVoiceTransmitting();
+
+	// 패널과 아이콘, 막대 색: 평소 흰 패널 + 마젠타 / 말하는 중 마젠타 패널 + 흰색 / 꺼짐 회색
+	const FLinearColor PanelColor = !bMicEnabled ? MicOffPanelColor : (bTalking ? MicTalkingPanelColor : MicPanelColor);
+	const FLinearColor ForeColor = !bMicEnabled ? MicOffIconColor : (bTalking ? MicTalkingIconColor : MicIconColor);
+	if (Image_MicPanel) { Image_MicPanel->SetColorAndOpacity(PanelColor); }
+	if (Image_MicIcon) { Image_MicIcon->SetColorAndOpacity(ForeColor); }
+
+	// 파장 막대: 말하는 중에는 파도타기처럼 오르내리고, 아니면 계단 모양으로 멈춤 (꺼짐은 낮고 평평)
+	MicWaveTime += DeltaSeconds * MicWaveSpeed;
+	MicWaveBlend = FMath::FInterpTo(MicWaveBlend, bTalking ? 1.f : 0.f, DeltaSeconds, 14.f);
+
+	const TObjectPtr<USizeBox> WaveBoxes[3] = { Size_MicWave1, Size_MicWave2, Size_MicWave3 };
+	const TObjectPtr<UImage> WaveImages[3] = { Image_MicWave1, Image_MicWave2, Image_MicWave3 };
+	static const float RestRatios[3] = { 0.35f, 0.65f, 1.f };
+	static const float Phases[3] = { 0.f, 2.1f, 4.2f };
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		float Ratio = RestRatios[Index];
+		if (!bMicEnabled)
+		{
+			Ratio = 0.2f;
+		}
+		else if (MicWaveBlend > KINDA_SMALL_NUMBER)
+		{
+			// 두 개의 사인을 섞어 규칙적이지 않게 출렁임
+			const float Wave = 0.5f + 0.32f * FMath::Sin(MicWaveTime + Phases[Index]) + 0.18f * FMath::Sin(MicWaveTime * 1.9f + Phases[Index] * 1.7f);
+			Ratio = FMath::Lerp(Ratio, FMath::Clamp(Wave, 0.12f, 1.f), MicWaveBlend);
+		}
+		if (WaveBoxes[Index]) { WaveBoxes[Index]->SetHeightOverride(FMath::Lerp(MicWaveMinHeight, MicWaveMaxHeight, Ratio)); }
+		if (WaveImages[Index]) { WaveImages[Index]->SetColorAndOpacity(ForeColor); }
+	}
+
+	// 눌러서 말하기 키 (키를 바꾸면 따라 바뀜)
+	if (Text_MicKey && Settings)
+	{
+		const FString KeyName = Settings->GetActionKey(TEXT("Voice")).GetDisplayName().ToString();
+		if (KeyName != LastMicKeyName)
+		{
+			LastMicKeyName = KeyName;
+			Text_MicKey->SetText(FText::FromString(KeyName));
+		}
+	}
+}
 
 void UCTHUDWidget::UpdateTimeDisplay()
 {

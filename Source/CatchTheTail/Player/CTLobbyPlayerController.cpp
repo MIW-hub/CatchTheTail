@@ -1,9 +1,12 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTLobbyPlayerController.h"
 #include "../Core/CTLobbyGameMode.h"
+#include "../Core/CTChatFilter.h"
 #include "../Core/CTGameState.h"
 #include "../UI/CTLobbyWidget.h"
 #include "../UI/CTLoadingWidget.h"
+#include "../UI/CTMicIndicatorWidget.h"
+#include "Blueprint/GameViewportSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -49,6 +52,27 @@ void ACTLobbyPlayerController::CreateUI()
 		if (LobbyWidget)
 		{
 			LobbyWidget->AddToViewport(0);
+		}
+	}
+
+	// 마이크 상태 (오른쪽 아래, 준비 버튼 왼쪽). 눌러서 말하기 키와 말하는 모습이 보임
+	if (!MicWidget)
+	{
+		MicWidget = CreateWidget<UCTMicIndicatorWidget>(this, UCTMicIndicatorWidget::StaticClass());
+		if (MicWidget)
+		{
+			// 화면에 먼저 추가한 뒤에 위치와 크기를 정해야 적용됨
+			MicWidget->AddToViewport(5);
+			if (UGameViewportSubsystem* ViewportSubsystem = UGameViewportSubsystem::Get(GetWorld()))
+			{
+				// 오른쪽 아래 기준, 오른쪽 아래 모서리를 맞춤. 오프셋은 (X, Y, 폭, 높이)
+				FGameViewportWidgetSlot ViewportSlot;
+				ViewportSlot.Anchors = FAnchors(1.f, 1.f);
+				ViewportSlot.Offsets = FMargin(-450.f, -30.f, 130.f, 100.f);
+				ViewportSlot.Alignment = FVector2D(1.f, 1.f);
+				ViewportSlot.ZOrder = 5;
+				ViewportSubsystem->SetWidgetSlot(MicWidget, ViewportSlot);
+			}
 		}
 	}
 
@@ -131,14 +155,16 @@ void ACTLobbyPlayerController::UpdateLoadingScreen()
 	const UWorld* World = GetWorld();
 	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
 
-	// 서버가 시작을 확정했거나(모두), 방금 내가 시작을 눌렀으면 띄움
+	// 시작 카운트다운(3, 2, 1)은 로비 화면에서 보이게 두고, 카운트가 끝나 맵으로 넘어가기 직전에만 로딩 화면을 띄움
 	const float StartRemaining = CTGameState ? CTGameState->GetLobbyStartRemainingSeconds() : 0.f;
-	const bool bConfirmed = StartRemaining > 0.f;
-	if (bConfirmed) { LastStartRemaining = StartRemaining; }
-	const bool bPending = World && (World->GetTimeSeconds() - StartRequestedTime) < StartPendingSeconds;
-	const bool bWantLoading = bConfirmed || bPending;
+	const bool bCounting = StartRemaining > 0.f;
+	if (bCounting) { LastStartRemaining = StartRemaining; }
 
-	if (bWantLoading && !LoadingWidget && LoadingWidgetClass)
+	// 카운트가 끝에 가까워 0이 된 것은 맵 이동 직전. 도중에 취소된 것은 아님
+	const bool bFinished = !bCounting && LastStartRemaining > 0.f && LastStartRemaining <= 0.6f;
+	if (!bCounting && !bFinished) { LastStartRemaining = 0.f; }
+
+	if (bFinished && !LoadingWidget && LoadingWidgetClass)
 	{
 		LoadingWidget = CreateWidget<UCTLoadingWidget>(this, LoadingWidgetClass);
 		if (LoadingWidget)
@@ -147,14 +173,10 @@ void ACTLobbyPlayerController::UpdateLoadingScreen()
 			LoadingWidget->AddToViewport(100);
 		}
 	}
-	else if (!bWantLoading && LoadingWidget)
+	else if (!bFinished && !bCounting && LoadingWidget)
 	{
-		// 카운트가 끝나서 0이 된 것은 맵 이동 직전이라 그대로 두고, 도중에 취소된 경우에만 치움
-		if (LastStartRemaining > 0.f && LastStartRemaining <= 0.6f) { return; }
-
 		LoadingWidget->RemoveFromParent();
 		LoadingWidget = nullptr;
-		LastStartRemaining = 0.f;
 	}
 }
 
@@ -175,14 +197,14 @@ void ACTLobbyPlayerController::RequestSetReady(bool bReady)
 
 void ACTLobbyPlayerController::RequestStartGame()
 {
-	// 이미 시작 중이면 다시 보내지 않음 (연타 방지)
+	// 이미 시작 중이면 다시 보내지 않음 (연타 방지). 카운트다운은 로비 화면에서 보이고, 끝난 뒤에 로딩 화면이 뜸
 	const UWorld* World = GetWorld();
 	if (!World || LoadingWidget) { return; }
+	if (World->GetTimeSeconds() - StartRequestedTime < StartPendingSeconds) { return; }
+	const ACTGameState* CTGameState = World->GetGameState<ACTGameState>();
+	if (CTGameState && CTGameState->GetLobbyStartRemainingSeconds() > 0.f) { return; }
 
-	// 서버 응답이 오기 전에도 바로 로딩 화면으로 덮어 다른 버튼이 눌리지 않게 함
 	StartRequestedTime = World->GetTimeSeconds();
-	UpdateLoadingScreen();
-
 	ServerStartGame();
 }
 
@@ -252,7 +274,8 @@ void ACTLobbyPlayerController::ServerSendChat_Implementation(const FString& Mess
 	if (Now - LastChatServerTime < ChatCooldownSeconds) { return; }
 	LastChatServerTime = Now;
 
-	GameMode->BroadcastChat(this, Trimmed);
+	// 비속어, 은어는 가려서 보냄
+	GameMode->BroadcastChat(this, FCTChatFilter::Sanitize(Trimmed));
 }
 
 void ACTLobbyPlayerController::ClientReceiveChat_Implementation(const FString& SenderName, const FString& Message)

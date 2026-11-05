@@ -4,7 +4,9 @@
 #include "CTGameState.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTPlayerController.h"
+#include "../Player/CTAIController.h"
 #include "CatchTheTail/Player/CTCharacter.h"
+#include "../World/CTTailPickup.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -160,7 +162,7 @@ void ACTGameMode::BeginStartCountdown()
 	ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	if (!CTGameState) { return; }
 
-	const float Delay = FMath::Max(AutoStartDelaySeconds, 0.1f);
+	const float Delay = FMath::Max(GameStartCountdownSeconds, 0.1f);
 
 	// 시작 시각 먼저, 단계 나중. 클라 남은 시간 정확
 	CTGameState->SetStartCountdown(CTGameState->GetServerWorldTimeSeconds() + Delay);
@@ -193,6 +195,9 @@ void ACTGameMode::StartGame()
 		if (ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState)) { CTPlayerState->SetForfeited(false); }
 	}
 
+	// 모두 입장한 뒤라 사람 수가 정확함. AI는 여기서 채움
+	SpawnAIPlayers();
+
 	// 플레이어 초기화
 	for (ACTPlayerState* PlayerState : CollectPlayers())
 	{
@@ -215,6 +220,54 @@ void ACTGameMode::StartGame()
 	GetWorldTimerManager().SetTimer(FlowTimerHandle, this, &ACTGameMode::TickGameFlow, 0.2f, true);
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 시작: 전체 %.0f초, 라운드 %.0f초"), GameDurationSeconds, RoundDurationSeconds);
+}
+
+void ACTGameMode::SpawnAIPlayers()
+{
+	UWorld* World = GetWorld();
+	if (bAIPlayersSpawned || !World) { return; }
+	bAIPlayersSpawned = true;
+
+	// 로비 설정 우선, 없으면 테스트용 값
+	int32 WantedCount = DebugAIPlayerCount;
+	int32 MaxPlayers = CTColorCount;
+	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
+	if (GameInstance && GameInstance->HasStoredMatchSettings())
+	{
+		const FCTMatchSettings& Settings = GameInstance->GetStoredMatchSettings();
+		WantedCount = Settings.AiPlayers;
+		MaxPlayers = FMath::Min(Settings.MaxPlayers, CTColorCount);
+	}
+
+	// 사람 수: 관전자와 AI가 아닌 플레이어
+	int32 HumanCount = 0;
+	for (APlayerState* State : GameState->PlayerArray)
+	{
+		if (State && !State->IsOnlyASpectator() && !State->IsABot()) { ++HumanCount; }
+	}
+
+	const int32 Count = FMath::Clamp(WantedCount, 0, FMath::Max(MaxPlayers - HumanCount, 0));
+	if (Count <= 0) { return; }
+
+	const TSubclassOf<ACTAIController> ControllerClass = AIControllerClass ? AIControllerClass : TSubclassOf<ACTAIController>(ACTAIController::StaticClass());
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACTAIController* AIController = World->SpawnActor<ACTAIController>(ControllerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+		if (!AIController) { continue; }
+
+		if (APlayerState* AIState = AIController->PlayerState)
+		{
+			AIState->SetIsABot(true);
+			AIState->SetPlayerName(FString::Printf(TEXT("AI %d"), Index + 1));
+		}
+
+		// 시작 지점에서 폰 생성 후 조종
+		RestartPlayer(AIController);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] AI 플레이어 %d명 추가 (사람 %d명, 요청 %d명)"), Count, HumanCount, WantedCount);
 }
 
 void ACTGameMode::EndGame()
@@ -324,6 +377,19 @@ void ACTGameMode::StartNewRound()
 
 	const double Now = CTGameState->GetServerWorldTimeSeconds();
 	const int32 NewRoundNumber = CTGameState->GetRoundNumber() + 1;
+
+	// 0) 맵에 남은 꼬리 아이템을 모두 치움. 라운드가 끝나기 전에 일부러 기믹에 맞아 꼬리를 떨어뜨리고,
+	//    새 라운드의 보충 꼬리와 함께 그 아이템까지 먹는 꼼수를 막음 (새 아이템은 스포너가 다시 만듦)
+	if (UWorld* World = GetWorld())
+	{
+		TArray<ACTTailPickup*> LeftoverPickups;
+		for (TActorIterator<ACTTailPickup> It(World); It; ++It) { LeftoverPickups.Add(*It); }
+		for (ACTTailPickup* Pickup : LeftoverPickups) { Pickup->Destroy(); }
+		if (LeftoverPickups.Num() > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT] 새 라운드 시작: 맵에 남은 꼬리 아이템 %d개 제거"), LeftoverPickups.Num());
+		}
+	}
 
 	// 1) 유령 부활
 	for (ACTPlayerState* PlayerState : CollectPlayers())

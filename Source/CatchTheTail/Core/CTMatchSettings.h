@@ -14,6 +14,7 @@ enum class ECTMatchSetting : uint8
 	InitialTails  UMETA(DisplayName = "Initial Tails"),   // 시작 꼬리 수
 	PhoneUses     UMETA(DisplayName = "Phone Uses"),      // 전화 재사용 대기 시간(초). 0이면 사용 안 함. 로비 위젯 이름 때문에 이전 이름을 유지
 	Bush          UMETA(DisplayName = "Bush"),            // 부쉬 기믹 (0 끄기, 1 켜기)
+	AiPlayers     UMETA(DisplayName = "AI Players"),      // AI 플레이어 수. 0이면 없음. 사람과 합쳐 최대 인원을 넘지 않음
 	Count         UMETA(Hidden)
 };
 
@@ -46,6 +47,10 @@ struct CATCHTHETAIL_API FCTMatchSettings
 	// 부쉬 사용 (0/1)
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Match")
 	int32 Bush = 1;
+
+	// AI 플레이어 수 (0이면 없음)
+	UPROPERTY(BlueprintReadOnly, Category = "CT|Match")
+	int32 AiPlayers = 0;
 
 	int32 Get(ECTMatchSetting Setting) const;
 	void Set(ECTMatchSetting Setting, int32 NewValue);

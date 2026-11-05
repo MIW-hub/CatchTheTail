@@ -87,6 +87,16 @@ float ACTRollingLog::FindGroundZ(const FVector& XY, float FallbackZ) const
 	return FallbackZ;
 }
 
+bool ACTRollingLog::IsRolling() const
+{
+	return Mesh && Mesh->IsVisible();
+}
+
+FVector ACTRollingLog::GetLogLocation() const
+{
+	return Mesh ? Mesh->GetComponentLocation() : GetActorLocation();
+}
+
 void ACTRollingLog::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

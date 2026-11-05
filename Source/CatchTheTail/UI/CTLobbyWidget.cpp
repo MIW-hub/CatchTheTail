@@ -24,6 +24,8 @@ void UCTLobbyWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	UCTButtonHoverEffect::Attach(this);
+	// 맵 카드의 맵 설정 버튼은 크기 변화 없이 색만 진해짐
+	UCTButtonHoverEffect::ApplyDarkenStyle(Button_SelectMap);
 
 	// 버튼 소리 (올림 / 누름)
 	UCTAudioSubsystem::ApplyUISounds(this);

@@ -27,6 +27,19 @@ void UCTAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	WorldAttenuation->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
 	WorldAttenuation->Attenuation.AttenuationShapeExtents = FVector(Settings->WorldSfxInnerRadius, 0.f, 0.f);
 	WorldAttenuation->Attenuation.FalloffDistance = Settings->WorldSfxFalloffDistance;
+
+	// 발소리는 가까이서만 들리고, 멀수록 고음이 깎여 부드럽게 들림
+	FootstepAttenuation = NewObject<USoundAttenuation>(this);
+	FootstepAttenuation->Attenuation.bAttenuate = true;
+	FootstepAttenuation->Attenuation.bSpatialize = true;
+	FootstepAttenuation->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
+	FootstepAttenuation->Attenuation.AttenuationShapeExtents = FVector(Settings->FootstepInnerRadius, 0.f, 0.f);
+	FootstepAttenuation->Attenuation.FalloffDistance = Settings->FootstepFalloffDistance;
+	FootstepAttenuation->Attenuation.bAttenuateWithLPF = true;
+	FootstepAttenuation->Attenuation.LPFRadiusMin = Settings->FootstepInnerRadius;
+	FootstepAttenuation->Attenuation.LPFRadiusMax = Settings->FootstepInnerRadius + Settings->FootstepFalloffDistance;
+	FootstepAttenuation->Attenuation.LPFFrequencyAtMin = 20000.f;
+	FootstepAttenuation->Attenuation.LPFFrequencyAtMax = Settings->FootstepFarLowPassHz;
 }
 
 USoundBase* UCTAudioSubsystem::GetSfx(ECTSfx Sfx)
@@ -55,6 +68,13 @@ void UCTAudioSubsystem::PlaySfxAtLocation(ECTSfx Sfx, FVector Location, float Vo
 	UWorld* World = GetWorld();
 	USoundBase* Sound = GetSfx(Sfx);
 	if (!World || !Sound) { return; }
+
+	if (Sfx == ECTSfx::Footstep)
+	{
+		const UCTAudioSettings* Settings = GetDefault<UCTAudioSettings>();
+		UGameplayStatics::PlaySoundAtLocation(World, Sound, Location, Volume * Settings->FootstepVolumeScale, Pitch * Settings->FootstepPitchScale, 0.f, FootstepAttenuation);
+		return;
+	}
 
 	UGameplayStatics::PlaySoundAtLocation(World, Sound, Location, Volume, Pitch, 0.f, WorldAttenuation);
 }

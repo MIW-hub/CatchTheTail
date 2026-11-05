@@ -14,7 +14,9 @@
 
 namespace
 {
-	const FLinearColor TextMain(0.92f, 0.95f, 1.f, 1.f);
+	// 흰 카드 위에서 읽히는 진한 보라(#440232)와 분홍(#FC3070)
+	const FLinearColor TextMain(0.058f, 0.0006f, 0.032f, 1.f);
+	const FLinearColor TextWarn(0.973f, 0.027f, 0.162f, 1.f);
 	const FLinearColor TextDim(0.5f, 0.62f, 0.74f, 1.f);
 	const FLinearColor TextTitle(0.1f, 0.8f, 1.f, 1.f);
 	const FLinearColor CardColor(0.025f, 0.04f, 0.075f, 0.96f);
@@ -144,7 +146,7 @@ void UCTPhonePopupWidget::RefreshStatus()
 		Text_Status->SetText(bCanCall
 			? NSLOCTEXT("CT", "Phone_Ready", "지금 통화할 수 있습니다")
 			: FText::Format(NSLOCTEXT("CT", "Phone_NextCall", "다음 통화까지 {0}초"), FText::AsNumber(FMath::CeilToInt(Remaining))));
-		Text_Status->SetColorAndOpacity(FSlateColor(bCanCall ? TextMain : FLinearColor(1.f, 0.75f, 0.2f, 1.f)));
+		Text_Status->SetColorAndOpacity(FSlateColor(bCanCall ? TextMain : TextWarn));
 	}
 	if (Button_Target) { Button_Target->SetIsEnabled(bCanCall); }
 	if (Button_Hunter) { Button_Hunter->SetIsEnabled(bCanCall); }

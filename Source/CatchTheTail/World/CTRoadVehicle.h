@@ -26,6 +26,10 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	// AI가 피하기 위해 읽는 값: 지금 자동차 위치, 달리는 경로(월드 좌표 스플라인)
+	FVector GetCarLocation() const;
+	const USplineComponent* GetPathSpline() const { return Path; }
+
 protected:
 	virtual void BeginPlay() override;
 

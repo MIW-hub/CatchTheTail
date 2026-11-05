@@ -838,6 +838,833 @@ int32 UCTUIBuildTools::BuildHudLayout(UBlueprint* WidgetBlueprint, UMaterialInte
 #endif
 }
 
+int32 UCTUIBuildTools::AddVoiceSettings(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UVerticalBox* List = Tree ? Cast<UVerticalBox>(Tree->FindWidget(TEXT("List_Settings"))) : nullptr;
+	UWidget* MuteRow = Tree ? Tree->FindWidget(TEXT("Size_CheckBox_Mute")) : nullptr;
+	if (!List || !MuteRow)
+	{
+		Tree = nullptr;
+		return -1;
+	}
+	if (Tree->FindWidget(TEXT("Slider_Voice")))
+	{
+		Tree = nullptr;
+		return 0; // 이미 있음
+	}
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTSettingsWidget");
+
+	// 기존 글자 모양(글꼴, 색)을 그대로 따라 함
+	auto MatchText = [](const TCHAR* NewName, const TCHAR* OldName)
+	{
+		UTextBlock* NewText = Cast<UTextBlock>(Tree->FindWidget(FName(NewName)));
+		const UTextBlock* OldText = Cast<UTextBlock>(Tree->FindWidget(FName(OldName)));
+		if (NewText && OldText)
+		{
+			NewText->SetFont(OldText->GetFont());
+			NewText->SetColorAndOpacity(OldText->GetColorAndOpacity());
+		}
+	};
+
+	int32 InsertIndex = List->GetChildIndex(MuteRow) + 1;
+	auto Insert = [&](UWidget* Widget, float BottomPadding)
+	{
+		UVerticalBoxSlot* BoxSlot = Cast<UVerticalBoxSlot>(List->InsertChildAt(InsertIndex++, Widget));
+		BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, BottomPadding));
+		BoxSlot->SetHorizontalAlignment(HAlign_Fill);
+		BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	};
+
+	Insert(MakeText(TEXT("Label_Voice"), TEXT("음성 채팅"), TEXT("Medium"), 24, TextTitle), 14.f);
+	Insert(MakeCheckRow(TEXT("Size_CheckBox_MicEnabled"), TEXT("CheckBox_MicEnabled"), TEXT("Label_CheckBox_MicEnabled"), TEXT("마이크 사용")), 18.f);
+	Insert(MakeSliderGroup(TEXT("Group_Voice"), TEXT("Label_VoiceVolume"), TEXT("음성 볼륨"), TEXT("Row_Voice"), TEXT("Height_Voice"), TEXT("Slider_Voice"), TEXT("Width_VoiceValue"), TEXT("Text_VoiceValue")), 18.f);
+	Insert(MakeSliderGroup(TEXT("Group_MicSensitivity"), TEXT("Label_MicSensitivity"), TEXT("마이크 감도"), TEXT("Row_MicSensitivity"), TEXT("Height_MicSensitivity"), TEXT("Slider_MicSensitivity"), TEXT("Width_MicSensitivityValue"), TEXT("Text_MicSensitivityValue")), 24.f);
+
+	MatchText(TEXT("Label_Voice"), TEXT("Label_Audio"));
+	MatchText(TEXT("Label_VoiceVolume"), TEXT("Label_Sfx"));
+	MatchText(TEXT("Label_MicSensitivity"), TEXT("Label_Sfx"));
+	MatchText(TEXT("Text_VoiceValue"), TEXT("Text_SfxValue"));
+	MatchText(TEXT("Text_MicSensitivityValue"), TEXT("Text_SfxValue"));
+	MatchText(TEXT("Label_CheckBox_MicEnabled"), TEXT("Label_CheckBox_Mute"));
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
+int32 UCTUIBuildTools::AddMatchSettingRow(UBlueprint* WidgetBlueprint, int32 SettingIndex)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || SettingIndex < 0 || SettingIndex >= static_cast<int32>(ECTMatchSetting::Count)) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UVerticalBox* Panel = Tree ? Cast<UVerticalBox>(Tree->FindWidget(TEXT("Panel_MatchSettings"))) : nullptr;
+	if (!Panel)
+	{
+		Tree = nullptr;
+		return -1;
+	}
+
+	const ECTMatchSetting Setting = static_cast<ECTMatchSetting>(SettingIndex);
+	const FString Key = FCTMatchSettings::GetKey(Setting).ToString();
+	if (Tree->FindWidget(*FString::Printf(TEXT("Row_Setting_%s"), *Key)))
+	{
+		Tree = nullptr;
+		return 0; // 이미 있음
+	}
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyWidget");
+
+	const FMargin ArrowMargin(0.101266f, 0.192771f, 0.101266f, 0.192771f);
+
+	UHorizontalBox* Row = Make<UHorizontalBox>(*FString::Printf(TEXT("Row_Setting_%s"), *Key));
+	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	UTextBlock* Label = MakeText(*FString::Printf(TEXT("Label_Setting_%s"), *Key), TEXT(""), TEXT("Regular"), 22, TextDim);
+	Label->SetText(FCTMatchSettings::GetLabel(Setting));
+	USizeBox* LabelBox = Sized(*FString::Printf(TEXT("Size_Label_Setting_%s"), *Key), Label, 0.f, 56.f);
+	Cast<USizeBoxSlot>(LabelBox->GetContentSlot())->SetVerticalAlignment(VAlign_Center);
+	AddH(Row, LabelBox, 12.f, true);
+
+	auto MakeArrow = [&](const TCHAR* Suffix, const TCHAR* Glyph)
+	{
+		UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("Rectangle_5"), ArrowMargin, FLinearColor::White);
+		if (UTextBlock* ArrowLabel = Cast<UTextBlock>(Arrow->GetChildAt(0)))
+		{
+			ArrowLabel->SetText(FText::FromString(Glyph));
+		}
+		return Sized(*FString::Printf(TEXT("Size_Button_Setting_%s_%s"), *Key, Suffix), Arrow, 56.f, 56.f);
+	};
+
+	AddH(Row, MakeArrow(TEXT("Prev"), TEXT("<")), 8.f, false);
+
+	UTextBlock* Value = MakeText(*FString::Printf(TEXT("Text_Setting_%s"), *Key), TEXT(""), TEXT("SemiBold"), 24, TextMain, ETextJustify::Center);
+	Value->SetText(FCTMatchSettings::FormatValue(Setting, FCTMatchSettings().Get(Setting)));
+	USizeBox* ValueBox = Sized(*FString::Printf(TEXT("Size_Text_Setting_%s"), *Key), Value, 170.f, 56.f);
+	Cast<USizeBoxSlot>(ValueBox->GetContentSlot())->SetVerticalAlignment(VAlign_Center);
+	AddH(Row, ValueBox, 8.f, false);
+
+	AddH(Row, MakeArrow(TEXT("Next"), TEXT(">")), 0.f, false);
+
+	AddV(Panel, Sized(*FString::Printf(TEXT("Size_Row_Setting_%s"), *Key), Row, 0.f, 56.f), 18.f);
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
+bool UCTUIBuildTools::SetCanvasSlotPlacement(UBlueprint* WidgetBlueprint, FName WidgetName, FVector2D AnchorMin, FVector2D AnchorMax, FVector2D Alignment, FVector2D Position, FVector2D SizeOrRightBottom)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	UCanvasPanelSlot* CanvasSlot = Widget ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr;
+	if (!CanvasSlot) { return false; }
+
+	CanvasSlot->SetAnchors(FAnchors(AnchorMin.X, AnchorMin.Y, AnchorMax.X, AnchorMax.Y));
+	CanvasSlot->SetAlignment(Alignment);
+	CanvasSlot->SetPosition(Position);
+	CanvasSlot->SetSize(SizeOrRightBottom);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetHudKeyIcon(UBlueprint* WidgetBlueprint, FName OverlayName, FName TextName, FName IconName, UTexture2D* IconTexture, float IconSize)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !IconTexture) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UOverlay* Overlay = WidgetTree ? Cast<UOverlay>(WidgetTree->FindWidget(OverlayName)) : nullptr;
+	if (!Overlay) { return false; }
+
+	UImage* Icon = Cast<UImage>(WidgetTree->FindWidget(IconName));
+	if (!Icon)
+	{
+		Icon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), IconName);
+		Icon->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* IconSlot = Overlay->AddChildToOverlay(Icon);
+		IconSlot->SetHorizontalAlignment(HAlign_Center);
+		IconSlot->SetVerticalAlignment(VAlign_Center);
+	}
+	FSlateBrush Brush;
+	Brush.SetResourceObject(IconTexture);
+	Brush.ImageSize = FVector2D(IconSize, IconSize);
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Icon->SetBrush(Brush);
+
+	if (UWidget* Text = WidgetTree->FindWidget(TextName)) { Text->SetVisibility(ESlateVisibility::Collapsed); }
+
+	// 위젯 변수 표에 새 이름 등록
+	Tree = WidgetTree;
+	RegisterWidgetGuids(WidgetBlueprint);
+	Tree = nullptr;
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+#if WITH_EDITOR
+namespace
+{
+	UWidgetTree* GetBlueprintTree(UBlueprint* WidgetBlueprint)
+	{
+		if (!WidgetBlueprint) { return nullptr; }
+		const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+		return TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	}
+
+	FSlateBrush MakeImageBrush(UTexture2D* Texture, int32 DrawAs, const FVector4& Margin, const FLinearColor& Tint)
+	{
+		FSlateBrush Brush;
+		Brush.SetResourceObject(Texture);
+		if (Texture) { Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY()); }
+		Brush.DrawAs = DrawAs == 1 ? ESlateBrushDrawType::Box : ESlateBrushDrawType::Image;
+		Brush.Margin = FMargin(Margin.X, Margin.Y, Margin.Z, Margin.W);
+		Brush.TintColor = Tint;
+		return Brush;
+	}
+}
+#endif
+
+bool UCTUIBuildTools::PlaceCanvasImage(UBlueprint* WidgetBlueprint, FName ParentName, FName ImageName, UTexture2D* Texture, FVector2D AnchorMin, FVector2D AnchorMax, FVector2D Alignment, FVector2D Position, FVector2D SizeOrRightBottom, int32 ZOrder, int32 DrawAs, FVector4 Margin, FLinearColor Tint)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UCanvasPanel* Parent = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->FindWidget(ParentName)) : nullptr;
+	if (!Parent) { return false; }
+
+	UImage* Image = Cast<UImage>(WidgetTree->FindWidget(ImageName));
+	if (!Image)
+	{
+		Image = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), ImageName);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Parent->AddChildToCanvas(Image);
+	}
+	Image->SetBrush(MakeImageBrush(Texture, DrawAs, Margin, Tint));
+	Image->SetColorAndOpacity(FLinearColor::White);
+
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Image->Slot))
+	{
+		CanvasSlot->SetAnchors(FAnchors(AnchorMin.X, AnchorMin.Y, AnchorMax.X, AnchorMax.Y));
+		CanvasSlot->SetAlignment(Alignment);
+		CanvasSlot->SetPosition(Position);
+		CanvasSlot->SetSize(SizeOrRightBottom);
+		CanvasSlot->SetZOrder(ZOrder);
+	}
+
+	Tree = WidgetTree;
+	RegisterWidgetGuids(WidgetBlueprint);
+	Tree = nullptr;
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetButtonImage(UBlueprint* WidgetBlueprint, FName ButtonName, UTexture2D* Texture, int32 DrawAs, FVector4 Margin, float HoverFactor, float PressFactor)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UButton* Button = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(ButtonName)) : nullptr;
+	if (!Button || !Texture) { return false; }
+
+	FButtonStyle Style = Button->GetStyle();
+	Style.SetNormal(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor::White));
+	Style.SetHovered(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor(HoverFactor, HoverFactor, HoverFactor, 1.f)));
+	Style.SetPressed(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor(PressFactor, PressFactor, PressFactor, 1.f)));
+	Style.SetDisabled(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor(0.55f, 0.55f, 0.55f, 0.85f)));
+	Style.SetNormalPadding(FMargin(0.f));
+	Style.SetPressedPadding(FMargin(0.f));
+	Button->SetStyle(Style);
+	Button->SetBackgroundColor(FLinearColor::White);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetTextAppearance(UBlueprint* WidgetBlueprint, FName TextName, FLinearColor Color, int32 FontSize, FLinearColor OutlineColor, int32 OutlineSize)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UTextBlock* Text = WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(TextName)) : nullptr;
+	if (!Text) { return false; }
+
+	Text->SetColorAndOpacity(FSlateColor(Color));
+	FSlateFontInfo Font = Text->GetFont();
+	if (FontSize > 0) { Font.Size = FontSize; }
+	Font.OutlineSettings.OutlineSize = OutlineSize;
+	Font.OutlineSettings.OutlineColor = OutlineColor;
+	Text->SetFont(Font);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetBorderImage(UBlueprint* WidgetBlueprint, FName BorderName, UTexture2D* Texture, int32 DrawAs, FVector4 Margin, FVector4 Padding)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UBorder* Border = WidgetTree ? Cast<UBorder>(WidgetTree->FindWidget(BorderName)) : nullptr;
+	if (!Border || !Texture) { return false; }
+	Border->SetBrush(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor::White));
+	Border->SetBrushColor(FLinearColor::White);
+	Border->SetPadding(FMargin(Padding.X, Padding.Y, Padding.Z, Padding.W));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::WrapInBorder(UBlueprint* WidgetBlueprint, FName WidgetName, UTexture2D* Texture, int32 DrawAs, FVector4 Margin, FVector4 Padding)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	if (!Widget || !Texture) { return false; }
+
+	const FName PillName(*FString::Printf(TEXT("Pill_%s"), *WidgetName.ToString()));
+	UBorder* Border = Cast<UBorder>(WidgetTree->FindWidget(PillName));
+	if (!Border)
+	{
+		UPanelWidget* Parent = Widget->GetParent();
+		const int32 Index = Parent ? Parent->GetChildIndex(Widget) : INDEX_NONE;
+		if (Index == INDEX_NONE) { return false; }
+		Border = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), PillName);
+		Parent->ReplaceChildAt(Index, Border);
+		Widget->Slot = nullptr;
+		Border->SetContent(Widget);
+	}
+	Border->SetBrush(MakeImageBrush(Texture, DrawAs, Margin, FLinearColor::White));
+	Border->SetBrushColor(FLinearColor::White);
+	Border->SetPadding(FMargin(Padding.X, Padding.Y, Padding.Z, Padding.W));
+	// 컴파일러가 변수 GUID를 요구하므로 변수로 두고 GUID 표에 등록
+	Border->bIsVariable = true;
+
+	Tree = WidgetTree;
+	RegisterWidgetGuids(WidgetBlueprint);
+	Tree = nullptr;
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+#if WITH_EDITOR
+namespace
+{
+	FSlateBrush MakeRoundedBrush(const FLinearColor& Fill, const FLinearColor& Outline, float Radius, float Width, const FVector2D& Size)
+	{
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = Fill;
+		Brush.ImageSize = Size;
+		Brush.OutlineSettings.CornerRadii = FVector4(Radius, Radius, Radius, Radius);
+		Brush.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+		Brush.OutlineSettings.Color = FSlateColor(Outline);
+		Brush.OutlineSettings.Width = Width;
+		return Brush;
+	}
+}
+#endif
+
+bool UCTUIBuildTools::StyleSlider(UBlueprint* WidgetBlueprint, FName SliderName, FLinearColor BarColor, FLinearColor HandleColor, FLinearColor OutlineColor)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	USlider* Slider = WidgetTree ? Cast<USlider>(WidgetTree->FindWidget(SliderName)) : nullptr;
+	if (!Slider) { return false; }
+
+	FSliderStyle Style = Slider->GetWidgetStyle();
+	const FSlateBrush Bar = MakeRoundedBrush(BarColor, OutlineColor, 6.f, 0.f, FVector2D(12.f, 12.f));
+	const FSlateBrush Handle = MakeRoundedBrush(HandleColor, OutlineColor, 15.f, 3.f, FVector2D(30.f, 30.f));
+	Style.SetNormalBarImage(Bar);
+	Style.SetHoveredBarImage(Bar);
+	Style.SetDisabledBarImage(Bar);
+	Style.SetNormalThumbImage(Handle);
+	Style.SetHoveredThumbImage(Handle);
+	Style.SetDisabledThumbImage(Handle);
+	Style.SetBarThickness(12.f);
+	Slider->SetWidgetStyle(Style);
+	Slider->SetSliderBarColor(FLinearColor::White);
+	Slider->SetSliderHandleColor(FLinearColor::White);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::StyleCheckBox(UBlueprint* WidgetBlueprint, FName CheckBoxName, FLinearColor UncheckedFill, FLinearColor CheckedFill, FLinearColor OutlineColor, float BoxSize)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UCheckBox* CheckBox = WidgetTree ? Cast<UCheckBox>(WidgetTree->FindWidget(CheckBoxName)) : nullptr;
+	if (!CheckBox) { return false; }
+
+	FCheckBoxStyle Style = CheckBox->GetWidgetStyle();
+	const FVector2D Size(BoxSize, BoxSize);
+	const FSlateBrush Off = MakeRoundedBrush(UncheckedFill, OutlineColor, 8.f, 3.f, Size);
+	const FSlateBrush On = MakeRoundedBrush(CheckedFill, OutlineColor, 8.f, 3.f, Size);
+	Style.SetUncheckedImage(Off);
+	Style.SetUncheckedHoveredImage(Off);
+	Style.SetUncheckedPressedImage(Off);
+	Style.SetCheckedImage(On);
+	Style.SetCheckedHoveredImage(On);
+	Style.SetCheckedPressedImage(On);
+	Style.SetUndeterminedImage(On);
+	Style.SetUndeterminedHoveredImage(On);
+	Style.SetUndeterminedPressedImage(On);
+	Style.SetCheckBoxType(ESlateCheckBoxType::CheckBox);
+	CheckBox->SetWidgetStyle(Style);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::StyleProgressBar(UBlueprint* WidgetBlueprint, FName BarName, FLinearColor Background, FLinearColor Fill, FLinearColor Outline)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UProgressBar* Bar = WidgetTree ? Cast<UProgressBar>(WidgetTree->FindWidget(BarName)) : nullptr;
+	if (!Bar) { return false; }
+
+	FProgressBarStyle Style = Bar->GetWidgetStyle();
+	Style.SetBackgroundImage(MakeRoundedBrush(Background, Outline, 7.f, 3.f, FVector2D(14.f, 14.f)));
+	Style.SetFillImage(MakeRoundedBrush(Fill, FLinearColor(0.f, 0.f, 0.f, 0.f), 7.f, 0.f, FVector2D(14.f, 14.f)));
+	Bar->SetWidgetStyle(Style);
+	Bar->SetFillColorAndOpacity(FLinearColor::White);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetImageRoundedBox(UBlueprint* WidgetBlueprint, FName ImageName, FLinearColor Fill, FLinearColor Outline, float Radius, float OutlineWidth)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UImage* Image = WidgetTree ? Cast<UImage>(WidgetTree->FindWidget(ImageName)) : nullptr;
+	if (!Image) { return false; }
+	Image->SetBrush(MakeRoundedBrush(Fill, Outline, Radius, OutlineWidth, FVector2D(32.f, 32.f)));
+	Image->SetColorAndOpacity(FLinearColor::White);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+#if WITH_EDITOR
+namespace
+{
+	bool IsNewStyleBrush(const FSlateBrush& Brush)
+	{
+		if (Brush.DrawAs == ESlateBrushDrawType::RoundedBox) { return true; }
+		const UObject* Resource = Brush.GetResourceObject();
+		if (!Resource) { return false; }
+		const FString Path = Resource->GetPathName();
+		return Path.Contains(TEXT("/2D/UI/Style/")) || Path.Contains(TEXT("/2D/UI/ico/"));
+	}
+}
+#endif
+
+int32 UCTUIBuildTools::FixImageTints(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	if (!WidgetTree) { return -1; }
+
+	int32 Fixed = 0;
+	TArray<UWidget*> All;
+	WidgetTree->GetAllWidgets(All);
+	for (UWidget* Widget : All)
+	{
+		if (UImage* Image = Cast<UImage>(Widget))
+		{
+			if (IsNewStyleBrush(Image->GetBrush()) && !Image->GetColorAndOpacity().Equals(FLinearColor::White))
+			{
+				Image->SetColorAndOpacity(FLinearColor::White);
+				++Fixed;
+			}
+		}
+		else if (UButton* Button = Cast<UButton>(Widget))
+		{
+			if (IsNewStyleBrush(Button->GetStyle().Normal))
+			{
+				Button->SetBackgroundColor(FLinearColor::White);
+				Button->SetColorAndOpacity(FLinearColor::White);
+				++Fixed;
+			}
+		}
+		else if (UBorder* Border = Cast<UBorder>(Widget))
+		{
+			if (IsNewStyleBrush(Border->Background))
+			{
+				Border->SetBrushColor(FLinearColor::White);
+				Border->SetContentColorAndOpacity(FLinearColor::White);
+				++Fixed;
+			}
+		}
+	}
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return Fixed;
+#else
+	return -1;
+#endif
+}
+
+bool UCTUIBuildTools::SetButtonLabelPadding(UBlueprint* WidgetBlueprint, FName ButtonName, float BottomPadding)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UButton* Button = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(ButtonName)) : nullptr;
+	UWidget* Content = Button ? Button->GetContent() : nullptr;
+	UButtonSlot* ButtonSlot = Content ? Cast<UButtonSlot>(Content->Slot) : nullptr;
+	if (!ButtonSlot) { return false; }
+
+	ButtonSlot->SetPadding(FMargin(0.f, 0.f, 0.f, BottomPadding));
+	ButtonSlot->SetHorizontalAlignment(HAlign_Center);
+	ButtonSlot->SetVerticalAlignment(VAlign_Center);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::AddButtonIcon(UBlueprint* WidgetBlueprint, FName ButtonName, UTexture2D* IconTexture, float IconSize, float Gap)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UButton* Button = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(ButtonName)) : nullptr;
+	if (!Button || !IconTexture) { return false; }
+
+	const FName RowName(*FString::Printf(TEXT("Row_Icon_%s"), *ButtonName.ToString()));
+	const FName IconName(*FString::Printf(TEXT("Icon_%s"), *ButtonName.ToString()));
+	UHorizontalBox* Row = Cast<UHorizontalBox>(WidgetTree->FindWidget(RowName));
+	UImage* Icon = Cast<UImage>(WidgetTree->FindWidget(IconName));
+
+	if (!Row)
+	{
+		UWidget* Label = Button->GetContent();
+		if (!Label) { return false; }
+		Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), RowName);
+		Icon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), IconName);
+		Icon->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		Button->ClearChildren();
+		Label->Slot = nullptr;
+		UHorizontalBoxSlot* IconSlot = Row->AddChildToHorizontalBox(Icon);
+		IconSlot->SetVerticalAlignment(VAlign_Center);
+		IconSlot->SetPadding(FMargin(0.f, 0.f, Gap, 0.f));
+		UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
+		LabelSlot->SetVerticalAlignment(VAlign_Center);
+		Button->SetContent(Row);
+	}
+	if (!Icon) { return false; }
+
+	FSlateBrush Brush;
+	Brush.SetResourceObject(IconTexture);
+	Brush.ImageSize = FVector2D(IconSize, IconSize);
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Icon->SetBrush(Brush);
+	Icon->SetColorAndOpacity(FLinearColor::White);
+	if (UHorizontalBoxSlot* IconSlot = Cast<UHorizontalBoxSlot>(Icon->Slot)) { IconSlot->SetPadding(FMargin(0.f, 0.f, Gap, 0.f)); }
+
+	Tree = WidgetTree;
+	RegisterWidgetGuids(WidgetBlueprint);
+	Tree = nullptr;
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::RemoveWidgetByName(UBlueprint* WidgetBlueprint, FName WidgetName)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	if (!Widget) { return false; }
+	WidgetTree->RemoveWidget(Widget);
+
+	Tree = WidgetTree;
+	RegisterWidgetGuids(WidgetBlueprint);
+	Tree = nullptr;
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetImageColorByName(UBlueprint* WidgetBlueprint, FName ImageName, FLinearColor Color)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UImage* Image = WidgetTree ? Cast<UImage>(WidgetTree->FindWidget(ImageName)) : nullptr;
+	if (!Image) { return false; }
+	Image->SetColorAndOpacity(Color);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetCanvasSlotZOrder(UBlueprint* WidgetBlueprint, FName WidgetName, int32 ZOrder)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	UCanvasPanelSlot* CanvasSlot = Widget ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr;
+	if (!CanvasSlot) { return false; }
+	CanvasSlot->SetZOrder(ZOrder);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetTextJustificationByName(UBlueprint* WidgetBlueprint, FName TextName, int32 Justification)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UTextBlock* Text = WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(TextName)) : nullptr;
+	if (!Text) { return false; }
+	Text->SetJustification(static_cast<ETextJustify::Type>(FMath::Clamp(Justification, 0, 2)));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetWidgetVisibilityByName(UBlueprint* WidgetBlueprint, FName WidgetName, int32 Visibility)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	if (!Widget) { return false; }
+	Widget->SetVisibility(static_cast<ESlateVisibility>(FMath::Clamp(Visibility, 0, 4)));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::SetSizeBoxOverride(UBlueprint* WidgetBlueprint, FName WidgetName, float Width, float Height)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	USizeBox* Box = WidgetTree ? Cast<USizeBox>(WidgetTree->FindWidget(WidgetName)) : nullptr;
+	if (!Box) { return false; }
+
+	if (Width > 0.f) { Box->SetWidthOverride(Width); } else { Box->ClearWidthOverride(); }
+	if (Height > 0.f) { Box->SetHeightOverride(Height); } else { Box->ClearHeightOverride(); }
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+int32 UCTUIBuildTools::AddMicAlwaysOnSetting(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UVerticalBox* List = Tree ? Cast<UVerticalBox>(Tree->FindWidget(TEXT("List_Settings"))) : nullptr;
+	UWidget* MicRow = Tree ? Tree->FindWidget(TEXT("Size_CheckBox_MicEnabled")) : nullptr;
+	if (!List || !MicRow)
+	{
+		Tree = nullptr;
+		return -1;
+	}
+	if (Tree->FindWidget(TEXT("CheckBox_MicAlwaysOn")))
+	{
+		Tree = nullptr;
+		return 0; // 이미 있음
+	}
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTSettingsWidget");
+
+	UVerticalBoxSlot* BoxSlot = Cast<UVerticalBoxSlot>(List->InsertChildAt(List->GetChildIndex(MicRow) + 1,
+		MakeCheckRow(TEXT("Size_CheckBox_MicAlwaysOn"), TEXT("CheckBox_MicAlwaysOn"), TEXT("Label_CheckBox_MicAlwaysOn"), TEXT("버튼 없이 말하기"))));
+	BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 18.f));
+	BoxSlot->SetHorizontalAlignment(HAlign_Fill);
+	BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+
+	// 기존 체크박스 글자 모양을 따라 함
+	UTextBlock* NewText = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_CheckBox_MicAlwaysOn")));
+	const UTextBlock* OldText = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_CheckBox_Mute")));
+	if (NewText && OldText)
+	{
+		NewText->SetFont(OldText->GetFont());
+		NewText->SetColorAndOpacity(OldText->GetColorAndOpacity());
+	}
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
+int32 UCTUIBuildTools::AddHudMicIndicator(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UCanvasPanel* Canvas = Tree ? Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_HUD"))) : nullptr;
+	if (!Canvas)
+	{
+		Tree = nullptr;
+		return -1;
+	}
+	if (Tree->FindWidget(TEXT("Image_MicPanel")))
+	{
+		Tree = nullptr;
+		return 0; // 이미 있음
+	}
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTHUDWidget");
+
+	// 예전에 만든 32x32 아이콘만 있는 버전은 지우고 다시 만듦. 키 글자(Text_MicKey)와 배치는 유지
+	UVerticalBox* Layout = Cast<UVerticalBox>(Tree->FindWidget(TEXT("Layout_Mic")));
+	if (UWidget* OldIconBox = Tree->FindWidget(TEXT("Size_MicIcon")))
+	{
+		Tree->RemoveWidget(OldIconBox);
+		if (UWidget* OldIcon = Tree->FindWidget(TEXT("Image_MicIcon"))) { Tree->RemoveWidget(OldIcon); }
+	}
+	if (!Layout)
+	{
+		Layout = Make<UVerticalBox>(TEXT("Layout_Mic"));
+		Layout->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UTextBlock* KeyText = MakeHudText(TEXT("Text_MicKey"), TEXT("V"), 18, FLinearColor::White, ETextJustify::Center, 2, FLinearColor(0.f, 0.f, 0.f, 0.85f));
+		AddV(Layout, KeyText, 0.f)->SetHorizontalAlignment(HAlign_Center);
+		PlaceHud(Canvas, Layout, FVector2D(-40.f, 0.f), FVector2D::ZeroVector, FVector2D(1.f, 0.5f), FVector2D(1.f, 0.5f));
+	}
+
+	// 패널 124x65 (74x39 그림의 약 1.7배) 위에 아이콘과 파장 막대
+	const FVector2D PanelSize(124.f, 65.f);
+	UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Group_Mic"));
+	Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	PlaceHud(Group, MakeHudImage(TEXT("Image_MicPanel"), TEXT("UI_Mic"), PanelSize), FVector2D::ZeroVector, PanelSize, FVector2D(0.f, 0.f), FVector2D(0.f, 0.f));
+	PlaceHud(Group, MakeHudImage(TEXT("Image_MicIcon"), TEXT("ico/Ico_Mic"), FVector2D(40.f, 40.f)), FVector2D(14.f, 10.f), FVector2D(40.f, 40.f), FVector2D(0.f, 0.f), FVector2D(0.f, 0.f));
+
+	// 파장 막대 3개: 높이가 오르내리는 가운데 정렬 막대
+	UHorizontalBox* Waves = Make<UHorizontalBox>(TEXT("Row_MicWave"));
+	Waves->SetVisibility(ESlateVisibility::HitTestInvisible);
+	for (int32 Index = 1; Index <= 3; ++Index)
+	{
+		UImage* Bar = Make<UImage>(*FString::Printf(TEXT("Image_MicWave%d"), Index));
+		Bar->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Bar->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83)));
+		USizeBox* BarBox = Sized(*FString::Printf(TEXT("Size_MicWave%d"), Index), Bar, 8.f, Index == 1 ? 14.f : (Index == 2 ? 24.f : 34.f));
+		UHorizontalBoxSlot* BarSlot = Waves->AddChildToHorizontalBox(BarBox);
+		BarSlot->SetPadding(FMargin(0.f, 0.f, Index < 3 ? 7.f : 0.f, 0.f));
+		BarSlot->SetVerticalAlignment(VAlign_Center);
+	}
+	PlaceHud(Group, Waves, FVector2D(66.f, 8.f), FVector2D(40.f, 42.f), FVector2D(0.f, 0.f), FVector2D(0.f, 0.f));
+
+	// 키 글자 위에 패널을 넣음
+	UVerticalBoxSlot* GroupSlot = Cast<UVerticalBoxSlot>(Layout->InsertChildAt(0, Sized(TEXT("Size_MicGroup"), Group, PanelSize.X, PanelSize.Y)));
+	GroupSlot->SetHorizontalAlignment(HAlign_Center);
+	GroupSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return -1;
+#endif
+}
+
+int32 UCTUIBuildTools::SyncWidgetGuids(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	const FMapProperty* GuidMapProperty = CastField<FMapProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetVariableNameToGuidMap")));
+	if (!Tree || !GuidMapProperty)
+	{
+		Tree = nullptr;
+		return -1;
+	}
+
+	FScriptMapHelper GuidMap(GuidMapProperty, GuidMapProperty->ContainerPtrToValuePtr<void>(WidgetBlueprint));
+	const int32 Before = GuidMap.Num();
+	RegisterWidgetGuids(WidgetBlueprint);
+	const int32 After = GuidMap.Num();
+
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	Tree = nullptr;
+	return FMath::Abs(After - Before);
+#else
+	return -1;
+#endif
+}
+
 int32 UCTUIBuildTools::KeyUnlocalizedTexts(UBlueprint* WidgetBlueprint)
 {
 #if WITH_EDITOR
@@ -965,9 +1792,10 @@ FString UCTUIBuildTools::DescribeWidgetTree(UBlueprint* WidgetBlueprint)
 		if (const UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot))
 		{
 			const FMargin Offsets = CanvasSlot->GetOffsets();
-			Result += FString::Printf(TEXT(" pos=(%.1f,%.1f) size=(%.1f,%.1f) anchors=(%.2f,%.2f) align=(%.2f,%.2f)"),
+			Result += FString::Printf(TEXT(" pos=(%.1f,%.1f) size=(%.1f,%.1f) anchors=(%.2f,%.2f)-(%.2f,%.2f) align=(%.2f,%.2f)"),
 				Offsets.Left, Offsets.Top, Offsets.Right, Offsets.Bottom,
 				CanvasSlot->GetAnchors().Minimum.X, CanvasSlot->GetAnchors().Minimum.Y,
+				CanvasSlot->GetAnchors().Maximum.X, CanvasSlot->GetAnchors().Maximum.Y,
 				CanvasSlot->GetAlignment().X, CanvasSlot->GetAlignment().Y);
 		}
 		if (const USizeBox* Box = Cast<USizeBox>(Widget))
@@ -977,6 +1805,14 @@ FString UCTUIBuildTools::DescribeWidgetTree(UBlueprint* WidgetBlueprint)
 		if (const UTextBlock* TextBlock = Cast<UTextBlock>(Widget))
 		{
 			Result += FString::Printf(TEXT(" text=\"%s\" font=%.0f wrap=%d"), *TextBlock->GetText().ToString(), TextBlock->GetFont().Size, TextBlock->GetAutoWrapText() ? 1 : 0);
+		}
+		if (const UImage* Img = Cast<UImage>(Widget))
+		{
+			const FSlateBrush& Brush = Img->GetBrush();
+			const FLinearColor Tint = Brush.TintColor.GetSpecifiedColor();
+			const FLinearColor Color = Img->GetColorAndOpacity();
+			Result += FString::Printf(TEXT(" img=%s tint=(%.2f,%.2f,%.2f,%.2f) color=(%.2f,%.2f,%.2f,%.2f)"),
+				Brush.GetResourceObject() ? *Brush.GetResourceObject()->GetName() : TEXT("none"), Tint.R, Tint.G, Tint.B, Tint.A, Color.R, Color.G, Color.B, Color.A);
 		}
 		Result += TEXT("\n");
 	}

@@ -37,6 +37,11 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	// AI가 피하기 위해 읽는 값
+	ECTBarrelState GetBarrelState() const { return State; }
+	float GetExplosionRadius() const { return ExplosionRadius; }
+	float GetTouchRadius() const;
+
 protected:
 	virtual void BeginPlay() override;
 

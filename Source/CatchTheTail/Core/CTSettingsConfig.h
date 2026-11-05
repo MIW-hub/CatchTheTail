@@ -57,6 +57,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Sound")
 	TSoftObjectPtr<USoundClass> SfxSoundClass;
 
+	// 음성 채팅 클래스. 다른 사람 목소리 볼륨 적용 (엔진 설정의 VOIP Sound Class와 같은 것)
+	UPROPERTY(Config, EditAnywhere, Category = "Sound")
+	TSoftObjectPtr<USoundClass> VoiceSoundClass;
+
 	// 조작
 	// 조작 목록 (위에서부터 표시)
 	UPROPERTY(Config, EditAnywhere, Category = "Controls")
