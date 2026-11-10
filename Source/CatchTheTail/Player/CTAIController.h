@@ -28,6 +28,14 @@ public:
 	virtual void OnUnPossess() override;
 
 protected:
+	// 꼬리 대결 중이거나 잡힌 동작이 끝난 뒤, 탐색을 이 시간(초)만큼 더 쉼
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "0"))
+	float GrappledPauseSeconds = 0.6f;
+
+	// 달리기를 켠 뒤 이 시간(초) 동안은 끄지 않음 (판단이 흔들려 달리기가 깜빡이는 것을 막음)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "0"))
+	float RunMinHoldSeconds = 1.5f;
+
 	// 판단 간격(초)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "0.02"))
 	float ThinkInterval = 0.12f;
@@ -75,6 +83,33 @@ protected:
 	// 아무도 못 알아챘을 때 돌아다니는 반경(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "100"))
 	float WanderRadius = 2500.f;
+
+	// 맵 가운데 쪽에서 놀게 하는 기능 (켜면 가장자리로 흩어지지 않음)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center")
+	bool bPreferMapCenter = true;
+
+	// 맵 가운데를 직접 지정 (끄면 NavMesh 범위의 가운데를 자동으로 씀)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (EditCondition = "bPreferMapCenter"))
+	bool bUseCenterOverride = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (EditCondition = "bUseCenterOverride"))
+	FVector CenterOverride = FVector::ZeroVector;
+
+	// 가운데에서 이 거리(cm) 안이 주로 노는 구역
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (ClampMin = "100"))
+	float CenterRoamRadius = 3000.f;
+
+	// 가운데에서 이 거리(cm)보다 멀어지면 다음 목적지를 가운데 구역에서 고름
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (ClampMin = "100"))
+	float CenterPullDistance = 3500.f;
+
+	// 배회 목적지를 고를 때 가운데에 가까운 곳을 선호하는 정도 (0 = 상관없음, 1 = 거의 항상)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (ClampMin = "0", ClampMax = "1"))
+	float WanderCenterBias = 0.7f;
+
+	// 도망 목적지를 고를 때 가운데에서 먼 곳을 싫어하는 정도 (0 = 상관없음)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI|Center", meta = (ClampMin = "0"))
+	float FleeCenterWeight = 0.5f;
 
 	// 목표가 아닌 상대가 밀 수 있는 거리에 있을 때 한 번 판단마다 밀 확률 (0~1)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|AI", meta = (ClampMin = "0", ClampMax = "1"))
@@ -147,9 +182,23 @@ private:
 	void Halt();
 	void FaceLocation(ACTCharacter& Me, const FVector& Location) const;
 
+	// 달리기 켜기/끄기. 달리기를 시작하자마자 판단이 바뀌어 바로 끄면 "일찍 멈춤" 쿨타임에 걸려
+	// 달리기가 깜빡이고 못 달리므로, 켠 뒤 RunMinHoldSeconds 동안은 끄기를 무시함
+	void SetAIRun(ACTCharacter& Me, bool bRun);
+	double RunStartedAt = -1000.0;
+
 	// 도망 목적지: 나를 노리는 상대에게서 가장 먼 갈 수 있는 곳
 	FVector PickFleePoint(const FVector& MyLocation, const FVector& HunterLocation) const;
 	FVector PickWanderPoint(const FVector& MyLocation) const;
+
+	// 놀이 구역의 가운데 (NavMesh 범위의 가운데, 없으면 시작점들의 평균)
+	FVector GetPlayAreaCenter() const;
+	mutable FVector CachedCenter = FVector::ZeroVector;
+	mutable bool bCenterCached = false;
+
+	// 대결, 잡힘으로 쉬는 중
+	double PausedUntil = 0.0;
+	bool bPaused = false;
 
 	double NextThinkTime = 0.0;
 	double NextMoveCommandTime = 0.0;

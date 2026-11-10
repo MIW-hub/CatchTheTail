@@ -199,6 +199,8 @@ void UCTGameInstance::JoinByRoomCode(const FString& RoomCode)
 
 void UCTGameInstance::LeaveToMainMenu(FText Message)
 {
+	// 로비로 안 가고 메인 메뉴로 튕길 때 이유를 로그에서 찾기 위한 기록
+	UE_LOG(LogTemp, Log, TEXT("[CT] 메인 메뉴로 이동: %s"), *Message.ToString());
 	PendingMessage = Message;
 	StoredRoomCode.Reset();
 	StoredMapIndex = INDEX_NONE;
@@ -224,6 +226,8 @@ void UCTGameInstance::QuitToDesktop()
 
 void UCTGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
 {
+	UE_LOG(LogTemp, Warning, TEXT("[CT] 네트워크 오류: 종류 %d, %s"), static_cast<int32>(FailureType), *ErrorString);
+
 	// 입장 중 실패, 이유를 메뉴에 안내
 	if (FailureType == ENetworkFailure::PendingConnectionFailure)
 	{
@@ -271,6 +275,8 @@ FText UCTGameInstance::MakeJoinFailureMessage(const FString& ErrorString) const
 
 void UCTGameInstance::HandleTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString)
 {
+	UE_LOG(LogTemp, Warning, TEXT("[CT] 이동 실패: 종류 %d, %s"), static_cast<int32>(FailureType), *ErrorString);
+
 	// 방금 거절 사유를 이미 안내했으면 일반 안내로 덮어쓰지 않음
 	if (FPlatformTime::Seconds() - LastJoinRejectTime < 3.0) { return; }
 

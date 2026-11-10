@@ -44,7 +44,7 @@ void ACTPlayerController::SetupInputComponent()
 	{
 		// 메뉴가 열려 있어도 같은 키로 닫을 수 있게 일시 정지 중에도 받음
 		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACTPlayerController::HandlePauseKey).bExecuteWhenPaused = true;
-		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ACTPlayerController::HandlePhoneKey);
+		// 전화 / 유령 이동 키는 설정에서 바꿀 수 있어 PlayerTick 에서 현재 키를 읽어 처리
 	}
 }
 
@@ -203,6 +203,15 @@ void ACTPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
 	if (!IsLocalController()) { return; }
+
+	// 전화 / 유령 이동 키 (설정에서 바꾼 키 우선, 기본 F)
+	if (const UGameInstance* PhoneGameInstance = GetGameInstance())
+	{
+		if (const UCTSettingsSubsystem* KeySettings = PhoneGameInstance->GetSubsystem<UCTSettingsSubsystem>())
+		{
+			if (WasInputKeyJustPressed(KeySettings->GetCodeKey(CTCodeKeys::Phone))) { HandlePhoneKey(); }
+		}
+	}
 
 	// 부스를 벗어나거나 경기가 끝나면 전화 팝업을 닫음
 	if (IsPhonePopupOpen() && !CanKeepPhonePopup()) { ClosePhonePopup(); }

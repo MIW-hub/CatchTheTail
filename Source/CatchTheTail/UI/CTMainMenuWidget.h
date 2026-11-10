@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Widgets/SWidget.h"
 #include "CTMainMenuWidget.generated.h"
 
 class UButton;
@@ -38,6 +39,9 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+
+	// 오른쪽 아래 버전 표시 ("v0.1.0 · 초기 버전")
+	TSharedPtr<SWidget> VersionLabel;
 
 	// 안내 문구 표시
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Menu")

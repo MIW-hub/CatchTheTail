@@ -144,6 +144,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool RemoveWidgetByName(UBlueprint* WidgetBlueprint, FName WidgetName);
 
+	// 글자 크기를 Delta만큼 키우거나 줄임 (최소 8). 색과 외곽선은 그대로
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool AdjustFontSize(UBlueprint* WidgetBlueprint, FName TextName, int32 Delta);
+
 	// 이미지 위젯의 색 배율(Color and Opacity)을 정함. 흰색이면 원본 색 그대로
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool SetImageColorByName(UBlueprint* WidgetBlueprint, FName ImageName, FLinearColor Color);

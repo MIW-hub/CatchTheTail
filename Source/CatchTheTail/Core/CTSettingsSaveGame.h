@@ -68,6 +68,10 @@ struct FCTSettingsData
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	float MicSensitivity = 0.9f;
 
+	// 이모트: 숫자 키 1, 2, 3...에 등록한 이모트 목록 번호. 비면 기본값
+	UPROPERTY()
+	TArray<int32> EmoteLoadout;
+
 	// 조작
 	// 바꾼 키. 행동 Id별, 안 바꾼 행동은 없음
 	UPROPERTY()

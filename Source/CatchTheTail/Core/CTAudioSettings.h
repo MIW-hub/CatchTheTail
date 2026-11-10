@@ -67,6 +67,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Music", meta = (ClampMin = "0"))
 	float MusicFadeSeconds = 1.0f;
 
+	// 경기 중 배경음에 곱하는 배율. 설정 창의 배경음 볼륨은 그대로 두고, 처음부터 경기 배경음이 작게 나와 발소리가 묻히지 않게 함 (1 = 그대로)
+	UPROPERTY(Config, EditAnywhere, Category = "Music", meta = (ClampMin = "0", ClampMax = "1"))
+	float GameMusicVolumeScale = 0.7f;
+
 	// 효과음
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|UI")
 	TSoftObjectPtr<USoundBase> UIHover;

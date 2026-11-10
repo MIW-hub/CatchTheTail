@@ -20,6 +20,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/VerticalBox.h"
 #include "Components/Widget.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/Culture.h"
 
 namespace
 {
@@ -283,6 +285,13 @@ void UCTHUDWidget::UpdateTimeDisplay()
 		}
 		if (CountdownNumber > 0)
 		{
+			// 마지막 라운드의 끝 카운트다운이면 "라운드 시작"이 아니라 "라운드 종료"
+			const bool bFinalRound = bPlaying && !bStartCountdown &&
+				FMath::IsNearlyEqual(GameState->GetRoundEndServerTime(), GameState->GetGameEndServerTime(), 0.5);
+			UpdateCountdownLabel(bFinalRound);
+		}
+		if (CountdownNumber > 0)
+		{
 			BP_OnCountdownTick(CountdownNumber);
 			if (bStartCountdown)
 			{
@@ -290,6 +299,31 @@ void UCTHUDWidget::UpdateTimeDisplay()
 			}
 		}
 	}
+}
+
+void UCTHUDWidget::UpdateCountdownLabel(bool bFinalRound)
+{
+	UTextBlock* Label = Cast<UTextBlock>(GetWidgetFromName(TEXT("Label_Countdown")));
+	if (!Label) { return; }
+
+	// 처음 본 글자("라운드 시작")를 기억해 두고 마지막 라운드가 아닐 때 되돌림
+	if (!bCountdownLabelCached)
+	{
+		CountdownLabelDefault = Label->GetText();
+		bCountdownLabelCached = true;
+	}
+
+	if (!bFinalRound)
+	{
+		Label->SetText(CountdownLabelDefault);
+		return;
+	}
+
+	// 현재 언어에 맞춘 "라운드 종료"
+	const FString Language = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
+	if (Language == TEXT("ko")) { Label->SetText(FText::FromString(TEXT("라운드 종료"))); }
+	else if (Language == TEXT("ja")) { Label->SetText(FText::FromString(TEXT("ラウンド終了"))); }
+	else { Label->SetText(FText::FromString(TEXT("Round End"))); }
 }
 
 UMaterialInstanceDynamic* UCTHUDWidget::GetOverlayMaterial(UImage* Overlay)

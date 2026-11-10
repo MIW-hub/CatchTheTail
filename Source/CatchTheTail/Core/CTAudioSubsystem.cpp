@@ -103,6 +103,9 @@ void UCTAudioSubsystem::PlayMusic(ECTMusic Music)
 
 	const float Fade = Settings->MusicFadeSeconds;
 
+	// 곡에 맞는 볼륨 배율(경기 중 배경음은 작게)을 쓰도록 먼저 기록
+	CurrentMusic = Music;
+
 	// 다 사라진 이전 곡은 정리
 	FadingMusicComponents.RemoveAll([](const UAudioComponent* Old) { return !IsValid(Old) || !Old->IsPlaying(); });
 
@@ -133,7 +136,11 @@ float UCTAudioSubsystem::GetSettingsMusicVolume() const
 	const UGameInstance* GameInstance = GetGameInstance();
 	const UCTSettingsSubsystem* Settings = GameInstance ? GameInstance->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 	if (!Settings) { return 1.f; }
-	return Settings->IsMuted() ? 0.f : Settings->GetMusicVolume();
+	if (Settings->IsMuted()) { return 0.f; }
+
+	// 경기 중 배경음은 설정 볼륨에 배율을 더 곱해 작게 (발소리가 묻히지 않도록)
+	const float Scale = CurrentMusic == ECTMusic::Game ? GetDefault<UCTAudioSettings>()->GameMusicVolumeScale : 1.f;
+	return Settings->GetMusicVolume() * Scale;
 }
 
 void UCTAudioSubsystem::RefreshMusicVolume()

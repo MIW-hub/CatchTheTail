@@ -43,8 +43,11 @@ public:
 	// 서버, 방장 로비 복귀 요청 (종료 후만)
 	bool RequestReturnToLobby(APlayerController* Requester);
 
-	// 서버, 점수 변경 + 유령 처리
+	// 서버, 꼬리를 잡음. 대결(F 연타)이 켜져 있으면 대결을 시작하고, 꺼져 있으면 바로 FinalizeTailGrabbed
 	bool HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
+
+	// 서버, 점수 변경 + 유령 처리 (꼬리를 실제로 뺏음). 대결에서 잡은 쪽이 이기면 호출됨
+	bool FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
 	// 서버, 기권 요청. 경기 중이고 기권이 열린 뒤에만 가능. 꼬리를 잃고 순위에서 빠져 유령으로 남음
 	bool HandleForfeit(ACTPlayerState* Forfeiter);
@@ -91,6 +94,10 @@ protected:
 	// 꼬리가 이 수보다 적으면 새 라운드에 채움, 0이면 안 채움
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game", meta = (ClampMin = "0"))
 	int32 MinTailCountAtRoundStart = 1;
+
+	// 꼬리를 잡으면 바로 뺏지 않고 F 연타 줄다리기로 결판 (끄면 예전처럼 즉시 뺏음)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")
+	bool bUseGrappleStruggle = true;
 
 	// 꼬리를 잡으면 상대가 가진 꼬리를 모두 가져옴 (끄면 1개만)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Game")

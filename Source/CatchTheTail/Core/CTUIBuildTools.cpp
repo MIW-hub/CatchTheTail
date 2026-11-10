@@ -1441,6 +1441,23 @@ bool UCTUIBuildTools::RemoveWidgetByName(UBlueprint* WidgetBlueprint, FName Widg
 #endif
 }
 
+bool UCTUIBuildTools::AdjustFontSize(UBlueprint* WidgetBlueprint, FName TextName, int32 Delta)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UTextBlock* Text = WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(TextName)) : nullptr;
+	if (!Text) { return false; }
+	FSlateFontInfo Font = Text->GetFont();
+	Font.Size = FMath::Max(8, Font.Size + Delta);
+	Text->SetFont(Font);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
 bool UCTUIBuildTools::SetImageColorByName(UBlueprint* WidgetBlueprint, FName ImageName, FLinearColor Color)
 {
 #if WITH_EDITOR

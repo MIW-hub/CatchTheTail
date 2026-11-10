@@ -13,6 +13,10 @@ namespace
 	// 세션의 방 코드 설정 이름
 	const FName RoomCodeKey(TEXT("CTROOMCODE"));
 
+	// 우리 게임 방 표시. 테스트용 AppId 480(Spacewar)은 다른 개발자 방이 섞여 있어서 이 값으로 거름
+	const FName GameTagKey(TEXT("CTGAMETAG"));
+	const FString GameTagValue(TEXT("HeyChicken"));
+
 	constexpr int32 MaxRoomPlayers = 8;
 	constexpr int32 MaxSearchResults = 50;
 
@@ -111,6 +115,7 @@ void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 	Settings.bUseLobbiesIfAvailable = !bLan;
 	Settings.bIsDedicated = false;
 	Settings.Set(RoomCodeKey, NormalizeCode(RoomCode), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	Settings.Set(GameTagKey, GameTagValue, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 
 	CreateHandle = Sessions->AddOnCreateSessionCompleteDelegate_Handle(FOnCreateSessionCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleCreateSessionComplete));
 	if (!Sessions->CreateSession(0, NAME_GameSession, Settings))
@@ -205,6 +210,12 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 	if (!bLan)
 	{
 		Search->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
+	}
+	// 스팀 서버에서 우리 게임 방만 걸러 받음 (안 걸면 AppId 480의 다른 방 50개가 먼저 차서 우리 방이 안 보임)
+	Search->QuerySettings.Set(GameTagKey, GameTagValue, EOnlineComparisonOp::Equals);
+	if (Mode == EJoinMode::Code)
+	{
+		Search->QuerySettings.Set(RoomCodeKey, RoomCode, EOnlineComparisonOp::Equals);
 	}
 
 	FindHandle = Sessions->AddOnFindSessionsCompleteDelegate_Handle(FOnFindSessionsCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleFindSessionsComplete));

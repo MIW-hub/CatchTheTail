@@ -7,12 +7,19 @@
 #include "../Tail/CTTail.h"
 #include "../World/CTBush.h"
 #include "../UI/CTHUDWidget.h"
+#include "../UI/CTEmoteBubbleComponent.h"
+#include "../UI/CTEmoteSelectWidget.h"
+#include "Blueprint/UserWidget.h"
+#include "Engine/Texture2D.h"
+#include "CTCharacterMovementComponent.h"
+#include "CTGrappleComponent.h"
 #include "CTPlayerController.h"
 #include "../Tongue/CTTongueComponent.h"
 #include "../Animation/CTAnimNotifyState_GrabWindow.h"
 #include "EngineUtils.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -41,7 +48,12 @@ namespace CTBuffNames
 	static const FName Ghost(TEXT("Ghost"));
 }
 
-ACTCharacter::ACTCharacter()
+// 이동이 느리게 출발해서 점점 빨라지는 이동 컴포넌트 사용.
+// 예전 방식으로 되돌리려면 아래 3줄을 주석 해제하고 그 아래 ObjectInitializer 버전을 지우면 됨 (헤더도 ACTCharacter() 로 복구).
+// ACTCharacter::ACTCharacter()
+// {
+ACTCharacter::ACTCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UCTCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// 눌러서 말하기 입력 (프로젝트의 IA_PushToTalk)
 	static ConstructorHelpers::FObjectFinder<UInputAction> VoiceActionFinder(TEXT("/Game/Input/IA_PushToTalk.IA_PushToTalk"));
@@ -64,6 +76,13 @@ ACTCharacter::ACTCharacter()
 	MoveComp->AirControl = 0.35f;
 	MoveComp->MaxWalkSpeed = BaseWalkSpeed;
 	MoveComp->BrakingDecelerationWalking = 2000.f;
+
+	// AI 길찾기 이동도 가속(Acceleration)으로 움직이게 함. 끄면 AI는 속도만 직접 주어져 가속이 0이라,
+	// 이동 애니메이션(가속이 있을 때만 걷기로 전환)이 안 나오고 다리가 안 움직인 채 미끄러짐
+	if (FNavMovementProperties* NavProperties = MoveComp->GetNavMovementProperties())
+	{
+		NavProperties->bUseAccelerationForPaths = true;
+	}
 
 	// 서버 메시도 몽타주 진행 (잡기 노티파이)
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
@@ -100,6 +119,40 @@ ACTCharacter::ACTCharacter()
 	// 혀: Head 본에 부착
 	TongueMesh = CreateDefaultSubobject<UCTTongueComponent>(TEXT("TongueMesh"));
 	TongueMesh->SetupAttachment(GetMesh(), TEXT("Head"));
+
+	// 이모트 말풍선: 캡슐에 붙여 머리 위에서 올라옴
+	EmoteBubble = CreateDefaultSubobject<UCTEmoteBubbleComponent>(TEXT("EmoteBubble"));
+	EmoteBubble->SetupAttachment(RootComponent);
+
+	// 꼬리 잡기 F 연타 대결
+	Grapple = CreateDefaultSubobject<UCTGrappleComponent>(TEXT("Grapple"));
+
+	// 이모트 목록: 아틀라스(3x3) 3장 = 27개
+	static const TCHAR* const SheetPaths[3] =
+	{
+		TEXT("/Game/2D/UI/Emote/Emote_Sheet1.Emote_Sheet1"),
+		TEXT("/Game/2D/UI/Emote/Emote_Sheet2.Emote_Sheet2"),
+		TEXT("/Game/2D/UI/Emote/Emote_Sheet3.Emote_Sheet3"),
+	};
+	static const TCHAR* const SheetLabels[27] =
+	{
+		TEXT("같이 가!"), TEXT("기다려!"), TEXT("도와줘!"), TEXT("따라와!"), TEXT("준비 끝!"), TEXT("가자!"), TEXT("잘했어!"), TEXT("복수할게"), TEXT("또 하자!"),
+		TEXT("헌터야?"), TEXT("경계!"), TEXT("도망가!"), TEXT("살려줘!"), TEXT("잡았다!"), TEXT("들켰다!"), TEXT("쉿!"), TEXT("저기!"), TEXT("난 아냐!"),
+		TEXT("안녕!"), TEXT("고마워!"), TEXT("미안!"), TEXT("ㅋㅋㅋ"), TEXT("흑흑"), TEXT("헉!"), TEXT("흥!"), TEXT("좋아!"), TEXT("사랑해"),
+	};
+	for (int32 Sheet = 0; Sheet < 3; ++Sheet)
+	{
+		ConstructorHelpers::FObjectFinder<UTexture2D> SheetFinder(SheetPaths[Sheet]);
+		for (int32 Cell = 0; Cell < 9; ++Cell)
+		{
+			FCTEmoteSlot& NewSlot = EmoteSlots.AddDefaulted_GetRef();
+			if (SheetFinder.Succeeded()) { NewSlot.Atlas = SheetFinder.Object; }
+			NewSlot.AtlasColumns = 3;
+			NewSlot.AtlasRows = 3;
+			NewSlot.AtlasCell = Cell;
+			NewSlot.Label = FText::FromString(SheetLabels[Sheet * 9 + Cell]);
+		}
+	}
 }
 
 void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -119,6 +172,13 @@ void ACTCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	EnsureVoiceTalker();
+
+	// 팔 늘리기: 포즈 확정 직후 팔 뼈 조정 (화면이 있는 쪽만)
+	if (GetNetMode() != NM_DedicatedServer && GetMesh())
+	{
+		ArmStretchPoseHandle = GetMesh()->RegisterOnBoneTransformsFinalizedDelegate(
+			FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this, &ACTCharacter::ApplyArmStretchToPose));
+	}
 
 	ApplyCameraSettings();
 
@@ -278,9 +338,35 @@ bool ACTCharacter::CanMoveNow() const
 	return CTPlayerState && CTPlayerState->GetAssignedColor() != ECTColor::None;
 }
 
+bool ACTCharacter::IsGrappling() const
+{
+	return Grapple && Grapple->IsGrappling();
+}
+
+bool ACTCharacter::IsPlayingCaughtMontage() const
+{
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	return AnimInstance && CaughtMontage && AnimInstance->Montage_IsPlaying(CaughtMontage);
+}
+
+bool ACTCharacter::IsPlayingKnockdownMontage() const
+{
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return false; }
+
+	for (const UAnimMontage* Montage : { PushedMontage.Get(), PushedBackMontage.Get(), GetUpMontage.Get(), GetUpBackMontage.Get() })
+	{
+		if (Montage && AnimInstance->Montage_IsPlaying(Montage)) { return true; }
+	}
+	return false;
+}
+
 bool ACTCharacter::CanUseActions() const
 {
 	if (IsGhost()) { return false; }
+
+	// 꼬리 잡기 대결 중에는 다른 행동 불가 (G는 연타)
+	if (IsGrappling()) { return false; }
 
 	// 부쉬 안, 전화부스 사용 중에는 잡기/밀기 불가
 	if (CurrentBush || bBoothLocked) { return false; }
@@ -458,6 +544,34 @@ void ACTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	{
 		EnhancedInput->BindAction(PushAction, ETriggerEvent::Started, this, &ACTCharacter::OnPushPressed);
 	}
+
+	// 저장해 둔 이모트 등록 불러오기 (내가 조종하게 된 캐릭터에서만 호출됨)
+	if (const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr)
+	{
+		const TArray<int32>& Saved = Settings->GetSavedEmoteLoadout();
+		for (int32 Index = 0; Index < EmoteLoadout.Num() && Index < Saved.Num(); ++Index)
+		{
+			if (EmoteSlots.IsValidIndex(Saved[Index])) { EmoteLoadout[Index] = Saved[Index]; }
+		}
+	}
+
+	// 잡기 보조 키(기본 G)와 이모트 창 키(기본 R)는 설정에서 바꿀 수 있어서 Tick 에서 현재 키를 읽어 처리
+
+	// 꼬리 줄다리기 중에는 마우스 왼쪽 클릭도 연타로 인정 (평소에는 아무 일도 안 함)
+	{
+		FInputKeyBinding ClickBinding(FInputChord(EKeys::LeftMouseButton), IE_Pressed);
+		ClickBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ACTCharacter::OnGrappleMouseClick);
+		EnhancedInput->KeyBindings.Emplace(MoveTemp(ClickBinding));
+	}
+
+	// 이모트: 윗줄 숫자 키 1~9 (칸 수만큼)
+	static const FKey EmoteKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
+	for (int32 Index = 0; Index < EmoteLoadout.Num() && Index < UE_ARRAY_COUNT(EmoteKeys); ++Index)
+	{
+		FInputKeyBinding Binding(FInputChord(EmoteKeys[Index]), IE_Pressed);
+		Binding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ACTCharacter::OnEmoteKeyPressed, Index);
+		EnhancedInput->KeyBindings.Emplace(MoveTemp(Binding));
+	}
 }
 
 void ACTCharacter::ApplyCameraSettings()
@@ -469,6 +583,13 @@ void ACTCharacter::ApplyCameraSettings()
 	CameraBoom->ProbeSize = CameraProbeSize;
 	CameraBoom->TargetArmLength = CameraDistanceBehind;
 	FollowCamera->SetFieldOfView(CameraFieldOfView);
+
+	// 점프: BP에서 정한 값을 적용 (체공시간이 길지 않게 중력 배율을 높임)
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->JumpZVelocity = JumpVelocity;
+		MoveComp->GravityScale = JumpGravityScale;
+	}
 }
 
 void ACTCharacter::UpdateCameraClip()
@@ -574,16 +695,127 @@ void ACTCharacter::Tick(float DeltaSeconds)
 
 	UpdateRunMontage();
 	UpdateGhostWalkMontage();
+	UpdateEmoteMontage();
 	UpdateBushVisibility();
 	UpdateBushXRay();
 	UpdateMovementSounds(DeltaSeconds);
+	UpdateArmStretch(DeltaSeconds);
 
 	// 로컬 전용
 	if (IsLocallyControlled())
 	{
 		UpdateCameraDistance(DeltaSeconds);
 		UpdateVoiceTransmit();
+
+		// 설정에서 바꿀 수 있는 키 (이모트 창, 잡기 보조)
+		const APlayerController* LocalController = Cast<APlayerController>(GetController());
+		const UGameInstance* KeyGameInstance = GetGameInstance();
+		if (LocalController && KeyGameInstance)
+		{
+			if (const UCTSettingsSubsystem* KeySettings = KeyGameInstance->GetSubsystem<UCTSettingsSubsystem>())
+			{
+				// 누른 순간에만 한 번 (꾹 누르고 있어도 반복 안 함), 0.25초 안에는 다시 안 받음
+				const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+				if (LocalController->WasInputKeyJustPressed(KeySettings->GetCodeKey(CTCodeKeys::EmoteMenu)) && Now - LastEmoteMenuToggleTime > 0.25)
+				{
+					LastEmoteMenuToggleTime = Now;
+					ToggleEmoteMenu();
+				}
+				if (LocalController->WasInputKeyJustPressed(KeySettings->GetCodeKey(CTCodeKeys::GrabAlt))) { OnGrabPressed(); }
+			}
+		}
 	}
+}
+
+void ACTCharacter::UpdateArmStretch(float DeltaSeconds)
+{
+	if (GetNetMode() == NM_DedicatedServer) { return; }
+
+	// 수동 목표가 기본이고, 잡기 몽타주 중이면 재생 위치에 따라 늘어났다 돌아옴
+	float Desired = ArmStretchTarget;
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (AnimInstance && GrabMontage && ArmStretchGrabScale > 1.f && AnimInstance->Montage_IsPlaying(GrabMontage))
+	{
+		const float Length = GrabMontage->GetPlayLength();
+		const float Alpha = Length > KINDA_SMALL_NUMBER ? FMath::Clamp(AnimInstance->Montage_GetPosition(GrabMontage) / Length, 0.f, 1.f) : 0.f;
+		const float Pulse = FMath::Sin(Alpha * UE_PI);
+		Desired = FMath::Max(Desired, FMath::Lerp(1.f, ArmStretchGrabScale, Pulse));
+	}
+
+	ArmStretch = FMath::FInterpTo(ArmStretch, Desired, DeltaSeconds, ArmStretchInterpSpeed);
+}
+
+void ACTCharacter::ApplyArmStretchToPose()
+{
+	if (!bApplyArmStretchToPose || FMath::IsNearlyEqual(ArmStretch, 1.f, 0.01f)) { return; }
+
+	USkeletalMeshComponent* SkelMesh = GetMesh();
+	const USkeletalMesh* MeshAsset = SkelMesh ? SkelMesh->GetSkeletalMeshAsset() : nullptr;
+	if (!MeshAsset) { return; }
+
+	TArray<FTransform>& ComponentPose = SkelMesh->GetEditableComponentSpaceTransforms();
+	const FReferenceSkeleton& RefSkeleton = MeshAsset->GetRefSkeleton();
+	const FVector BoneScale = GetArmStretchScale3D();
+
+	static const FName ArmBones[2][3] =
+	{
+		{ TEXT("LeftArm"),  TEXT("LeftForeArm"),  TEXT("LeftHand")  },
+		{ TEXT("RightArm"), TEXT("RightForeArm"), TEXT("RightHand") },
+	};
+
+	bool bChanged = false;
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		const int32 Arm = SkelMesh->GetBoneIndex(ArmBones[Side][0]);
+		const int32 Fore = SkelMesh->GetBoneIndex(ArmBones[Side][1]);
+		const int32 Hand = SkelMesh->GetBoneIndex(ArmBones[Side][2]);
+		if (Arm == INDEX_NONE || Fore == INDEX_NONE || Hand == INDEX_NONE) { continue; }
+		if (!ComponentPose.IsValidIndex(Arm) || !ComponentPose.IsValidIndex(Fore) || !ComponentPose.IsValidIndex(Hand)) { continue; }
+
+		// 관절 위치를 늘어난 길이만큼 밀어냄
+		const FVector ArmLocation = ComponentPose[Arm].GetLocation();
+		const FVector ForeOld = ComponentPose[Fore].GetLocation();
+		const FVector HandOld = ComponentPose[Hand].GetLocation();
+		const FVector ForeNew = ArmLocation + (ForeOld - ArmLocation) * ArmStretch;
+		const FVector HandNew = ForeNew + (HandOld - ForeOld) * ArmStretch;
+		const FVector HandDelta = HandNew - HandOld;
+
+		// 손가락 등 손 아래 뼈는 손과 같이 이동
+		for (int32 Index = Hand + 1; Index < ComponentPose.Num(); ++Index)
+		{
+			for (int32 Parent = RefSkeleton.GetParentIndex(Index); Parent != INDEX_NONE; Parent = RefSkeleton.GetParentIndex(Parent))
+			{
+				if (Parent == Hand)
+				{
+					ComponentPose[Index].AddToTranslation(HandDelta);
+					break;
+				}
+			}
+		}
+
+		ComponentPose[Fore].SetLocation(ForeNew);
+		ComponentPose[Hand].SetLocation(HandNew);
+
+		// 팔 뼈는 길이 축으로 늘려 메시가 같이 늘어남. 손은 그대로
+		ComponentPose[Arm].SetScale3D(ComponentPose[Arm].GetScale3D() * BoneScale);
+		ComponentPose[Fore].SetScale3D(ComponentPose[Fore].GetScale3D() * BoneScale);
+		bChanged = true;
+	}
+
+	if (bChanged) { SkelMesh->MarkRenderDynamicDataDirty(); }
+}
+
+FVector ACTCharacter::GetArmStretchScale3D() const
+{
+	// 축 성분만 ArmStretch, 나머지 1
+	const FVector Axis = ArmStretchAxis.GetClampedToMaxSize(1.0);
+	return FVector::OneVector + Axis * (ArmStretch - 1.f);
+}
+
+FVector ACTCharacter::GetArmStretchHandScale3D() const
+{
+	const FVector Axis = ArmStretchAxis.GetClampedToMaxSize(1.0);
+	return FVector::OneVector + Axis * ((1.f / FMath::Max(ArmStretch, 0.1f)) - 1.f);
 }
 
 void ACTCharacter::UpdateCameraDistance(float DeltaSeconds)
@@ -647,6 +879,13 @@ void ACTCharacter::OnRunReleased()
 
 void ACTCharacter::OnGrabPressed()
 {
+	// 꼬리 잡기 대결 중에는 G가 연타 입력
+	if (IsGrappling())
+	{
+		Grapple->LocalMash();
+		return;
+	}
+
 	if (!CanUseActions()) { return; }
 
 	// 쿨타임 중 서버 거절
@@ -657,6 +896,11 @@ void ACTCharacter::OnGrabPressed()
 	// 서버 응답 전 선재생
 	PlayActionMontage(ECTCharacterAction::Grab);
 	ServerGrab();
+}
+
+void ACTCharacter::OnGrappleMouseClick()
+{
+	if (IsGrappling()) { Grapple->LocalMash(); }
 }
 
 void ACTCharacter::OnVoicePressed()
@@ -708,6 +952,10 @@ void ACTCharacter::EnsureVoiceTalker()
 
 	Talker->Settings.ComponentToAttachTo = GetRootComponent();
 	Talker->Settings.AttenuationSettings = VoiceAttenuation;
+
+	// 목소리가 안 들릴 때 거리 때문인지 확인하는 용도 (로그에 최대 크기 거리와 들리는 한계 거리)
+	UE_LOG(LogTemp, Log, TEXT("[CT-Voice] %s 의 목소리: 최대 크기 %.0fcm, 들리는 한계 %.0fcm"),
+		*VoicePlayerState->GetPlayerName(), VoiceInnerRadius, VoiceInnerRadius + VoiceFalloffDistance);
 }
 
 void ACTCharacter::OnPushPressed()
@@ -810,7 +1058,7 @@ void ACTCharacter::ServerGrab_Implementation()
 
 	if (!CTGameMode || !CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
-	if (CurrentBush || bBoothLocked) { return; }
+	if (CurrentBush || bBoothLocked || IsGrappling()) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
 	// 동작 중이면 재시작 안 함 (연타 방지)
@@ -943,6 +1191,12 @@ void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
 	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
 
+	if (ArmStretchPoseHandle.IsValid() && GetMesh())
+	{
+		GetMesh()->UnregisterOnBoneTransformsFinalizedDelegate(ArmStretchPoseHandle);
+		ArmStretchPoseHandle.Reset();
+	}
+
 	if (HasAuthority() && OwnedTail)
 	{
 		OwnedTail->Destroy();
@@ -1052,7 +1306,7 @@ void ACTCharacter::ServerPush_Implementation()
 
 	if (!CTGameState || !MyPlayerState) { return; }
 	if (MyPlayerState->IsGhost()) { return; }
-	if (CurrentBush || bBoothLocked) { return; }
+	if (CurrentBush || bBoothLocked || IsGrappling()) { return; }
 	if (CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
 
 	// 쿨타임 확인
@@ -1142,6 +1396,173 @@ void ACTCharacter::HandlePushedMontageEnded(UAnimMontage* Montage, bool bInterru
 	UAnimMontage* GetUp = (PushedBackMontage && Montage == PushedBackMontage) ? GetUpBackMontage.Get() : GetUpMontage.Get();
 	if (bInterrupted || !GetUp || IsGhost()) { return; }
 	PlayAnimMontage(GetUp, ActionMontagePlayRate);
+}
+
+// 이모트
+
+void ACTCharacter::OnEmoteKeyPressed(int32 SlotIndex)
+{
+	RequestEmote(SlotIndex);
+}
+
+void ACTCharacter::SetEmoteLoadout(int32 KeyPosition, int32 LibraryIndex)
+{
+	if (!EmoteLoadout.IsValidIndex(KeyPosition) || !EmoteSlots.IsValidIndex(LibraryIndex)) { return; }
+	EmoteLoadout[KeyPosition] = LibraryIndex;
+
+	// 다음에도 쓰도록 저장
+	if (UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr)
+	{
+		Settings->SaveEmoteLoadout(EmoteLoadout);
+	}
+}
+
+void ACTCharacter::ToggleEmoteMenu()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!IsLocallyControlled() || !PlayerController) { return; }
+
+	if (EmoteMenu && EmoteMenu->IsInViewport())
+	{
+		CloseEmoteMenu();
+		return;
+	}
+
+	EmoteMenu = CreateWidget<UCTEmoteSelectWidget>(PlayerController, UCTEmoteSelectWidget::StaticClass());
+	if (!EmoteMenu) { return; }
+	EmoteMenu->Setup(this);
+	EmoteMenu->OnCloseRequested.AddUObject(this, &ACTCharacter::CloseEmoteMenu);
+	EmoteMenu->AddToViewport(30);
+
+	// 이동과 시점을 막고 마우스를 보여줌 (원래 커서 상태는 닫을 때 되돌림)
+	bEmoteMenuPrevCursor = PlayerController->bShowMouseCursor;
+	PlayerController->SetIgnoreMoveInput(true);
+	PlayerController->SetIgnoreLookInput(true);
+	PlayerController->bShowMouseCursor = true;
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(EmoteMenu->TakeWidget());
+	InputMode.SetHideCursorDuringCapture(false);
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+}
+
+void ACTCharacter::CloseEmoteMenu()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (EmoteMenu)
+	{
+		EmoteMenu->RemoveFromParent();
+		EmoteMenu = nullptr;
+	}
+	if (!PlayerController) { return; }
+
+	PlayerController->SetIgnoreMoveInput(false);
+	// 로비처럼 원래 시점이 고정이던 화면은 고정 유지
+	PlayerController->bShowMouseCursor = bEmoteMenuPrevCursor;
+	if (bEmoteMenuPrevCursor)
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PlayerController->SetInputMode(InputMode);
+	}
+	else
+	{
+		PlayerController->SetIgnoreLookInput(false);
+		PlayerController->SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void ACTCharacter::RequestEmote(int32 KeyPosition)
+{
+	// 키 자리 -> 이모트 목록 번호
+	if (!EmoteLoadout.IsValidIndex(KeyPosition)) { return; }
+	const int32 SlotIndex = EmoteLoadout[KeyPosition];
+	if (!IsLocallyControlled() || !EmoteSlots.IsValidIndex(SlotIndex) || IsBoothLocked()) { return; }
+
+	// 연타 방지 (서버도 다시 검사)
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LocalLastEmoteTime < EmoteCooldownSeconds) { return; }
+	LocalLastEmoteTime = Now;
+
+	ServerPlayEmote(SlotIndex);
+}
+
+void ACTCharacter::ServerPlayEmote_Implementation(int32 SlotIndex)
+{
+	if (!EmoteSlots.IsValidIndex(SlotIndex) || bBoothLocked) { return; }
+
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - LastEmoteServerTime < EmoteCooldownSeconds * 0.5) { return; }
+	LastEmoteServerTime = Now;
+
+	MulticastPlayEmote(SlotIndex);
+}
+
+void ACTCharacter::MulticastPlayEmote_Implementation(int32 SlotIndex)
+{
+	if (!EmoteSlots.IsValidIndex(SlotIndex) || GetNetMode() == NM_DedicatedServer) { return; }
+	const FCTEmoteSlot& Slot = EmoteSlots[SlotIndex];
+
+	// 말풍선: 그림이 비어 있어도 빈 말풍선이 뜸
+	if (EmoteBubble)
+	{
+		if (Slot.Atlas)
+		{
+			// 아틀라스에서 이 칸만 잘라 씀
+			const int32 Columns = FMath::Max(1, Slot.AtlasColumns);
+			const int32 Rows = FMath::Max(1, Slot.AtlasRows);
+			const int32 Column = Slot.AtlasCell % Columns;
+			const int32 Row = FMath::Clamp(Slot.AtlasCell / Columns, 0, Rows - 1);
+			const FVector2D CellSize(1.0 / Columns, 1.0 / Rows);
+			const FVector2D UVMin(Column * CellSize.X, Row * CellSize.Y);
+			EmoteBubble->ShowEmote(Slot.Atlas, UVMin, UVMin + CellSize);
+		}
+		else
+		{
+			EmoteBubble->ShowEmote(Slot.Icon);
+		}
+	}
+
+	// 동작: 서 있을 때만 (이동 중, 공중, 유령, 다른 동작 중이면 건너뜀)
+	if ((Slot.Montage || Slot.Sequence) && !IsGhost() && !GetCharacterMovement()->IsFalling() && GetVelocity().Size2D() <= EmoteCancelSpeed)
+	{
+		UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+		const UAnimMontage* Active = AnimInstance ? AnimInstance->GetCurrentActiveMontage() : nullptr;
+		const bool bBusy = Active && Active != ActiveEmoteMontage;
+		if (AnimInstance && !bBusy)
+		{
+			if (Slot.Montage)
+			{
+				ActiveEmoteMontage = Slot.Montage;
+				PlayAnimMontage(Slot.Montage, 1.f);
+			}
+			else
+			{
+				// 애니메이션을 바로 몽타주로 만들어 재생 (기존 몽타주와 같은 DefaultSlot)
+				ActiveEmoteMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(Slot.Sequence, TEXT("DefaultSlot"), 0.2f, 0.2f, 1.f, 1);
+			}
+		}
+	}
+}
+
+void ACTCharacter::UpdateEmoteMontage()
+{
+	if (!ActiveEmoteMontage) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(ActiveEmoteMontage))
+	{
+		ActiveEmoteMontage = nullptr;
+		return;
+	}
+
+	// 움직이거나 점프하면 동작을 끊음
+	if (GetCharacterMovement()->IsFalling() || GetVelocity().Size2D() > EmoteCancelSpeed || IsGhost())
+	{
+		AnimInstance->Montage_Stop(ActiveEmoteMontage->BlendOut.GetBlendTime(), ActiveEmoteMontage);
+		ActiveEmoteMontage = nullptr;
+	}
 }
 
 void ACTCharacter::MulticastPlayHitSfx_Implementation(ECTSfx Sfx)

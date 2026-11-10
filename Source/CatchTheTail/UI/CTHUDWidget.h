@@ -287,6 +287,11 @@ private:
 	bool bScoreboardDirty = true;
 
 	int32 LastCountdownNumber = -1;
+
+	// 카운트다운 아래 글자(Label_Countdown): 기본은 "라운드 시작", 마지막 라운드는 "라운드 종료"
+	void UpdateCountdownLabel(bool bFinalRound);
+	FText CountdownLabelDefault;
+	bool bCountdownLabelCached = false;
 	int32 LastTailCount = INDEX_NONE;
 	bool bLastIsGhost = false;
 };

@@ -17,7 +17,7 @@ public class CatchTheTail : ModuleRules
 		// Slate / SlateCore: UMG 위젯 내부에서 쓰는 UI 기반 모듈
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"Slate", "SlateCore"
+			"Slate", "SlateCore", "EngineSettings"
 		});
 
 		// Uncomment if you are using online features

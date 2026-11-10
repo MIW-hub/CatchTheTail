@@ -16,6 +16,8 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
+#include "GameFramework/PlayerStart.h"
 #include "Navigation/PathFollowingComponent.h"
 
 ACTAIController::ACTAIController()
@@ -42,8 +44,28 @@ void ACTAIController::Tick(float DeltaSeconds)
 	const UWorld* World = GetWorld();
 	if (!World || !HasAuthority()) { return; }
 
-	// 직선 이동 중이면 목적지 쪽으로 입력
 	ACTCharacter* Me = Cast<ACTCharacter>(GetPawn());
+	const double TickNow = World->GetTimeSeconds();
+
+	// 꼬리 대결 중이거나 잡힌 동작, 밀려 넘어지고 일어나는 동작이 재생되는 동안은 탐색, 이동을 멈춤. 끝난 뒤에도 잠깐 더 쉼
+	if (Me && (Me->IsGrappling() || Me->IsPlayingCaughtMontage() || Me->IsPlayingKnockdownMontage()))
+	{
+		PausedUntil = TickNow + GrappledPauseSeconds;
+	}
+	if (Me && TickNow < PausedUntil)
+	{
+		if (!bPaused)
+		{
+			bPaused = true;
+			bDirectMove = false;
+			StopMovement();
+			Me->AISetRun(false);
+		}
+		return;
+	}
+	bPaused = false;
+
+	// 직선 이동 중이면 목적지 쪽으로 입력
 	if (bDirectMove && Me)
 	{
 		FVector ToTarget = DirectMoveTarget - Me->GetActorLocation();
@@ -114,7 +136,7 @@ void ACTAIController::Think()
 	if (GameState->GetPhase() != ECTGamePhase::Playing || Me->IsBoothLocked())
 	{
 		Halt();
-		Me->AISetRun(false);
+		SetAIRun(*Me, false);
 		return;
 	}
 
@@ -126,7 +148,7 @@ void ACTAIController::Think()
 	{
 		if (GoToTailPickup(*Me, Now, /*bIgnoreHazards=*/true)) { return; }
 
-		Me->AISetRun(false);
+		SetAIRun(*Me, false);
 		if (GetMoveStatus() == EPathFollowingStatus::Idle && !bDirectMove && Now >= NextWanderTime)
 		{
 			NextWanderTime = Now + FMath::FRandRange(0.3f, 1.5f);
@@ -234,7 +256,7 @@ void ACTAIController::Think()
 			return;
 		}
 
-		Me->AISetRun(HunterDistance <= RunDistance);
+		SetAIRun(*Me, HunterDistance <= RunDistance);
 
 		if (Now >= NextMoveCommandTime || GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
@@ -258,7 +280,7 @@ void ACTAIController::Think()
 			return;
 		}
 
-		Me->AISetRun(Distance <= RunDistance * 2.f && Distance > 350.f);
+		SetAIRun(*Me, Distance <= RunDistance * 2.f && Distance > 350.f);
 
 		if (Now >= NextMoveCommandTime || GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
@@ -277,7 +299,7 @@ void ACTAIController::Think()
 		return;
 	}
 
-	Me->AISetRun(false);
+	SetAIRun(*Me, false);
 	if (GetMoveStatus() == EPathFollowingStatus::Idle && !bDirectMove && Now >= NextWanderTime)
 	{
 		NextWanderTime = Now + FMath::FRandRange(0.5f, 2.5f);
@@ -310,6 +332,22 @@ void ACTAIController::MoveToTarget(const ACTCharacter& Target, float AcceptRadiu
 	}
 }
 
+void ACTAIController::SetAIRun(ACTCharacter& Me, bool bRun)
+{
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+	if (bRun)
+	{
+		if (Me.GetRunState() == ECTRunState::Idle) { RunStartedAt = Now; }
+		Me.AISetRun(true);
+		return;
+	}
+
+	// 달리는 중이고 막 시작했으면 잠깐 더 유지
+	if (Me.GetRunState() == ECTRunState::Running && Now - RunStartedAt < RunMinHoldSeconds) { return; }
+	Me.AISetRun(false);
+}
+
 void ACTAIController::Halt()
 {
 	bDirectMove = false;
@@ -338,6 +376,7 @@ FVector ACTAIController::PickFleePoint(const FVector& MyLocation, const FVector&
 		float BestScore = -TNumericLimits<float>::Max();
 		FVector Best = FVector::ZeroVector;
 		bool bFound = false;
+		const FVector Center = GetPlayAreaCenter();
 		for (int32 Sample = 0; Sample < 10; ++Sample)
 		{
 			FNavLocation Point;
@@ -346,7 +385,9 @@ FVector ACTAIController::PickFleePoint(const FVector& MyLocation, const FVector&
 
 			FVector ToPoint = Point.Location - MyLocation;
 			ToPoint.Z = 0.f;
-			const float Score = FVector::Dist2D(Point.Location, HunterLocation) + 400.f * FVector::DotProduct(ToPoint.GetSafeNormal(), Away);
+			float Score = FVector::Dist2D(Point.Location, HunterLocation) + 400.f * FVector::DotProduct(ToPoint.GetSafeNormal(), Away);
+			// 가운데에서 멀수록 점수를 깎아 가장자리로만 도망치지 않게 함
+			if (bPreferMapCenter) { Score -= FleeCenterWeight * FVector::Dist2D(Point.Location, Center); }
 			if (Score > BestScore)
 			{
 				BestScore = Score;
@@ -361,18 +402,74 @@ FVector ACTAIController::PickFleePoint(const FVector& MyLocation, const FVector&
 	return MyLocation + Away * FleeSampleRadius * 0.6f;
 }
 
+FVector ACTAIController::GetPlayAreaCenter() const
+{
+	if (bUseCenterOverride) { return CenterOverride; }
+	if (bCenterCached) { return CachedCenter; }
+
+	// NavMesh 범위(볼륨)들을 합친 상자의 가운데
+	FBox Bounds(ForceInit);
+	for (TActorIterator<ANavMeshBoundsVolume> It(GetWorld()); It; ++It)
+	{
+		Bounds += It->GetComponentsBoundingBox();
+	}
+
+	// 볼륨이 없으면 플레이어 시작점들의 평균
+	if (!Bounds.IsValid)
+	{
+		for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+		{
+			Bounds += It->GetActorLocation();
+		}
+	}
+
+	CachedCenter = Bounds.IsValid ? Bounds.GetCenter() : FVector::ZeroVector;
+	bCenterCached = true;
+	return CachedCenter;
+}
+
 FVector ACTAIController::PickWanderPoint(const FVector& MyLocation) const
 {
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
 	{
+		const FVector Center = GetPlayAreaCenter();
+		const bool bCenterMode = bPreferMapCenter;
+
+		// 가운데에서 너무 멀어졌으면 가운데 구역에서 목적지를 고름
+		if (bCenterMode && FVector::Dist2D(MyLocation, Center) > CenterPullDistance)
+		{
+			FNavLocation Pulled;
+			for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+			{
+				if (!Nav->GetRandomReachablePointInRadius(Center, CenterRoamRadius, Pulled)) { continue; }
+				if (!IsNearHazardPath(Pulled.Location)) { return Pulled.Location; }
+			}
+		}
+
+		// 여러 곳을 뽑아 가운데에 가까운 곳을 선호 (WanderCenterBias 만큼). 위험물 근처는 제외
 		FNavLocation Point;
 		FVector Fallback = MyLocation;
+		float BestScore = -TNumericLimits<float>::Max();
+		FVector Best = MyLocation;
+		bool bFound = false;
 		for (int32 Attempt = 0; Attempt < 8; ++Attempt)
 		{
 			if (!Nav->GetRandomReachablePointInRadius(MyLocation, WanderRadius, Point)) { continue; }
 			Fallback = Point.Location;
-			if (!IsNearHazardPath(Point.Location)) { return Point.Location; } // 도로, 통나무 길, 드럼통 근처는 피함
+			if (IsNearHazardPath(Point.Location)) { continue; } // 도로, 통나무 길, 드럼통 근처는 피함
+
+			// 가까울수록 높은 점수 + 무작위. 편향이 0이면 완전 무작위
+			const float DistToCenter = FVector::Dist2D(Point.Location, Center);
+			const float CenterScore = bCenterMode ? -DistToCenter / FMath::Max(CenterRoamRadius, 1.f) : 0.f;
+			const float Score = CenterScore * WanderCenterBias + FMath::FRand() * (1.f - WanderCenterBias);
+			if (Score > BestScore)
+			{
+				BestScore = Score;
+				Best = Point.Location;
+				bFound = true;
+			}
 		}
+		if (bFound) { return Best; }
 		if (!Fallback.Equals(MyLocation)) { return Fallback; }
 	}
 
@@ -532,7 +629,7 @@ bool ACTAIController::AvoidHazards(ACTCharacter& Me, double Now)
 
 	// 피할 곳: 위험 반경 밖. 달려서 빠르게
 	Halt();
-	Me.AISetRun(true);
+	SetAIRun(Me, true);
 	const FVector Destination = MyLocation + BestEscape * (BestRadius + 300.f);
 	FVector Target = Destination;
 	if (UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld()))
@@ -651,7 +748,7 @@ bool ACTAIController::GoToTailPickup(ACTCharacter& Me, double Now, bool bIgnoreH
 
 	// 달려서 가고, 가까우면 걸어서 정확히 닿음
 	const float Distance = FVector::Dist2D(MyLocation, Goal);
-	Me.AISetRun(Distance > 350.f);
+	SetAIRun(Me, Distance > 350.f);
 	if (Now >= NextMoveCommandTime || GetMoveStatus() == EPathFollowingStatus::Idle)
 	{
 		NextMoveCommandTime = Now + 0.2;

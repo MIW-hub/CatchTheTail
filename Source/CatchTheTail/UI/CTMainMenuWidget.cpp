@@ -1,6 +1,7 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTMainMenuWidget.h"
 #include "CTButtonHoverEffect.h"
+#include "CTVersionLabel.h"
 #include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameInstance.h"
 #include "CTSettingsWidget.h"
@@ -23,6 +24,9 @@ void UCTMainMenuWidget::NativeConstruct()
 
 	// 버튼 소리 (올림 / 누름)
 	UCTAudioSubsystem::ApplyUISounds(this);
+
+	// 오른쪽 아래에 버전 표시
+	CTVersionLabel::Show(GetWorld(), VersionLabel);
 
 	if (Button_Start)       { Button_Start->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleStartClicked); }
 	if (Button_FindLobby)   { Button_FindLobby->OnClicked.AddUniqueDynamic(this, &UCTMainMenuWidget::HandleFindLobbyClicked); }
@@ -79,6 +83,8 @@ void UCTMainMenuWidget::RefreshPlayerName()
 
 void UCTMainMenuWidget::NativeDestruct()
 {
+	CTVersionLabel::Hide(GetWorld(), VersionLabel);
+
 	if (UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>())
 	{
 		GameInstance->OnMenuMessage.RemoveDynamic(this, &UCTMainMenuWidget::HandleMessage);

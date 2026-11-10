@@ -57,6 +57,59 @@ namespace
 		return FText::FromName(Entry.Id);
 	}
 
+	// 현재 언어에 맞는 문구 (한/영/일)
+	FText Loc3(const TCHAR* Ko, const TCHAR* En, const TCHAR* Ja)
+	{
+		const FString Language = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
+		if (Language == TEXT("ko")) { return FText::FromString(Ko); }
+		if (Language == TEXT("ja")) { return FText::FromString(Ja); }
+		return FText::FromString(En);
+	}
+
+	bool IsCodeKeyId(FName Id)
+	{
+		return Id == CTCodeKeys::EmoteMenu || Id == CTCodeKeys::Phone || Id == CTCodeKeys::GrabAlt;
+	}
+
+	FKey DefaultCodeKey(FName Id)
+	{
+		if (Id == CTCodeKeys::EmoteMenu) { return EKeys::R; }
+		if (Id == CTCodeKeys::Phone) { return EKeys::F; }
+		if (Id == CTCodeKeys::GrabAlt) { return EKeys::G; }
+		return EKeys::Invalid;
+	}
+
+	// 숫자 키 1~9는 이모트용이라 다른 동작에 못 씀
+	bool IsEmoteNumberKey(const FKey& Key)
+	{
+		static const FKey Numbers[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
+		for (const FKey& Number : Numbers) { if (Number == Key) { return true; } }
+		return false;
+	}
+
+	FText DescriptionFor(FName Id)
+	{
+		if (Id == TEXT("Move")) { return Loc3(TEXT("캐릭터를 움직여요."), TEXT("Move your character."), TEXT("キャラクターを動かします。")); }
+		if (Id == TEXT("Look")) { return Loc3(TEXT("마우스로 시점을 돌려요."), TEXT("Turn the camera with the mouse."), TEXT("マウスで視点を回します。")); }
+		if (Id == TEXT("Jump")) { return Loc3(TEXT("점프해요."), TEXT("Jump."), TEXT("ジャンプします。")); }
+		if (Id == TEXT("Dash") || Id == TEXT("Run")) { return Loc3(TEXT("잠깐 빠르게 달려요. 쓰고 나면 쉬어야 해요."), TEXT("Sprint for a moment. It needs a short rest after."), TEXT("少しの間速く走ります。使ったあとは休みが必要です。")); }
+		if (Id == TEXT("Grab")) { return Loc3(TEXT("상대 꼬리를 잡아요. 잡은 뒤에는 연타해서 당겨요."), TEXT("Grab an opponent's tail, then mash to pull it."), TEXT("相手のしっぽをつかみます。つかんだあとは連打で引っ張ります。")); }
+		if (Id == TEXT("Push")) { return Loc3(TEXT("앞에 있는 상대를 밀어내요."), TEXT("Shove the player in front of you."), TEXT("前にいる相手を押します。")); }
+		if (Id == TEXT("Voice")) { return Loc3(TEXT("누르고 있는 동안 말해요. 가까이 있는 사람에게 들려요."), TEXT("Hold to talk. Nearby players can hear you."), TEXT("押している間話せます。近くの人に聞こえます。")); }
+		if (Id == CTCodeKeys::EmoteMenu) { return Loc3(TEXT("이모트 창을 열고 닫아요. 숫자 키에 등록할 수 있어요."), TEXT("Open or close the emote menu. Assign emotes to the number keys."), TEXT("エモートウィンドウを開閉します。数字キーに登録できます。")); }
+		if (Id == CTCodeKeys::Phone) { return Loc3(TEXT("전화부스를 써요. 유령일 때는 다른 자리로 한 번 옮겨요."), TEXT("Use the phone booth. As a ghost, move to another spot once."), TEXT("電話ボックスを使います。ゴーストのときは一度だけ別の場所へ移動します。")); }
+		if (Id == CTCodeKeys::GrabAlt) { return Loc3(TEXT("잡기 보조 키예요. 꼬리 대결 중에는 연타해요."), TEXT("Second key for Grab. Mash it during a tail struggle."), TEXT("つかむの補助キーです。しっぽの勝負中は連打します。")); }
+		return FText::GetEmpty();
+	}
+
+	FText CodeKeyDisplayName(FName Id)
+	{
+		if (Id == CTCodeKeys::EmoteMenu) { return Loc3(TEXT("이모트 창"), TEXT("Emote Menu"), TEXT("エモート")); }
+		if (Id == CTCodeKeys::Phone) { return Loc3(TEXT("전화 / 유령 이동"), TEXT("Phone / Ghost Move"), TEXT("電話 / ゴースト移動")); }
+		if (Id == CTCodeKeys::GrabAlt) { return Loc3(TEXT("잡기 (보조)"), TEXT("Grab (Alt)"), TEXT("つかむ (補助)")); }
+		return FText::GetEmpty();
+	}
+
 	// 원본 컨텍스트의 첫 키보드/마우스 키
 	FKey FirstKeyboardMouseKey(const UInputMappingContext* Context, const UInputAction* Action)
 	{
@@ -129,6 +182,12 @@ void UCTSettingsSubsystem::CommitChange()
 {
 	SaveSettings();
 	OnSettingsChanged.Broadcast();
+}
+
+void UCTSettingsSubsystem::SaveEmoteLoadout(const TArray<int32>& Loadout)
+{
+	Data.EmoteLoadout = Loadout;
+	SaveSettings();
 }
 
 // 소리 / 화면 / 접근성
@@ -377,8 +436,27 @@ void UCTSettingsSubsystem::ResetToDefaults()
 
 // 조작 (키 변경)
 
+FKey UCTSettingsSubsystem::GetCodeKey(FName CodeKeyId) const
+{
+	if (const FKey* Overridden = Data.KeyOverrides.Find(CodeKeyId))
+	{
+		return *Overridden;
+	}
+	return DefaultCodeKey(CodeKeyId);
+}
+
+void UCTSettingsSubsystem::ResetKeyBindings()
+{
+	Data.KeyOverrides.Empty();
+	EffectiveContexts.Empty();
+	ApplyKeyBindingsToLocalPlayer();
+	CommitChange();
+}
+
 FKey UCTSettingsSubsystem::GetDefaultKey(FName ActionId) const
 {
+	if (IsCodeKeyId(ActionId)) { return DefaultCodeKey(ActionId); }
+
 	const FCTControlEntry* Entry = FindEntry(ActionId);
 	if (!Entry) { return EKeys::Invalid; }
 
@@ -387,6 +465,8 @@ FKey UCTSettingsSubsystem::GetDefaultKey(FName ActionId) const
 
 FKey UCTSettingsSubsystem::GetCurrentKey(FName ActionId) const
 {
+	if (IsCodeKeyId(ActionId)) { return GetCodeKey(ActionId); }
+
 	if (const FKey* Overridden = Data.KeyOverrides.Find(ActionId))
 	{
 		return *Overridden;
@@ -396,6 +476,15 @@ FKey UCTSettingsSubsystem::GetCurrentKey(FName ActionId) const
 
 bool UCTSettingsSubsystem::IsKeyUsedByOther(FName ActionId, FKey Key) const
 {
+	// 숫자 키 1~9는 이모트 전용
+	if (IsEmoteNumberKey(Key)) { return true; }
+
+	// 코드에서 받는 키(이모트 창, 전화, 잡기 보조)와도 겹치면 안 됨
+	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt })
+	{
+		if (CodeId != ActionId && GetCodeKey(CodeId) == Key) { return true; }
+	}
+
 	TSet<const UInputMappingContext*> Contexts;
 	TSet<const UInputAction*> RebindableActions;
 
@@ -443,6 +532,7 @@ TArray<FCTControlRow> UCTSettingsSubsystem::GetControlRows() const
 		Row.Id = Entry.Id;
 		Row.DisplayName = DisplayNameFor(Entry);
 		Row.bRebindable = Entry.bRebindable;
+		Row.Description = DescriptionFor(Entry.Id);
 
 		if (Entry.bRebindable)
 		{
@@ -465,13 +555,42 @@ TArray<FCTControlRow> UCTSettingsSubsystem::GetControlRows() const
 		Rows.Add(Row);
 	}
 
+	// 코드에서 받는 키: 이모트 창, 전화, 잡기 보조 (바꿀 수 있음)
+	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt })
+	{
+		FCTControlRow Row;
+		Row.Id = CodeId;
+		Row.DisplayName = CodeKeyDisplayName(CodeId);
+		Row.Description = DescriptionFor(CodeId);
+		Row.bRebindable = true;
+		Row.Keys.Add(GetCodeKey(CodeId));
+		Rows.Add(Row);
+	}
+
+	// 안내만 하는 줄 (바꿀 수 없음)
+	{
+		FCTControlRow EmoteKeys;
+		EmoteKeys.Id = TEXT("EmoteKeys");
+		EmoteKeys.DisplayName = Loc3(TEXT("이모트 사용"), TEXT("Use Emote"), TEXT("エモート使用"));
+		EmoteKeys.Description = Loc3(TEXT("등록해 둔 이모트를 바로 써요."), TEXT("Play the emote you assigned to that number."), TEXT("登録したエモートをすぐ使います。"));
+		EmoteKeys.KeysLabel = FText::FromString(TEXT("1 ~ 9"));
+		Rows.Add(EmoteKeys);
+
+		FCTControlRow MashClick;
+		MashClick.Id = TEXT("MashClick");
+		MashClick.DisplayName = Loc3(TEXT("대결 연타 (마우스)"), TEXT("Struggle Mash (Mouse)"), TEXT("勝負の連打 (マウス)"));
+		MashClick.Description = Loc3(TEXT("꼬리 대결 중에는 마우스 왼쪽 클릭으로도 연타할 수 있어요."), TEXT("During a tail struggle, left-click also counts as a mash."), TEXT("しっぽの勝負中は左クリックでも連打できます。"));
+		MashClick.Keys.Add(EKeys::LeftMouseButton);
+		Rows.Add(MashClick);
+	}
+
 	return Rows;
 }
 
 bool UCTSettingsSubsystem::SetKeyBinding(FName ActionId, FKey NewKey, FText& OutError)
 {
 	const FCTControlEntry* Entry = FindEntry(ActionId);
-	if (!Entry || !Entry->bRebindable)
+	if (!IsCodeKeyId(ActionId) && (!Entry || !Entry->bRebindable))
 	{
 		OutError = NSLOCTEXT("CT", "Key_NotRebindable", "이 동작의 키는 바꿀 수 없습니다.");
 		return false;
@@ -505,7 +624,7 @@ bool UCTSettingsSubsystem::SetKeyBinding(FName ActionId, FKey NewKey, FText& Out
 		Data.KeyOverrides.Add(ActionId, NewKey);
 	}
 
-	ApplyKeyBindingsToLocalPlayer();
+	if (!IsCodeKeyId(ActionId)) { ApplyKeyBindingsToLocalPlayer(); } // 코드 키는 매핑 재적용 불필요 (매 프레임 읽음)
 	CommitChange();
 	OutError = FText::GetEmpty();
 	return true;

@@ -30,7 +30,23 @@ struct FCTControlRow
 
 	UPROPERTY(BlueprintReadOnly, Category = "CT|Settings")
 	bool bRebindable = false;
+
+	// 이 키가 하는 일 설명 (설정 창에서 줄 아래에 작게 보임)
+	UPROPERTY(BlueprintReadOnly, Category = "CT|Settings")
+	FText Description;
+
+	// 키 이름 대신 보일 글자 (예: "1 ~ 9"). 비면 Keys 이름
+	UPROPERTY(BlueprintReadOnly, Category = "CT|Settings")
+	FText KeysLabel;
 };
+
+// 코드에서 직접 받는 키 (입력 매핑 에셋 밖). 설정 창에서 바꿀 수 있음
+namespace CTCodeKeys
+{
+	inline const FName EmoteMenu(TEXT("EmoteMenu"));  // 이모트 창 열기/닫기 (기본 R)
+	inline const FName Phone(TEXT("Phone"));          // 전화부스, 유령 이동 (기본 F)
+	inline const FName GrabAlt(TEXT("GrabAlt"));      // 잡기 보조 / 꼬리 대결 연타 (기본 G)
+}
 
 UCLASS()
 class CATCHTHETAIL_API UCTSettingsSubsystem : public UGameInstanceSubsystem
@@ -170,6 +186,14 @@ public:
 	// 로컬 플레이어에 키 재적용. 메뉴에선 무동작
 	void ApplyKeyBindingsToLocalPlayer();
 
+	// 코드에서 받는 키의 현재 키 (바꾼 키 우선, 없으면 기본 R, F, G)
+	UFUNCTION(BlueprintPure, Category = "CT|Settings")
+	FKey GetCodeKey(FName CodeKeyId) const;
+
+	// 키 설정만 처음으로 (소리, 화면 등 다른 설정은 그대로)
+	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
+	void ResetKeyBindings();
+
 	// 개인 설정
 	// 이름 변경 가능 여부 (Allow Name Change)
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")
@@ -178,6 +202,12 @@ public:
 	// 이름 변경. 불허/규칙 위반 시 false + 이유
 	UFUNCTION(BlueprintCallable, Category = "CT|Settings")
 	bool ChangePlayerName(const FString& NewName, FText& OutError);
+
+	// 저장된 이모트 등록 목록 (비어 있으면 저장된 적 없음)
+	const TArray<int32>& GetSavedEmoteLoadout() const { return Data.EmoteLoadout; }
+
+	// 이모트 등록 목록 저장
+	void SaveEmoteLoadout(const TArray<int32>& Loadout);
 
 	// 행동의 현재 키 (바꾼 키 우선). HUD 키 안내용
 	UFUNCTION(BlueprintPure, Category = "CT|Settings")

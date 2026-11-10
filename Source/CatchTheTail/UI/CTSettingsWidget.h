@@ -27,6 +27,8 @@ class CATCHTHETAIL_API UCTSettingsWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	UCTSettingsWidget(const FObjectInitializer& ObjectInitializer);
+
 	// 닫기 시 호출
 	UPROPERTY(BlueprintAssignable, Category = "CT|Settings")
 	FCTSettingsCloseSignature OnCloseRequested;
@@ -228,6 +230,10 @@ private:
 
 	UFUNCTION()
 	void HandleKeyRebound(FName ActionId, FKey NewKey);
+
+	// 키 설정만 처음으로
+	UFUNCTION()
+	void HandleResetKeysClicked();
 
 	UFUNCTION()
 	void HandleChangeNameClicked();

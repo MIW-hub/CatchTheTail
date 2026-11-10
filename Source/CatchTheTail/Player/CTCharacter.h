@@ -12,20 +12,79 @@ class UCameraComponent;
 class UInputAction;
 class UCurveFloat;
 class UAnimMontage;
+class UAnimSequence;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class ACTTail;
 class ACTBush;
 class UCTTongueComponent;
+class UCTEmoteBubbleComponent;
+class UCTGrappleComponent;
+class UTexture2D;
 struct FInputActionValue;
+
+// 이모트 한 칸 (숫자 키 1, 2, 3...에 순서대로 대응)
+USTRUCT(BlueprintType)
+struct FCTEmoteSlot
+{
+	GENERATED_BODY()
+
+	// 말풍선 안에 채울 그림 (이모지). 아틀라스를 쓰면 비워 둠
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UTexture2D> Icon;
+
+	// 아틀라스(여러 이모지가 모인 한 장의 그림). 있으면 Icon 대신 이 그림의 AtlasCell 칸만 잘라 씀
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UTexture2D> Atlas;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "1"))
+	int32 AtlasColumns = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "1"))
+	int32 AtlasRows = 3;
+
+	// 칸 번호. 왼쪽 위가 0, 오른쪽으로 갔다가 다음 줄 (3x3이면 0~8)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	int32 AtlasCell = 0;
+
+	// 캐릭터가 재생할 동작. 비면 말풍선만 뜸
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UAnimMontage> Montage;
+
+	// 몽타주 대신 애니메이션을 바로 넣을 수 있음 (몽타주가 비어 있을 때만 사용, 코드가 몽타주로 만들어 재생)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UAnimSequence> Sequence;
+
+	// 설정 화면 등에 쓸 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	FText Label;
+
+	// 아틀라스에서 이 칸의 UV 범위. 아틀라스가 없으면 전체(0~1)
+	void GetUVRegion(FVector2D& OutMin, FVector2D& OutMax) const
+	{
+		OutMin = FVector2D(0.0, 0.0);
+		OutMax = FVector2D(1.0, 1.0);
+		if (!Atlas) { return; }
+		const int32 Columns = FMath::Max(1, AtlasColumns);
+		const int32 Rows = FMath::Max(1, AtlasRows);
+		const FVector2D CellSize(1.0 / Columns, 1.0 / Rows);
+		OutMin = FVector2D((AtlasCell % Columns) * CellSize.X, FMath::Clamp(AtlasCell / Columns, 0, Rows - 1) * CellSize.Y);
+		OutMax = OutMin + CellSize;
+	}
+
+	UTexture2D* GetTexture() const { return Atlas ? Atlas.Get() : Icon.Get(); }
+};
 
 UCLASS()
 class CATCHTHETAIL_API ACTCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
+	// 잡기 대결이 달리기 해제, 이동 잠금 등에 접근
+	friend class UCTGrappleComponent;
+
 public:
-	ACTCharacter();
+	ACTCharacter(const FObjectInitializer& ObjectInitializer);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -116,6 +175,40 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Animation")
 	UAnimMontage* GetActionMontage(ECTCharacterAction Action) const;
 
+	// 팔 늘리기 (만화식 당기기). AnimBP 의 Transform (Modify) Bone 에 연결해서 사용
+	// 팔(Arm, ForeArm)은 GetArmStretchScale3D, 손(Hand)은 GetArmStretchHandScale3D 를 Scale 에 넣음
+	UFUNCTION(BlueprintCallable, Category = "CT|Animation")
+	void SetArmStretchTarget(float NewScale) { ArmStretchTarget = FMath::Max(NewScale, 0.1f); }
+
+	// 현재 늘어난 배율 (1 = 기본)
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	float GetArmStretch() const { return ArmStretch; }
+
+	// 잡기 중 팔이 늘어나는 최대 배율
+	float GetArmStretchGrabScale() const { return ArmStretchGrabScale; }
+
+	// 꼬리 잡기 F 연타 대결
+	UCTGrappleComponent* GetGrapple() const { return Grapple; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Grapple")
+	bool IsGrappling() const;
+
+	// 잡힌 동작(CaughtMontage)이 재생 중인가
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	bool IsPlayingCaughtMontage() const;
+
+	// 밀려 넘어지는 동작과 일어나는 동작이 재생 중인가 (경직 상태)
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	bool IsPlayingKnockdownMontage() const;
+
+	// 팔 뼈 스케일: 뼈 길이 축만 ArmStretch, 나머지 1
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	FVector GetArmStretchScale3D() const;
+
+	// 손 뼈 스케일: 팔이 늘어난 만큼 되돌려 손 크기 유지
+	UFUNCTION(BlueprintPure, Category = "CT|Animation")
+	FVector GetArmStretchHandScale3D() const;
+
 	// 서버 전용 함수
 	// 같은 이름이면 값 갱신
 	void AddSpeedBuff(FName BuffId, float Value);
@@ -169,6 +262,20 @@ public:
 	// 서버 호출: 기믹에 맞은 소리를 전원 화면에서 재생
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayHitSfx(ECTSfx Sfx);
+
+	// 이모트 재생 요청. SlotIndex 는 숫자 키 순서(0이 키 1번)이고 EmoteLoadout 에 등록된 이모트가 나옴. 서버 확인 뒤 전원 화면에 동작과 말풍선이 나옴
+	UFUNCTION(BlueprintCallable, Category = "CT|Emote")
+	void RequestEmote(int32 SlotIndex);
+
+	// 숫자 키 자리(0부터)에 이모트 목록의 LibraryIndex 번 이모트를 등록 (이 컴퓨터만)
+	UFUNCTION(BlueprintCallable, Category = "CT|Emote")
+	void SetEmoteLoadout(int32 KeyPosition, int32 LibraryIndex);
+
+	UFUNCTION(BlueprintPure, Category = "CT|Emote")
+	const TArray<FCTEmoteSlot>& GetEmoteLibrary() const { return EmoteSlots; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Emote")
+	const TArray<int32>& GetEmoteLoadout() const { return EmoteLoadout; }
 
 	// 서버 호출: 날아가는 방향(수평)에 따라 넘어지는 연출을 고름. 보는 방향으로 날아가면 앞으로 엎어지고, 반대면 뒤로 넘어짐
 	void PlayKnockedDown(const FVector& KnockDirection);
@@ -237,6 +344,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Camera", meta = (ClampMin = "30", ClampMax = "120"))
 	float CameraFieldOfView = 70.f;
 
+	// 점프
+	// 점프 시작 속도(cm/s). 높이 = 속도^2 / (2 x 980 x 중력배율). 예전 값은 속도 700, 배율 1 (높이 약 250cm, 체공 1.4초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Jump", meta = (ClampMin = "100"))
+	float JumpVelocity = 860.f;
+
+	// 올라갈 때 중력 배율. 높이를 그대로 두려면 JumpVelocity 와 함께 올림 (속도^2 / 배율 이 같으면 높이 같음)
+	// 떨어질 때 추가 배율은 캐릭터무브먼트의 FallGravityMultiplier
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Jump", meta = (ClampMin = "0.1"))
+	float JumpGravityScale = 1.5f;
+
 	// 입력
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Input")
 	TObjectPtr<UInputAction> MoveAction;
@@ -263,11 +380,31 @@ protected:
 
 	// 이 거리(cm) 안에서는 목소리가 최대 크기
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice", meta = (ClampMin = "0"))
-	float VoiceInnerRadius = 125.f;
+	float VoiceInnerRadius = 300.f;
 
 	// 최대 크기 거리에서 이만큼(cm) 더 멀어지면 안 들림
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice", meta = (ClampMin = "0"))
-	float VoiceFalloffDistance = 375.f;
+	float VoiceFalloffDistance = 1500.f;
+
+	// 이모트 목록 (전체). 기본으로 아틀라스 3장의 27개가 들어 있음. BP에서 그림과 동작을 바꿀 수 있음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote")
+	TArray<FCTEmoteSlot> EmoteSlots;
+
+	// 숫자 키 1, 2, 3...에 등록된 이모트 (EmoteSlots 번호). 칸 수만큼 키가 연결됨 (최대 9)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote")
+	TArray<int32> EmoteLoadout = { 18, 19, 2, 24 }; // 안녕!, 고마워!, 도와줘!, 흥! (모두 동작이 연결된 칸)
+
+	// 연속으로 누르는 것을 막는 간격(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote", meta = (ClampMin = "0"))
+	float EmoteCooldownSeconds = 0.5f;
+
+	// 이모트 동작 중 이 속도(cm/s)보다 빨라지면 동작만 끊음 (말풍선은 유지)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote", meta = (ClampMin = "0"))
+	float EmoteCancelSpeed = 50.f;
+
+	// 머리 위 말풍선
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Emote")
+	TObjectPtr<UCTEmoteBubbleComponent> EmoteBubble;
 
 	// 애니메이션 몽타주
 	// 잡기 (왼손)
@@ -345,6 +482,26 @@ protected:
 	// 행동 몽타주 재생 속도
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0.1"))
 	float ActionMontagePlayRate = 1.f;
+
+	// 꼬리 잡기 대결 (F 연타 줄다리기)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Grapple")
+	TObjectPtr<UCTGrappleComponent> Grapple;
+
+	// true면 AnimBP 없이 코드로 팔 뼈를 직접 늘림. AnimBP 에서 직접 연결했다면 끔
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation|ArmStretch")
+	bool bApplyArmStretchToPose = true;
+
+	// 팔 늘리기: 뼈의 길이 축. 길이 대신 굵어지면 다른 축으로 바꿈 (X, Y, Z 중 하나만 1)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation|ArmStretch")
+	FVector ArmStretchAxis = FVector(1.0, 0.0, 0.0);
+
+	// 잡기 몽타주 중 팔이 최대로 늘어나는 배율 (1 = 안 늘림)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation|ArmStretch", meta = (ClampMin = "1"))
+	float ArmStretchGrabScale = 1.5f;
+
+	// 늘어나고 줄어드는 속도
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation|ArmStretch", meta = (ClampMin = "0.1"))
+	float ArmStretchInterpSpeed = 14.f;
 
 	// 혀
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Tongue")
@@ -513,6 +670,9 @@ protected:
 	void OnRunPressed();
 	void OnRunReleased();
 	void OnGrabPressed();
+
+	// 마우스 왼쪽 클릭: 꼬리 줄다리기 중에만 게이지 연타로 인정
+	void OnGrappleMouseClick();
 	void OnPushPressed();
 	void OnVoicePressed();
 	void OnVoiceReleased();
@@ -539,6 +699,48 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerPush();
+
+	// 이모트 고르는 창 (R 키로 열고 닫음)
+	void ToggleEmoteMenu();
+	void CloseEmoteMenu();
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UCTEmoteSelectWidget> EmoteMenu;
+
+	bool bEmoteMenuPrevCursor = false;
+
+	// 이모트 창 키를 눌러 열고 닫은 마지막 시각 (너무 빠른 반복 방지)
+	double LastEmoteMenuToggleTime = -1000.0;
+
+	// 이모트
+	void OnEmoteKeyPressed(int32 SlotIndex);
+
+	UFUNCTION(Server, Reliable)
+	void ServerPlayEmote(int32 SlotIndex);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastPlayEmote(int32 SlotIndex);
+
+	// 이모트 동작을 이동하면 끊음
+	void UpdateEmoteMontage();
+
+	// 서버: 마지막 이모트 시각, 로컬: 마지막 입력 시각
+	double LastEmoteServerTime = -1000.0;
+	double LocalLastEmoteTime = -1000.0;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveEmoteMontage;
+
+	// 팔 늘리기: 매 틱 목표값으로 보간
+	void UpdateArmStretch(float DeltaSeconds);
+
+	// 포즈가 확정된 직후 팔 뼈를 늘림 (AnimBP 불필요)
+	void ApplyArmStretchToPose();
+	FDelegateHandle ArmStretchPoseHandle;
+
+	// 현재 배율 / 수동 목표 (줄다리기 등에서 SetArmStretchTarget 으로 지정)
+	float ArmStretch = 1.f;
+	float ArmStretchTarget = 1.f;
 
 	// 애니메이션
 	// 로컬에서만 몽타주 재생

@@ -12,7 +12,26 @@
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/Widget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Engine/Texture2D.h"
+#include "Styling/SlateBrush.h"
+#include "Styling/SlateTypes.h"
+#include "Internationalization/Culture.h"
+#include "Internationalization/Internationalization.h"
+#include "UObject/ConstructorHelpers.h"
+
+UCTSettingsWidget::UCTSettingsWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// 조작 한 줄 위젯 기본값. 블루프린트에 지정되지 않으면 조작 목록(키 변경)이 아예 안 보였음
+	static ConstructorHelpers::FClassFinder<UCTKeyBindEntryWidget> KeyEntryFinder(TEXT("/Game/UI/WBP_CTKeyBindEntryWidget"));
+	if (KeyEntryFinder.Succeeded())
+	{
+		KeyBindEntryClass = KeyEntryFinder.Class;
+	}
+}
 
 UCTSettingsSubsystem* UCTSettingsWidget::GetSettings() const
 {
@@ -144,6 +163,10 @@ void UCTSettingsWidget::BuildControlRows()
 
 	VerticalBox_Controls->ClearChildren();
 
+	// 설명 글자 / 초기화 버튼 글꼴은 기존 안내 글자(Text_ControlsMessage)를 따름
+	FSlateFontInfo DescFont = Text_ControlsMessage ? Text_ControlsMessage->GetFont() : FSlateFontInfo();
+	DescFont.Size = 14;
+
 	for (const FCTControlRow& Row : Settings->GetControlRows())
 	{
 		UCTKeyBindEntryWidget* Entry = CreateWidget<UCTKeyBindEntryWidget>(this, KeyBindEntryClass);
@@ -152,7 +175,80 @@ void UCTSettingsWidget::BuildControlRows()
 		Entry->Setup(Row);
 		Entry->OnKeyRebound.AddUniqueDynamic(this, &UCTSettingsWidget::HandleKeyRebound);
 		VerticalBox_Controls->AddChildToVerticalBox(Entry);
+
+		// 줄 아래에 작은 설명
+		if (!Row.Description.IsEmpty() && WidgetTree)
+		{
+			UTextBlock* Description = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+			Description->SetText(Row.Description);
+			Description->SetFont(DescFont);
+			Description->SetColorAndOpacity(FSlateColor(FLinearColor(0.36f, 0.22f, 0.42f, 1.f))); // 프로젝트 UI의 짙은 보라 계열
+			Description->SetAutoWrapText(true);
+			if (UVerticalBoxSlot* DescSlot = VerticalBox_Controls->AddChildToVerticalBox(Description))
+			{
+				DescSlot->SetPadding(FMargin(14.f, 0.f, 8.f, 12.f));
+			}
+		}
 	}
+
+	// 키 설정 초기화 버튼
+	if (WidgetTree)
+	{
+		UButton* ResetKeys = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
+		ResetKeys->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleResetKeysClicked);
+
+		// 프로젝트 UI의 노란 버튼 그림 (UI_Btn_Yellow_M)
+		if (UTexture2D* ButtonTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/Style/UI_Btn_Yellow_M.UI_Btn_Yellow_M")))
+		{
+			FSlateBrush Normal;
+			Normal.SetResourceObject(ButtonTexture);
+			Normal.ImageSize = FVector2D(ButtonTexture->GetSizeX(), ButtonTexture->GetSizeY());
+			Normal.DrawAs = ESlateBrushDrawType::Box;
+			Normal.Margin = FMargin(0.18f, 0.25f, 0.18f, 0.35f);
+
+			FSlateBrush Hovered = Normal;
+			Hovered.TintColor = FSlateColor(FLinearColor(1.f, 0.95f, 0.8f, 1.f));
+			FSlateBrush Pressed = Normal;
+			Pressed.TintColor = FSlateColor(FLinearColor(0.85f, 0.8f, 0.7f, 1.f));
+
+			FButtonStyle Style;
+			Style.SetNormal(Normal).SetHovered(Hovered).SetPressed(Pressed);
+			Style.SetNormalPadding(FMargin(30.f, 8.f, 30.f, 18.f));
+			Style.SetPressedPadding(FMargin(30.f, 14.f, 30.f, 12.f));
+			ResetKeys->SetStyle(Style);
+		}
+		else
+		{
+			ResetKeys->SetBackgroundColor(FLinearColor(1.f, 0.78f, 0.f, 1.f));
+		}
+
+		const FString Language = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
+		UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Label->SetText(FText::FromString(Language == TEXT("ko") ? TEXT("키 설정 초기화") : (Language == TEXT("ja") ? TEXT("キー設定をリセット") : TEXT("Reset Key Bindings"))));
+		FSlateFontInfo ButtonFont = DescFont;
+		ButtonFont.Size = 18;
+		Label->SetFont(ButtonFont);
+		Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.1f, 0.1f, 0.1f, 1.f)));
+		ResetKeys->AddChild(Label);
+
+		if (UVerticalBoxSlot* ButtonSlot = VerticalBox_Controls->AddChildToVerticalBox(ResetKeys))
+		{
+			ButtonSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 4.f));
+			ButtonSlot->SetHorizontalAlignment(HAlign_Right);
+		}
+	}
+}
+
+void UCTSettingsWidget::HandleResetKeysClicked()
+{
+	UCTSettingsSubsystem* Settings = GetSettings();
+	if (!Settings) { return; }
+
+	Settings->ResetKeyBindings();
+	BuildControlRows();
+
+	const FString Language = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
+	ShowMessage(FText::FromString(Language == TEXT("ko") ? TEXT("키 설정을 처음으로 되돌렸어요.") : (Language == TEXT("ja") ? TEXT("キー設定を元に戻しました。") : TEXT("Key bindings were reset."))));
 }
 
 void UCTSettingsWidget::ShowMessage(const FText& Message)

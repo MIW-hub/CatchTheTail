@@ -1,10 +1,19 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTIntroWidget.h"
+#include "CTVersionLabel.h"
 #include "Components/TextBlock.h"
+
+void UCTIntroWidget::NativeDestruct()
+{
+	CTVersionLabel::Hide(GetWorld(), VersionLabel);
+	Super::NativeDestruct();
+}
 
 void UCTIntroWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	CTVersionLabel::Show(GetWorld(), VersionLabel);
 
 	// 키 입력용 포커스
 	SetIsFocusable(true);

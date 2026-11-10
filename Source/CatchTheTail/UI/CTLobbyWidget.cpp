@@ -231,21 +231,23 @@ void UCTLobbyWidget::RefreshLobby()
 		Text_PlayerList->SetText(FText::FromString(List));
 	}
 
-	// 상태 문구
+	// 상태 문구: 인원/준비 안내와 패널 그림은 없앰. 시작 카운트다운일 때만 글자로 보임
+	if (UWidget* StatusPill = GetWidgetFromName(TEXT("Image_StatusPill")))
+	{
+		StatusPill->SetVisibility(ESlateVisibility::Collapsed);
+	}
 	if (Text_Status)
 	{
-		FText Status;
 		if (bStarting)
 		{
-			Status = FText::Format(NSLOCTEXT("CT", "Lobby_Starting", "게임 시작 {0}"), FMath::CeilToInt(StartRemaining));
+			Text_Status->SetText(FText::Format(NSLOCTEXT("CT", "Lobby_Starting", "게임 시작 {0}"), FMath::CeilToInt(StartRemaining)));
+			Text_Status->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 		else
 		{
-			Status = FText::Format(
-				NSLOCTEXT("CT", "Lobby_Status", "인원 {0}/{1} · 준비 {2}명"),
-				CTGameState->PlayerArray.Num(), CTGameState->GetLobbyMinPlayers(), CTGameState->GetLobbyReadyCount());
+			Text_Status->SetText(FText::GetEmpty());
+			Text_Status->SetVisibility(ESlateVisibility::Collapsed);
 		}
-		Text_Status->SetText(Status);
 	}
 
 	// 준비 버튼: 방장에게는 필요 없음

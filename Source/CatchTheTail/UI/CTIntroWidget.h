@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Widgets/SWidget.h"
 #include "CTIntroWidget.generated.h"
 
 class UTextBlock;
@@ -25,6 +26,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -53,6 +55,9 @@ protected:
 	TObjectPtr<UTextBlock> Text_Skip;
 
 private:
+	// 오른쪽 아래 버전 표시 ("v0.1.0 · 초기 버전")
+	TSharedPtr<SWidget> VersionLabel;
+
 	float ElapsedSeconds = 0.f;
 	bool bFinished = false;
 };

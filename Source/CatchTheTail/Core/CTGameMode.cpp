@@ -6,9 +6,11 @@
 #include "../Player/CTPlayerController.h"
 #include "../Player/CTAIController.h"
 #include "CatchTheTail/Player/CTCharacter.h"
+#include "../Player/CTGrappleComponent.h"
 #include "../World/CTTailPickup.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Misc/PackageName.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerStart.h"
@@ -343,8 +345,23 @@ void ACTGameMode::ReturnToLobby()
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 대기 로비로 복귀: %s"), *LobbyMap.ToString());
-	World->ServerTravel(LobbyMap.ToString());
+	// ServerTravel 은 짧은 맵 이름(L_Lobby)을 찾지 못해 조용히 멈춤. 전체 패키지 경로(/Game/Levels/L_Lobby)로 바꿔서 이동
+	FString TravelName = LobbyMap.ToString();
+	if (!TravelName.StartsWith(TEXT("/")))
+	{
+		FString LongPackageName;
+		if (FPackageName::SearchForPackageOnDisk(TravelName, &LongPackageName) && !LongPackageName.IsEmpty())
+		{
+			TravelName = LongPackageName;
+		}
+		else
+		{
+			TravelName = TEXT("/Game/Levels/") + TravelName;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 대기 로비로 복귀: %s"), *TravelName);
+	World->ServerTravel(TravelName);
 }
 
 // 라운드 진행
@@ -518,6 +535,28 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	// 목표 색만 가능
 	if (Grabber->GetTargetColor() == ECTColor::None) { return false; }
 	if (Victim->GetAssignedColor() != Grabber->GetTargetColor()) { return false; }
+
+	// 꼬리 줄다리기: 둘 다 대결에 들어감. 결과는 UCTGrappleComponent 가 FinalizeTailGrabbed 로 알림
+	if (bUseGrappleStruggle)
+	{
+		ACTCharacter* GrabberCharacter = Cast<ACTCharacter>(Grabber->GetPawn());
+		ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn());
+		if (GrabberCharacter && VictimCharacter && GrabberCharacter->GetGrapple() && VictimCharacter->GetGrapple())
+		{
+			return GrabberCharacter->GetGrapple()->BeginGrapple(VictimCharacter);
+		}
+	}
+
+	return FinalizeTailGrabbed(Grabber, Victim);
+}
+
+bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim)
+{
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+	if (!Grabber || !Victim || Grabber == Victim) { return false; }
+	if (Grabber->IsGhost() || Victim->IsGhost()) { return false; }
+	if (Grabber->GetTargetColor() == ECTColor::None || Victim->GetAssignedColor() != Grabber->GetTargetColor()) { return false; }
 
 	// 잡힌 쪽은 꼬리를 잃고 유령. 잡은 쪽은 빼앗은 만큼 얻음 (최소 1개)
 	const int32 Taken = bTakeAllTailsOnGrab ? FMath::Max(Victim->GetTailCount(), 1) : 1;
