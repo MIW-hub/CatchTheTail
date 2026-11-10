@@ -198,7 +198,8 @@ void UCTSettingsWidget::BuildControlRows()
 		ResetKeys->OnClicked.AddUniqueDynamic(this, &UCTSettingsWidget::HandleResetKeysClicked);
 
 		// 프로젝트 UI의 노란 버튼 그림 (UI_Btn_Yellow_M)
-		if (UTexture2D* ButtonTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/Style/UI_Btn_Yellow_M.UI_Btn_Yellow_M")))
+		UTexture2D* ButtonTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/Style/UI_Btn_Yellow_M.UI_Btn_Yellow_M"));
+		if (ButtonTexture)
 		{
 			FSlateBrush Normal;
 			Normal.SetResourceObject(ButtonTexture);

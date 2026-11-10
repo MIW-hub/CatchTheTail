@@ -1,4 +1,4 @@
-﻿// Copyright Moon Party Games. All Rights Reserved.
+// Copyright Moon Party Games. All Rights Reserved.
 #include "CTKeyBindEntryWidget.h"
 #include "../Core/CTSettingsSubsystem.h"
 #include "Components/Image.h"
@@ -11,31 +11,24 @@
 
 void UCTKeyBindEntryWidget::ApplyProjectStyle()
 {
-	// 프로젝트 UI 그림으로 꾸밈: 분홍 줄(UI_Row_Pink) + 크림색 알약 키 칸(UI_Pill_Status), 글자는 짙은 보라
+	// 프로젝트 UI 그림으로 꾸밈: 분홍 줄(UI_Row_Pink) + 짙은 보라 글자
+	// 주의: 키 칸(InputKeySelector)의 버튼 스타일은 바꾸지 않음. 커스텀 버튼 스타일을 주면
+	// 위젯이 다시 만들어질 때 그리는 중 크래시(접근 위반)가 나서, 글자 색만 바꿈
 	const FLinearColor Ink(0.24f, 0.03f, 0.24f, 1.f);
 	UTexture2D* RowTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/Style/UI_Row_Pink.UI_Row_Pink"));
-	UTexture2D* PillTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/Style/UI_Pill_Status.UI_Pill_Status"));
-	StyleTextures = { RowTexture, PillTexture };
-
-	auto MakeBox = [](UTexture2D* Texture, const FMargin& Margin) -> FSlateBrush
-	{
-		FSlateBrush Brush;
-		if (Texture)
-		{
-			Brush.SetResourceObject(Texture);
-			Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
-			Brush.DrawAs = ESlateBrushDrawType::Box;
-			Brush.Margin = Margin;
-		}
-		return Brush;
-	};
+	StyleTextures = { RowTexture };
 
 	// 줄 배경 (원래 어두운 회색 사각형)
 	if (UImage* RowImage = Cast<UImage>(GetWidgetFromName(TEXT("Image_KeyRow"))))
 	{
 		if (RowTexture)
 		{
-			RowImage->SetBrush(MakeBox(RowTexture, FMargin(0.10f, 0.28f, 0.10f, 0.25f)));
+			FSlateBrush Brush;
+			Brush.SetResourceObject(RowTexture);
+			Brush.ImageSize = FVector2D(RowTexture->GetSizeX(), RowTexture->GetSizeY());
+			Brush.DrawAs = ESlateBrushDrawType::Box;
+			Brush.Margin = FMargin(0.10f, 0.28f, 0.10f, 0.25f);
+			RowImage->SetBrush(Brush);
 			RowImage->SetColorAndOpacity(FLinearColor::White);
 		}
 	}
@@ -43,21 +36,9 @@ void UCTKeyBindEntryWidget::ApplyProjectStyle()
 	if (Text_ActionName) { Text_ActionName->SetColorAndOpacity(FSlateColor(Ink)); }
 	if (Text_Keys)       { Text_Keys->SetColorAndOpacity(FSlateColor(Ink)); }
 
-	// 키 칸: 크림색 알약 + 짙은 보라 글자
-	if (KeySelector && PillTexture)
+	// 키 칸 글자 색만 짙은 보라로
+	if (KeySelector)
 	{
-		const FSlateBrush Normal = MakeBox(PillTexture, FMargin(0.20f, 0.30f, 0.20f, 0.25f));
-		FSlateBrush Hovered = Normal;
-		Hovered.TintColor = FSlateColor(FLinearColor(1.f, 0.96f, 0.82f, 1.f));
-		FSlateBrush Pressed = Normal;
-		Pressed.TintColor = FSlateColor(FLinearColor(0.88f, 0.82f, 0.62f, 1.f));
-
-		FButtonStyle Style;
-		Style.SetNormal(Normal).SetHovered(Hovered).SetPressed(Pressed);
-		Style.SetNormalPadding(FMargin(6.f, 1.f, 6.f, 4.f));
-		Style.SetPressedPadding(FMargin(6.f, 3.f, 6.f, 2.f));
-		KeySelector->SetButtonStyle(Style);
-
 		FTextBlockStyle TextStyle = KeySelector->GetTextStyle();
 		TextStyle.SetColorAndOpacity(FSlateColor(Ink));
 		KeySelector->SetTextStyle(TextStyle);
@@ -69,6 +50,7 @@ void UCTKeyBindEntryWidget::NativeConstruct()
 	Super::NativeConstruct();
 
 	ApplyProjectStyle();
+
 
 	if (KeySelector)
 	{
