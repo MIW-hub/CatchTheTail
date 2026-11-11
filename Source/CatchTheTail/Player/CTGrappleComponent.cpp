@@ -456,6 +456,13 @@ void UCTGrappleComponent::StartMontage()
 	{
 		ActiveMontage = Montage;
 		Anim->Montage_Play(Montage);
+
+		// 끝나면 처음 섹션으로 이어서 끊김 없이 반복 (대결이 끝날 때까지)
+		if (Montage->GetNumSections() > 0)
+		{
+			const FName FirstSection = Montage->GetSectionName(0);
+			Anim->Montage_SetNextSection(FirstSection, FirstSection, Montage);
+		}
 		return;
 	}
 

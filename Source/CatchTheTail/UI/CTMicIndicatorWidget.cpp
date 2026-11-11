@@ -19,7 +19,7 @@
 
 namespace
 {
-	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor MicMagenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
 	const FLinearColor OffPanel(0.62f, 0.62f, 0.62f, 1.f);
 	const FLinearColor OffIcon(0.3f, 0.3f, 0.3f, 1.f);
 	constexpr float WaveMinHeight = 8.f;
@@ -90,7 +90,7 @@ void UCTMicIndicatorWidget::NativeOnInitialized()
 	{
 		UImage* Bar = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), *FString::Printf(TEXT("Image_MicWave%d"), Index + 1));
 		Bar->SetVisibility(ESlateVisibility::HitTestInvisible);
-		Bar->SetColorAndOpacity(Magenta);
+		Bar->SetColorAndOpacity(MicMagenta);
 		USizeBox* BarBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("Size_MicWave%d"), Index + 1));
 		BarBox->SetWidthOverride(8.f);
 		BarBox->SetHeightOverride(Index == 0 ? 14.f : (Index == 1 ? 24.f : 34.f));
@@ -130,8 +130,8 @@ void UCTMicIndicatorWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 	const ACTCharacter* MyCharacter = PlayerController ? Cast<ACTCharacter>(PlayerController->GetPawn()) : nullptr;
 	const bool bTalking = bMicEnabled && MyCharacter && MyCharacter->IsVoiceTransmitting();
 
-	const FLinearColor PanelColor = !bMicEnabled ? OffPanel : (bTalking ? Magenta : FLinearColor::White);
-	const FLinearColor ForeColor = !bMicEnabled ? OffIcon : (bTalking ? FLinearColor::White : Magenta);
+	const FLinearColor PanelColor = !bMicEnabled ? OffPanel : (bTalking ? MicMagenta : FLinearColor::White);
+	const FLinearColor ForeColor = !bMicEnabled ? OffIcon : (bTalking ? FLinearColor::White : MicMagenta);
 	// 패널 이미지는 상태가 바뀔 때만 교체 (0 꺼짐, 1 평소, 2 말하는 중)
 	const int32 NewPanelState = !bMicEnabled ? 0 : (bTalking ? 2 : 1);
 	if (Image_MicPanel && NewPanelState != PanelState)

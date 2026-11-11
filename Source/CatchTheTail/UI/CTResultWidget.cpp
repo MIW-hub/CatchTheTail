@@ -91,8 +91,28 @@ void UCTResultWidget::ShowResult()
 
 	if (Text_ResultTitle)
 	{
-		// 승자 목록에 없으면 패배 (동점은 연장전 대상 별도)
-		const FText& Title = (bIsTie && bLocalPlayerWon) ? TieText : (bLocalPlayerWon ? WinText : LoseText);
+		// 내 등수 (꼬리 수가 같으면 같은 등수). 순위표 목록과 같은 규칙
+		int32 MyRank = INDEX_NONE;
+		{
+			const TArray<ACTPlayerState*> Sorted = GetSortedPlayers(GameState);
+			int32 Rank = 0;
+			int32 PreviousTailCount = INDEX_NONE;
+			for (int32 Index = 0; Index < Sorted.Num(); ++Index)
+			{
+				if (Sorted[Index]->GetTailCount() != PreviousTailCount)
+				{
+					Rank = Index + 1;
+					PreviousTailCount = Sorted[Index]->GetTailCount();
+				}
+				if (Sorted[Index] == MyPlayerState) { MyRank = Rank; break; }
+			}
+		}
+
+		// 연장전이면 안내 문구, 아니면 "N등" (순위에 없는 관전자는 기존 승리/패배 문구)
+		FText Title;
+		if (bIsTie && bLocalPlayerWon) { Title = TieText; }
+		else if (MyRank != INDEX_NONE) { Title = FText::Format(RankText, MyRank); }
+		else { Title = bLocalPlayerWon ? WinText : LoseText; }
 		Text_ResultTitle->SetText(Title);
 	}
 

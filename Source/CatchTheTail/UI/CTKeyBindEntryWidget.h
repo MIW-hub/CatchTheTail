@@ -5,6 +5,7 @@
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
 #include "Framework/Commands/InputChord.h"
+#include "Styling/SlateTypes.h"
 #include "CTKeyBindEntryWidget.generated.h"
 
 class UInputKeySelector;
@@ -48,13 +49,6 @@ protected:
 	TObjectPtr<UTextBlock> Text_Keys;
 
 private:
-	// 프로젝트 UI 그림으로 줄과 키 칸을 꾸밈
-	void ApplyProjectStyle();
-
-	// 꾸밈에 쓰는 그림 (위젯이 살아 있는 동안 유지)
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UTexture2D>> StyleTextures;
-
 	UFUNCTION()
 	void HandleKeySelected(FInputChord SelectedKey);
 

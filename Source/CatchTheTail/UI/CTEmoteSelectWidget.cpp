@@ -27,7 +27,7 @@
 
 namespace
 {
-	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor EmoteMagenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
 	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
 	constexpr int32 LibraryColumns = 9;
 
@@ -85,7 +85,7 @@ void UCTEmoteCellWidget::Build(int32 InIndex, float Size, const FText& CornerTex
 		UTextBlock* Corner = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_CellKey"));
 		Corner->SetText(CornerText);
 		Corner->SetVisibility(ESlateVisibility::HitTestInvisible);
-		StyleText(Corner, 22, Magenta);
+		StyleText(Corner, 22, EmoteMagenta);
 		Corner->SetShadowOffset(FVector2D(1.f, 1.f));
 		Corner->SetShadowColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.9f));
 		UOverlaySlot* CornerSlot = Overlay->AddChildToOverlay(Corner);
@@ -130,7 +130,7 @@ void UCTEmoteCellWidget::SetSelected(bool bSelected)
 {
 	if (!Image_Back) { return; }
 	Image_Back->SetBrush(bSelected
-		? MakeRoundBrush(FLinearColor(1.f, 0.88f, 0.94f, 1.f), Magenta, 5.f, 14.f)
+		? MakeRoundBrush(FLinearColor(1.f, 0.88f, 0.94f, 1.f), EmoteMagenta, 5.f, 14.f)
 		: MakeRoundBrush(FLinearColor(1.f, 1.f, 1.f, 0.92f), FLinearColor(0.8f, 0.8f, 0.8f, 1.f), 2.f, 14.f));
 }
 
@@ -158,7 +158,7 @@ void UCTEmoteSelectWidget::Setup(ACTCharacter* InCharacter)
 
 	// 가운데 패널
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Border_EmotePanel"));
-	Panel->SetBrush(MakeRoundBrush(FLinearColor(1.f, 0.96f, 0.98f, 1.f), Magenta, 6.f, 28.f));
+	Panel->SetBrush(MakeRoundBrush(FLinearColor(1.f, 0.96f, 0.98f, 1.f), EmoteMagenta, 6.f, 28.f));
 	Panel->SetPadding(FMargin(32.f, 24.f));
 	UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
@@ -219,7 +219,7 @@ void UCTEmoteSelectWidget::Setup(ACTCharacter* InCharacter)
 
 	// 닫기
 	UButton* Close = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("Button_EmoteClose"));
-	Close->SetBackgroundColor(Magenta);
+	Close->SetBackgroundColor(EmoteMagenta);
 	Close->OnClicked.AddDynamic(this, &UCTEmoteSelectWidget::HandleCloseClicked);
 	UTextBlock* CloseText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_EmoteClose"));
 	CloseText->SetText(LOCTEXT("Close", "닫기 (R)"));

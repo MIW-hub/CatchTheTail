@@ -39,6 +39,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText LoseText = NSLOCTEXT("CT", "UI_Result_Lose", "패배");
 
+	// 제목에 쓰는 내 등수 문구 ({0} = 등수). 승리/패배 대신 표시
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FText RankText = NSLOCTEXT("CT", "UI_Result_Rank", "{0}등");
+
 	// 동점 (연장전)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText TieText = NSLOCTEXT("CT", "UI_Result_Tie", "동점! 연장전");
