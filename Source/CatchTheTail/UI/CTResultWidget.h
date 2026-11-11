@@ -44,10 +44,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText RankText = NSLOCTEXT("CT", "UI_Result_Rank", "{0}등");
 
-	// 동점 (연장전)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
-	FText TieText = NSLOCTEXT("CT", "UI_Result_Tie", "동점! 연장전");
-
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_ResultTitle;
 

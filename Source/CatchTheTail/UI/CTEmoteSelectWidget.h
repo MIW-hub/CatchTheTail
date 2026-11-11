@@ -78,7 +78,8 @@ public:
 	UCTEmoteSelectWidget(const FObjectInitializer& ObjectInitializer);
 
 	// 캐릭터의 이모트 목록으로 창을 채움 (CreateWidget 직후 한 번)
-	void Setup(ACTCharacter* InCharacter);
+	// 칸 그림용 WBP 가 없으면 false (이때는 창을 열면 안 됨)
+	bool Setup(ACTCharacter* InCharacter);
 
 	// 닫기 요청 (R, ESC, 닫기 버튼)
 	FCTEmoteMenuClosedSignature OnCloseRequested;

@@ -70,7 +70,7 @@ void UCTEmoteBubbleComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	{
 		const float T = FMath::Clamp(PhaseTime / RiseSeconds, 0.f, 1.f);
 		// 천천히 -> 빠르게
-		const float Alpha = FMath::InterpEaseIn(0.f, 1.f, T, EaseExponent);
+		const float Alpha = FMath::InterpEaseOut(0.f, 1.f, T, EaseExponent);
 		// 처음 0.25초 안에 나타남
 		const float Opacity = FMath::Clamp(ElapsedTotal / 0.25f, 0.f, 1.f);
 		ApplyState(Alpha, Opacity, Pop);

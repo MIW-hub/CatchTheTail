@@ -287,7 +287,7 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 	Language->MaxListHeight = 240.f;
 	Language->Font = MakeFont(TEXT("Medium"), 20);
 	Language->ForegroundColor = FSlateColor(FLinearColor::White);
-	Language->WidgetStyle.ComboButtonStyle.ButtonStyle = MakeButtonStyle(TEXT("Rectangle_9"), ComboMargin);
+	Language->WidgetStyle.ComboButtonStyle.ButtonStyle = MakeButtonStyle(TEXT("UI_Old_Combo_Gray"), ComboMargin);
 	AddV(List, Sized(TEXT("Height_Language"), Language, 0.f, 56.f), 24.f);
 
 	// 소리
@@ -323,16 +323,16 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 		FEditableTextBoxStyle Style = NewName->WidgetStyle;
 		Style.TextStyle.SetFont(MakeFont(TEXT("Regular"), 20));
 		Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor::White));
-		Style.SetBackgroundImageNormal(ImageBrush(TEXT("Rectangle_3"), InputMargin, FLinearColor(1.f, 1.f, 1.f, 1.f)));
-		Style.SetBackgroundImageHovered(ImageBrush(TEXT("Rectangle_3"), InputMargin, FLinearColor(1.1f, 1.1f, 1.1f, 1.f)));
-		Style.SetBackgroundImageFocused(ImageBrush(TEXT("Rectangle_3"), InputMargin, FLinearColor(1.1f, 1.1f, 1.1f, 1.f)));
-		Style.SetBackgroundImageReadOnly(ImageBrush(TEXT("Rectangle_3"), InputMargin, FLinearColor(1.f, 1.f, 1.f, 1.f)));
+		Style.SetBackgroundImageNormal(ImageBrush(TEXT("UI_Old_Input_Dark"), InputMargin, FLinearColor(1.f, 1.f, 1.f, 1.f)));
+		Style.SetBackgroundImageHovered(ImageBrush(TEXT("UI_Old_Input_Dark"), InputMargin, FLinearColor(1.1f, 1.1f, 1.1f, 1.f)));
+		Style.SetBackgroundImageFocused(ImageBrush(TEXT("UI_Old_Input_Dark"), InputMargin, FLinearColor(1.1f, 1.1f, 1.1f, 1.f)));
+		Style.SetBackgroundImageReadOnly(ImageBrush(TEXT("UI_Old_Input_Dark"), InputMargin, FLinearColor(1.f, 1.f, 1.f, 1.f)));
 		Style.SetPadding(FMargin(16.f, 8.f, 16.f, 8.f));
 		NewName->WidgetStyle = Style;
 	}
 	AddH(NameRow, Sized(TEXT("Height_NameInput"), NewName, 0.f, 56.f), 12.f, true);
 
-	UButton* ChangeButton = MakeButton(TEXT("Button_ChangeName"), TEXT("Label_Button_ChangeName"), TEXT("이름 변경"), TEXT("Rectangle_6"), ButtonMarginA, FLinearColor(0.055f, 0.035f, 0.01f, 1.f));
+	UButton* ChangeButton = MakeButton(TEXT("Button_ChangeName"), TEXT("Label_Button_ChangeName"), TEXT("이름 변경"), TEXT("UI_Old_Btn_Yellow"), ButtonMarginA, FLinearColor(0.055f, 0.035f, 0.01f, 1.f));
 	AddH(NameRow, Sized(TEXT("Size_Button_ChangeName"), ChangeButton, 160.f, 56.f), 0.f, false);
 	AddV(ChangeName, NameRow, 8.f);
 	AddV(ChangeName, MakeText(TEXT("Text_NameMessage"), TEXT(""), TEXT("Regular"), 17, TextWarn), 0.f);
@@ -360,12 +360,12 @@ int32 UCTUIBuildTools::BuildSettingsWidgetDesign(UBlueprint* WidgetBlueprint)
 
 	UHorizontalBox* Footer = Make<UHorizontalBox>(TEXT("Row_SettingsFooter"));
 	Footer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UButton* ResetButton = MakeButton(TEXT("Button_Reset"), TEXT("Label_Button_Reset"), TEXT("기본값으로 초기화"), TEXT("Rectangle_5"), ButtonMarginB, FLinearColor::White);
+	UButton* ResetButton = MakeButton(TEXT("Button_Reset"), TEXT("Label_Button_Reset"), TEXT("기본값으로 초기화"), TEXT("UI_Old_Btn_Red"), ButtonMarginB, FLinearColor::White);
 	AddH(Footer, Sized(TEXT("Size_Button_Reset"), ResetButton, 260.f, 56.f), 0.f, false);
 	USpacer* FooterSpacer = Make<USpacer>(TEXT("Spacer_Footer"));
 	FooterSpacer->SetSize(FVector2D(1.f, 1.f));
 	AddH(Footer, FooterSpacer, 0.f, true);
-	UButton* CloseButton = MakeButton(TEXT("Button_Close"), TEXT("Label_Button_Close"), TEXT("닫기"), TEXT("Rectangle_4"), ButtonMarginB, FLinearColor::White);
+	UButton* CloseButton = MakeButton(TEXT("Button_Close"), TEXT("Label_Button_Close"), TEXT("닫기"), TEXT("UI_Old_Btn_Gray"), ButtonMarginB, FLinearColor::White);
 	AddH(Footer, Sized(TEXT("Size_Button_Close"), CloseButton, 200.f, 56.f), 0.f, false);
 	AddV(Layout, Footer, 0.f);
 
@@ -757,9 +757,9 @@ int32 UCTUIBuildTools::BuildHudLayout(UBlueprint* WidgetBlueprint, UMaterialInte
 
 		struct FKeyHint { const TCHAR* Key; const TCHAR* Label; const TCHAR* Id; const TCHAR* KeyTexture; float KeyWidth; const TCHAR* Cool; const TCHAR* CoolText; };
 		const FKeyHint Hints[] = {
-			{ TEXT("Q"),     TEXT("꼬리잡기"), TEXT("Grab"), TEXT("UI_keyButton"),   41.f, TEXT("Image_CoolTime_1"), TEXT("Text_GrabCooldown") },
-			{ TEXT("E"),     TEXT("밀기"),     TEXT("Push"), TEXT("UI_keyButton"),   41.f, TEXT("Image_CoolTime_2"), TEXT("Text_PushCooldown") },
-			{ TEXT("SHIFT"), TEXT("달리기"),   TEXT("Run"),  TEXT("UI_KetButton_2"), 88.f, TEXT("Image_CoolTime"),   TEXT("Text_RunCooldown") },
+			{ TEXT("Q"),     TEXT("꼬리잡기"), TEXT("Grab"), TEXT("UI_KeyButton_Small"),   41.f, TEXT("Image_CoolTime_1"), TEXT("Text_GrabCooldown") },
+			{ TEXT("E"),     TEXT("밀기"),     TEXT("Push"), TEXT("UI_KeyButton_Small"),   41.f, TEXT("Image_CoolTime_2"), TEXT("Text_PushCooldown") },
+			{ TEXT("SHIFT"), TEXT("달리기"),   TEXT("Run"),  TEXT("UI_KeyButton_Wide"), 88.f, TEXT("Image_CoolTime"),   TEXT("Text_RunCooldown") },
 		};
 
 		for (const FKeyHint& Hint : Hints)
@@ -937,7 +937,7 @@ int32 UCTUIBuildTools::AddMatchSettingRow(UBlueprint* WidgetBlueprint, int32 Set
 
 	auto MakeArrow = [&](const TCHAR* Suffix, const TCHAR* Glyph)
 	{
-		UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("Rectangle_5"), ArrowMargin, FLinearColor::White);
+		UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("UI_Old_Btn_Red"), ArrowMargin, FLinearColor::White);
 		if (UTextBlock* ArrowLabel = Cast<UTextBlock>(Arrow->GetChildAt(0)))
 		{
 			ArrowLabel->SetText(FText::FromString(Glyph));
@@ -2002,7 +2002,7 @@ int32 UCTUIBuildTools::BuildLanguageSelectDesign(UBlueprint* WidgetBlueprint)
 	};
 	for (const FLanguageButton& Entry : LanguageButtons)
 	{
-		UButton* Button = MakeButton(Entry.Button, Entry.Label, TEXT(""), TEXT("Rectangle_5"), ButtonMarginB, FLinearColor::White);
+		UButton* Button = MakeButton(Entry.Button, Entry.Label, TEXT(""), TEXT("UI_Old_Btn_Red"), ButtonMarginB, FLinearColor::White);
 		if (UTextBlock* Label = Cast<UTextBlock>(Button->GetChildAt(0)))
 		{
 			Label->SetText(FText::FromString(Entry.Name));
@@ -2016,7 +2016,7 @@ int32 UCTUIBuildTools::BuildLanguageSelectDesign(UBlueprint* WidgetBlueprint)
 	AddV(Layout, Gap, 0.f);
 
 	// 확인 (이 글자만 번역 대상)
-	UButton* Confirm = MakeButton(TEXT("Button_Confirm"), TEXT("Label_Button_Confirm"), TEXT("확인"), TEXT("Rectangle_4"), ButtonMarginB, FLinearColor::White);
+	UButton* Confirm = MakeButton(TEXT("Button_Confirm"), TEXT("Label_Button_Confirm"), TEXT("확인"), TEXT("UI_Old_Btn_Gray"), ButtonMarginB, FLinearColor::White);
 	AddV(Layout, Sized(TEXT("Size_Button_Confirm"), Confirm, 0.f, 64.f), 0.f);
 
 	BlueprintName = TEXT("WBP_CTSettingsWidget");
@@ -2073,7 +2073,7 @@ bool UCTUIBuildTools::RefineSettingsWidget(UBlueprint* WidgetBlueprint)
 		for (int32 Index = 0; Index < 3; ++Index)
 		{
 			const FLanguageButton& Entry = Buttons[Index];
-			UButton* Button = MakeButton(Entry.Button, Entry.Label, TEXT(""), TEXT("Rectangle_5"), ButtonMarginB, FLinearColor::White);
+			UButton* Button = MakeButton(Entry.Button, Entry.Label, TEXT(""), TEXT("UI_Old_Btn_Red"), ButtonMarginB, FLinearColor::White);
 			if (UTextBlock* Label = Cast<UTextBlock>(Button->GetChildAt(0)))
 			{
 				Label->SetText(FText::FromString(Entry.Name));
@@ -2199,7 +2199,7 @@ bool UCTUIBuildTools::RefineNameChange(UBlueprint* WidgetBlueprint)
 	if (!Tree->FindWidget(TEXT("Button_ChangeNameOpen")))
 	{
 		const FMargin ButtonMarginA(0.041237f, 0.210526f, 0.041237f, 0.210526f);
-		UButton* OpenButton = MakeButton(TEXT("Button_ChangeNameOpen"), TEXT("Label_Button_ChangeNameOpen"), TEXT("이름 변경"), TEXT("Rectangle_6"), ButtonMarginA, FLinearColor(0.055f, 0.035f, 0.01f, 1.f));
+		UButton* OpenButton = MakeButton(TEXT("Button_ChangeNameOpen"), TEXT("Label_Button_ChangeNameOpen"), TEXT("이름 변경"), TEXT("UI_Old_Btn_Yellow"), ButtonMarginA, FLinearColor(0.055f, 0.035f, 0.01f, 1.f));
 		USizeBox* Sized160 = Sized(TEXT("Size_Button_ChangeNameOpen"), OpenButton, 200.f, 56.f);
 
 		UPanelSlot* NewSlot = Panel->InsertChildAt(0, Sized160);
@@ -2339,7 +2339,7 @@ bool UCTUIBuildTools::BuildMatchSettingsPanel(UBlueprint* WidgetBlueprint)
 
 			auto MakeArrow = [&](const TCHAR* Suffix, const TCHAR* Glyph)
 			{
-				UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("Rectangle_5"), ArrowMargin, FLinearColor::White);
+				UButton* Arrow = MakeButton(*FString::Printf(TEXT("Button_Setting_%s_%s"), *Key, Suffix), *FString::Printf(TEXT("Label_Button_Setting_%s_%s"), *Key, Suffix), TEXT(""), TEXT("UI_Old_Btn_Red"), ArrowMargin, FLinearColor::White);
 				if (UTextBlock* ArrowLabel = Cast<UTextBlock>(Arrow->GetChildAt(0)))
 				{
 					ArrowLabel->SetText(FText::FromString(Glyph));
@@ -2550,9 +2550,9 @@ int32 UCTUIBuildTools::BuildPauseMenu(UBlueprint* WidgetBlueprint)
 
 	struct FMainButton { const TCHAR* Button; const TCHAR* Label; const TCHAR* Text; const TCHAR* Texture; float Gap; };
 	const FMainButton MainButtons[] = {
-		{ TEXT("Button_Resume"),   TEXT("Label_Button_Resume"),   TEXT("계속하기"), TEXT("Rectangle_4"), 16.f },
-		{ TEXT("Button_Settings"), TEXT("Label_Button_Settings"), TEXT("설정"),     TEXT("Rectangle_5"), 16.f },
-		{ TEXT("Button_Forfeit"),  TEXT("Label_Button_Forfeit"),  TEXT("기권"),     TEXT("Rectangle_5"), 6.f },
+		{ TEXT("Button_Resume"),   TEXT("Label_Button_Resume"),   TEXT("계속하기"), TEXT("UI_Old_Btn_Gray"), 16.f },
+		{ TEXT("Button_Settings"), TEXT("Label_Button_Settings"), TEXT("설정"),     TEXT("UI_Old_Btn_Red"), 16.f },
+		{ TEXT("Button_Forfeit"),  TEXT("Label_Button_Forfeit"),  TEXT("기권"),     TEXT("UI_Old_Btn_Red"), 6.f },
 	};
 	for (const FMainButton& Entry : MainButtons)
 	{
@@ -2560,7 +2560,7 @@ int32 UCTUIBuildTools::BuildPauseMenu(UBlueprint* WidgetBlueprint)
 		AddV(MainLayout, Sized(*FString::Printf(TEXT("Size_%s"), Entry.Button), Button, 0.f, 68.f), Entry.Gap);
 	}
 	AddV(MainLayout, MakeText(TEXT("Text_ForfeitInfo"), TEXT("경기 시간이 절반 지나면 기권할 수 있어요."), TEXT("Regular"), 17, TextWarn, ETextJustify::Center), 16.f);
-	UButton* QuitButton = MakeButton(TEXT("Button_Quit"), TEXT("Label_Button_Quit"), TEXT("게임 종료"), TEXT("Rectangle_5"), ButtonMargin, FLinearColor::White);
+	UButton* QuitButton = MakeButton(TEXT("Button_Quit"), TEXT("Label_Button_Quit"), TEXT("게임 종료"), TEXT("UI_Old_Btn_Red"), ButtonMargin, FLinearColor::White);
 	AddV(MainLayout, Sized(TEXT("Size_Button_Quit"), QuitButton, 0.f, 68.f), 0.f);
 
 	UBorder* MainFrame = MakeCard(TEXT("Frame_PauseMain"), MainLayout, FLinearColor(0.012f, 0.02f, 0.04f, 1.f), FMargin(48.f, 40.f, 48.f, 44.f));
@@ -2599,8 +2599,8 @@ int32 UCTUIBuildTools::BuildPauseMenu(UBlueprint* WidgetBlueprint)
 
 	UHorizontalBox* ConfirmButtons = Make<UHorizontalBox>(TEXT("Row_ConfirmButtons"));
 	ConfirmButtons->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UButton* NoButton = MakeButton(TEXT("Button_ConfirmNo"), TEXT("Label_Button_ConfirmNo"), TEXT("취소"), TEXT("Rectangle_5"), ButtonMargin, FLinearColor::White);
-	UButton* YesButton = MakeButton(TEXT("Button_ConfirmYes"), TEXT("Label_Button_ConfirmYes"), TEXT("확인"), TEXT("Rectangle_4"), ButtonMargin, FLinearColor::White);
+	UButton* NoButton = MakeButton(TEXT("Button_ConfirmNo"), TEXT("Label_Button_ConfirmNo"), TEXT("취소"), TEXT("UI_Old_Btn_Red"), ButtonMargin, FLinearColor::White);
+	UButton* YesButton = MakeButton(TEXT("Button_ConfirmYes"), TEXT("Label_Button_ConfirmYes"), TEXT("확인"), TEXT("UI_Old_Btn_Gray"), ButtonMargin, FLinearColor::White);
 	AddH(ConfirmButtons, Sized(TEXT("Size_Button_ConfirmNo"), NoButton, 0.f, 64.f), 16.f, true);
 	AddH(ConfirmButtons, Sized(TEXT("Size_Button_ConfirmYes"), YesButton, 0.f, 64.f), 0.f, true);
 	AddV(ConfirmLayout, ConfirmButtons, 0.f);

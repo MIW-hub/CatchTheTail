@@ -9,6 +9,9 @@
 // 목소리 볼륨 슬라이더 100%일 때의 배율 (슬라이더 50%가 예전 기본 크기)
 constexpr float CTVoiceMaxGain = 2.0f;
 
+// 마이크 입력 증폭 배율 (voice.MicInputGain). 너무 크면 소리가 찢어짐
+constexpr float CTMicInputGain = 3.0f;
+
 // 설정 창 값. 로컬 저장
 USTRUCT(BlueprintType)
 struct FCTSettingsData

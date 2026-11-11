@@ -17,7 +17,6 @@ Esc는 메뉴 키라서 쓸 수 없습니다.	Esc is the menu key and can't be u
 달리는 중 {0}	Running {0}	走行中 {0}
 대기	Waiting	待機
 대시	Dash	ダッシュ
-동점! 연장전	Tie! Overtime	同点！延長戦
 라운드 {0}	Round {0}	ラウンド {0}
 맵 없음	No map	マップなし
 목표 없음	None	なし
@@ -245,3 +244,12 @@ F키: 무작위 위치로 한 번 이동 (유령은 다음 라운드에 부활)	
 음성 말하기	Push to Talk	ボイス発言
 AI 인원	AI Players	AI人数
 버튼 없이 말하기	Hands-free Voice	ボタンなしで発言
+이모트 설정	Emote Settings	エモート設定
+숫자 키 자리를 고른 뒤, 아래에서 넣을 이모트를 누르세요	Pick a number key slot, then choose an emote below	数字キーの枠を選んでから、下のエモートを選んでください
+닫기 (R)	Close (R)	閉じる (R)
+{0}등	Rank {0}	{0}位
+방 전적	Room Record	ルーム戦績
+전적	Record	戦績
+총 {0}판 / 1등 {1}번	{0} games / {1} wins	計{0}戦 / 1位 {1}回
+총 0판 / 1등 0번	0 games / 0 wins	計0戦 / 1位 0回
+아직 전적이 없어요. 한 판 해 보세요!	No records yet. Play a match!	まだ戦績がありません。1戦してみましょう!

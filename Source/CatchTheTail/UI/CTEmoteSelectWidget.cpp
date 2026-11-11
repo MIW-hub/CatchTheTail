@@ -76,9 +76,10 @@ void UCTEmoteSelectWidget::NativeOnInitialized()
 	SetIsFocusable(true);
 }
 
-void UCTEmoteSelectWidget::Setup(ACTCharacter* InCharacter)
+bool UCTEmoteSelectWidget::Setup(ACTCharacter* InCharacter)
 {
-	if (!InCharacter || !EmoteCellClass || !SlotCells.IsEmpty()) { return; }
+	if (!InCharacter || !EmoteCellClass) { return false; }
+	if (!SlotCells.IsEmpty()) { return true; }
 	Character = InCharacter;
 
 	// 숫자 키 자리
@@ -119,6 +120,7 @@ void UCTEmoteSelectWidget::Setup(ACTCharacter* InCharacter)
 
 	RefreshSlots();
 	RefreshSelection();
+	return true;
 }
 
 void UCTEmoteSelectWidget::RefreshSlots()

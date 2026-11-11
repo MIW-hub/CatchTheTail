@@ -110,10 +110,9 @@ void UCTResultWidget::ShowResult()
 
 	if (Text_ResultTitle)
 	{
-		// 연장전이면 안내 문구, 아니면 "N등" (순위에 없는 관전자는 기존 승리/패배 문구)
+		// 항상 "N등" (연장전 문구는 쓰지 않음) (순위에 없는 관전자는 기존 승리/패배 문구)
 		FText Title;
-		if (bIsTie && bLocalPlayerWon) { Title = TieText; }
-		else if (MyRank != INDEX_NONE) { Title = FText::Format(RankText, MyRank); }
+		if (MyRank != INDEX_NONE) { Title = FText::Format(RankText, MyRank); }
 		else { Title = bLocalPlayerWon ? WinText : LoseText; }
 		Text_ResultTitle->SetText(Title);
 	}
@@ -121,7 +120,7 @@ void UCTResultWidget::ShowResult()
 	// 1등이면 등수 옆에 왕관
 	if (Image_RankCrown)
 	{
-		Image_RankCrown->SetVisibility((MyRank == 1 && !(bIsTie && bLocalPlayerWon)) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		Image_RankCrown->SetVisibility((MyRank == 1) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
 	// 위에는 내 순위만 보여줌 (우승자 이름 줄은 숨김)

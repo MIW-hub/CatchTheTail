@@ -70,7 +70,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	TSubclassOf<UCTMatchHistoryEntryWidget> EntryClass;
 
-	// 위 요약 ("총 N판 / 1등 M번")
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FText TotalText = NSLOCTEXT("CT", "UI_History_Total", "총 {0}판 / 1등 {1}번");
 

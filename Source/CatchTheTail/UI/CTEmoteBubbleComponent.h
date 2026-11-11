@@ -35,15 +35,15 @@ public:
 
 	// 올라오는 시간(초)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "0.05"))
-	float RiseSeconds = 2.f;
+	float RiseSeconds = 0.35f;
 
 	// 멈춰서 유지하는 시간(초)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "0"))
-	float HoldSeconds = 2.f;
+	float HoldSeconds = 3.5f;
 
 	// 사라지는 시간(초)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "0.05"))
-	float FadeSeconds = 2.f;
+	float FadeSeconds = 0.35f;
 
 	// 머리 위 시작 위치 (캐릭터 기준 cm, 말풍선 아래 끝이 이 위치)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")

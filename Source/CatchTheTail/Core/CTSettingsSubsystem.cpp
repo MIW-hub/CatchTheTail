@@ -18,6 +18,7 @@
 #include "Internationalization/TextLocalizationManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Net/VoiceConfig.h"
+#include "HAL/IConsoleManager.h"
 #include "Sound/SoundClass.h"
 #include "Sound/SoundMix.h"
 
@@ -276,6 +277,12 @@ void UCTSettingsSubsystem::ApplyAudio()
 
 	// 마이크 감도: 이 값보다 작은 소리는 보내지 않음 (감도가 클수록 기준이 낮음. 0.9일 때 0.01)
 	UVOIPStatics::SetMicThreshold((1.f - Data.MicSensitivity) * 0.1f);
+
+	// 마이크 입력 증폭 (보내는 소리 자체를 키움). 기본 1.0이라 작게 들린다는 의견이 있어 올림
+	if (IConsoleVariable* MicGain = IConsoleManager::Get().FindConsoleVariable(TEXT("voice.MicInputGain")))
+	{
+		MicGain->Set(CTMicInputGain, ECVF_SetByGameSetting);
+	}
 
 	// 배경음은 실행 중 곡에 직접 볼륨 (음소거 포함)
 	if (UCTAudioSubsystem* Audio = GameInstance ? GameInstance->GetSubsystem<UCTAudioSubsystem>() : nullptr)

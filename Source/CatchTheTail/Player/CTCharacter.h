@@ -37,6 +37,13 @@ struct FCTEmoteSlot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
 	TObjectPtr<UTexture2D> Atlas;
 
+	// 영어 / 일본어 아틀라스 (말풍선 글자가 언어별로 다름). 비어 있으면 Atlas 를 씀
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UTexture2D> AtlasEn;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	TObjectPtr<UTexture2D> AtlasJa;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote", meta = (ClampMin = "1"))
 	int32 AtlasColumns = 3;
 
@@ -59,12 +66,22 @@ struct FCTEmoteSlot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
 	FText Label;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	FText LabelEn;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CT|Emote")
+	FText LabelJa;
+
+	// 지금 게임 언어에 맞는 아틀라스 / 이름 (ko: Atlas, en: AtlasEn, ja: AtlasJa)
+	UTexture2D* GetAtlas() const;
+	FText GetLabel() const;
+
 	// 아틀라스에서 이 칸의 UV 범위. 아틀라스가 없으면 전체(0~1)
 	void GetUVRegion(FVector2D& OutMin, FVector2D& OutMax) const
 	{
 		OutMin = FVector2D(0.0, 0.0);
 		OutMax = FVector2D(1.0, 1.0);
-		if (!Atlas) { return; }
+		if (!GetAtlas()) { return; }
 		const int32 Columns = FMath::Max(1, AtlasColumns);
 		const int32 Rows = FMath::Max(1, AtlasRows);
 		const FVector2D CellSize(1.0 / Columns, 1.0 / Rows);
@@ -72,7 +89,7 @@ struct FCTEmoteSlot
 		OutMax = OutMin + CellSize;
 	}
 
-	UTexture2D* GetTexture() const { return Atlas ? Atlas.Get() : Icon.Get(); }
+	UTexture2D* GetTexture() const { UTexture2D* Sheet = GetAtlas(); return Sheet ? Sheet : Icon.Get(); }
 };
 
 UCLASS()
@@ -712,6 +729,9 @@ protected:
 	TSubclassOf<class UCTEmoteSelectWidget> EmoteMenuClass;
 
 	bool bEmoteMenuPrevCursor = false;
+
+	// 이모트 창을 연 컨트롤러 (캐릭터가 사라질 때도 입력 상태를 되돌리기 위함)
+	TWeakObjectPtr<APlayerController> EmoteMenuController;
 
 	// 이모트 창 키를 눌러 열고 닫은 마지막 시각 (너무 빠른 반복 방지)
 	double LastEmoteMenuToggleTime = -1000.0;

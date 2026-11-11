@@ -40,6 +40,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "Internationalization/Culture.h"
+#include "Internationalization/Internationalization.h"
 
 namespace CTBuffNames
 {
@@ -131,12 +133,24 @@ ACTCharacter::ACTCharacter(const FObjectInitializer& ObjectInitializer)
 	static ConstructorHelpers::FClassFinder<UCTEmoteSelectWidget> EmoteMenuFinder(TEXT("/Game/UI/WBP_CTEmoteSelectWidget"));
 	if (EmoteMenuFinder.Succeeded()) { EmoteMenuClass = EmoteMenuFinder.Class; }
 
-	// 이모트 목록: 아틀라스(3x3) 3장 = 27개
-	static const TCHAR* const SheetPaths[3] =
+	// 이모트 목록: 아틀라스(3x3) 3장 = 27개. 말풍선 글자가 다른 한국어/영어/일본어 시트가 따로 있음
+	static const TCHAR* const SheetPathsKo[3] =
 	{
-		TEXT("/Game/2D/UI/Emote/Emote_Sheet1.Emote_Sheet1"),
-		TEXT("/Game/2D/UI/Emote/Emote_Sheet2.Emote_Sheet2"),
-		TEXT("/Game/2D/UI/Emote/Emote_Sheet3.Emote_Sheet3"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ko_Team.Emote_Ko_Team"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ko_Feelings.Emote_Ko_Feelings"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ko_Game.Emote_Ko_Game"),
+	};
+	static const TCHAR* const SheetPathsEn[3] =
+	{
+		TEXT("/Game/2D/UI/Emote/Emote_En_Team.Emote_En_Team"),
+		TEXT("/Game/2D/UI/Emote/Emote_En_Feelings.Emote_En_Feelings"),
+		TEXT("/Game/2D/UI/Emote/Emote_En_Game.Emote_En_Game"),
+	};
+	static const TCHAR* const SheetPathsJa[3] =
+	{
+		TEXT("/Game/2D/UI/Emote/Emote_Ja_Team.Emote_Ja_Team"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ja_Feelings.Emote_Ja_Feelings"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ja_Game.Emote_Ja_Game"),
 	};
 	static const TCHAR* const SheetLabels[27] =
 	{
@@ -144,19 +158,62 @@ ACTCharacter::ACTCharacter(const FObjectInitializer& ObjectInitializer)
 		TEXT("헌터야?"), TEXT("경계!"), TEXT("도망가!"), TEXT("살려줘!"), TEXT("잡았다!"), TEXT("들켰다!"), TEXT("쉿!"), TEXT("저기!"), TEXT("난 아냐!"),
 		TEXT("안녕!"), TEXT("고마워!"), TEXT("미안!"), TEXT("ㅋㅋㅋ"), TEXT("흑흑"), TEXT("헉!"), TEXT("흥!"), TEXT("좋아!"), TEXT("사랑해"),
 	};
+	static const TCHAR* const SheetLabelsEn[27] =
+	{
+		TEXT("Together!"), TEXT("Wait!"), TEXT("Help!"), TEXT("Follow me!"), TEXT("Ready!"), TEXT("Let's go!"), TEXT("Well done!"), TEXT("I'll get you!"), TEXT("Again!"),
+		TEXT("Hunter?"), TEXT("Watch out!"), TEXT("Run!"), TEXT("Help me!"), TEXT("Got you!"), TEXT("Busted!"), TEXT("Shh!"), TEXT("Over there!"), TEXT("Not me!"),
+		TEXT("Hi!"), TEXT("Thanks!"), TEXT("Sorry!"), TEXT("LOL"), TEXT("Sob..."), TEXT("Gasp!"), TEXT("Hmph!"), TEXT("Nice!"), TEXT("Love you!"),
+	};
+	static const TCHAR* const SheetLabelsJa[27] =
+	{
+		TEXT("一緒に行こう!"), TEXT("待って!"), TEXT("手伝って!"), TEXT("ついてきて!"), TEXT("準備OK!"), TEXT("行こう!"), TEXT("やったね!"), TEXT("仕返しだ!"), TEXT("もう一回!"),
+		TEXT("ハンター?"), TEXT("警戒!"), TEXT("逃げて!"), TEXT("助けて!"), TEXT("捕まえた!"), TEXT("バレた!"), TEXT("しーっ!"), TEXT("あそこ!"), TEXT("私じゃない!"),
+		TEXT("やっほー!"), TEXT("ありがとう!"), TEXT("ごめん!"), TEXT("あはは!"), TEXT("えーん"), TEXT("えっ!"), TEXT("ふん!"), TEXT("いいね!"), TEXT("大好き!"),
+	};
 	for (int32 Sheet = 0; Sheet < 3; ++Sheet)
 	{
-		ConstructorHelpers::FObjectFinder<UTexture2D> SheetFinder(SheetPaths[Sheet]);
+		ConstructorHelpers::FObjectFinder<UTexture2D> SheetFinderKo(SheetPathsKo[Sheet]);
+		ConstructorHelpers::FObjectFinder<UTexture2D> SheetFinderEn(SheetPathsEn[Sheet]);
+		ConstructorHelpers::FObjectFinder<UTexture2D> SheetFinderJa(SheetPathsJa[Sheet]);
 		for (int32 Cell = 0; Cell < 9; ++Cell)
 		{
 			FCTEmoteSlot& NewSlot = EmoteSlots.AddDefaulted_GetRef();
-			if (SheetFinder.Succeeded()) { NewSlot.Atlas = SheetFinder.Object; }
+			if (SheetFinderKo.Succeeded()) { NewSlot.Atlas = SheetFinderKo.Object; }
+			if (SheetFinderEn.Succeeded()) { NewSlot.AtlasEn = SheetFinderEn.Object; }
+			if (SheetFinderJa.Succeeded()) { NewSlot.AtlasJa = SheetFinderJa.Object; }
 			NewSlot.AtlasColumns = 3;
 			NewSlot.AtlasRows = 3;
 			NewSlot.AtlasCell = Cell;
 			NewSlot.Label = FText::FromString(SheetLabels[Sheet * 9 + Cell]);
+			NewSlot.LabelEn = FText::FromString(SheetLabelsEn[Sheet * 9 + Cell]);
+			NewSlot.LabelJa = FText::FromString(SheetLabelsJa[Sheet * 9 + Cell]);
 		}
 	}
+}
+
+// 지금 게임 언어에 맞는 이모트 그림 / 이름 (없으면 한국어)
+namespace
+{
+	FString CurrentEmoteLanguage()
+	{
+		return FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
+	}
+}
+
+UTexture2D* FCTEmoteSlot::GetAtlas() const
+{
+	const FString Language = CurrentEmoteLanguage();
+	if (Language == TEXT("en") && AtlasEn) { return AtlasEn; }
+	if (Language == TEXT("ja") && AtlasJa) { return AtlasJa; }
+	return Atlas;
+}
+
+FText FCTEmoteSlot::GetLabel() const
+{
+	const FString Language = CurrentEmoteLanguage();
+	if (Language == TEXT("en") && !LabelEn.IsEmpty()) { return LabelEn; }
+	if (Language == TEXT("ja") && !LabelJa.IsEmpty()) { return LabelJa; }
+	return Label;
 }
 
 void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -1192,6 +1249,9 @@ void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 말하는 중에 사라지면 전송 중지
 	if (IsLocallyControlled()) { OnVoiceReleased(); }
 
+	// 이모트 창을 연 채로 사라지면 입력 막힘이 남지 않게 닫음
+	if (EmoteMenu) { CloseEmoteMenu(); }
+
 	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
 	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
 
@@ -1436,7 +1496,12 @@ void ACTCharacter::ToggleEmoteMenu()
 	if (!EmoteMenuClass) { return; }
 	EmoteMenu = CreateWidget<UCTEmoteSelectWidget>(PlayerController, EmoteMenuClass);
 	if (!EmoteMenu) { return; }
-	EmoteMenu->Setup(this);
+	if (!EmoteMenu->Setup(this))
+	{
+		EmoteMenu = nullptr; // 칸 WBP 를 못 불러오면 빈 창으로 입력만 막히지 않게 열지 않음
+		return;
+	}
+	EmoteMenuController = PlayerController;
 	EmoteMenu->OnCloseRequested.AddUObject(this, &ACTCharacter::CloseEmoteMenu);
 	EmoteMenu->AddToViewport(30);
 
@@ -1454,7 +1519,10 @@ void ACTCharacter::ToggleEmoteMenu()
 
 void ACTCharacter::CloseEmoteMenu()
 {
+	// 캐릭터가 사라지는 중이면 컨트롤러가 이미 떨어졌을 수 있어 열 때 저장해 둔 것을 씀
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController) { PlayerController = EmoteMenuController.Get(); }
+	EmoteMenuController.Reset();
 	if (EmoteMenu)
 	{
 		EmoteMenu->RemoveFromParent();
@@ -1513,7 +1581,7 @@ void ACTCharacter::MulticastPlayEmote_Implementation(int32 SlotIndex)
 	// 말풍선: 그림이 비어 있어도 빈 말풍선이 뜸
 	if (EmoteBubble)
 	{
-		if (Slot.Atlas)
+		if (UTexture2D* SlotAtlas = Slot.GetAtlas())
 		{
 			// 아틀라스에서 이 칸만 잘라 씀
 			const int32 Columns = FMath::Max(1, Slot.AtlasColumns);
@@ -1522,7 +1590,7 @@ void ACTCharacter::MulticastPlayEmote_Implementation(int32 SlotIndex)
 			const int32 Row = FMath::Clamp(Slot.AtlasCell / Columns, 0, Rows - 1);
 			const FVector2D CellSize(1.0 / Columns, 1.0 / Rows);
 			const FVector2D UVMin(Column * CellSize.X, Row * CellSize.Y);
-			EmoteBubble->ShowEmote(Slot.Atlas, UVMin, UVMin + CellSize);
+			EmoteBubble->ShowEmote(SlotAtlas, UVMin, UVMin + CellSize);
 		}
 		else
 		{
