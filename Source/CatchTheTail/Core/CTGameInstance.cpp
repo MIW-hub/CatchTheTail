@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTGameInstance.h"
+#include "CTMatchHistory.h"
 #include "HAL/PlatformTime.h"
 #include "../Type/CTTypes.h"
 #include "CTProfileSaveGame.h"
@@ -199,6 +200,9 @@ void UCTGameInstance::JoinByRoomCode(const FString& RoomCode)
 
 void UCTGameInstance::LeaveToMainMenu(FText Message)
 {
+	// 방 전적은 방이 끝나면 사라짐
+	UCTMatchHistory::ClearRecords();
+
 	// 로비로 안 가고 메인 메뉴로 튕길 때 이유를 로그에서 찾기 위한 기록
 	UE_LOG(LogTemp, Log, TEXT("[CT] 메인 메뉴로 이동: %s"), *Message.ToString());
 	PendingMessage = Message;

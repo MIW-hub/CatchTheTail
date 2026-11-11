@@ -7,6 +7,7 @@
 
 class UCTScoreEntryWidget;
 class UButton;
+class UImage;
 class UVerticalBox;
 
 UCLASS(Abstract)
@@ -53,6 +54,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Winners;
 
+	// 내 등수 옆 왕관 (1등일 때만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_RankCrown;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_Ranking;
 
@@ -69,6 +74,9 @@ protected:
 	TObjectPtr<UTextBlock> Text_ReturnHint;
 
 private:
+	// 이 판의 결과를 전적에 한 번만 저장
+	bool bRecordedToHistory = false;
+
 	UFUNCTION()
 	void HandleReturnToLobbyClicked();
 

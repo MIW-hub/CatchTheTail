@@ -6,6 +6,9 @@
 #include "InputCoreTypes.h"
 #include "CTSettingsSaveGame.generated.h"
 
+// 목소리 볼륨 슬라이더 100%일 때의 배율 (슬라이더 50%가 예전 기본 크기)
+constexpr float CTVoiceMaxGain = 2.0f;
+
 // 설정 창 값. 로컬 저장
 USTRUCT(BlueprintType)
 struct FCTSettingsData
@@ -60,9 +63,13 @@ struct FCTSettingsData
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
 	bool bMicAlwaysOn = false;
 
-	// 다른 사람 목소리 볼륨 0~1
+	// 다른 사람 목소리 볼륨 0~1 (슬라이더 값). 실제 볼륨 = 값 x CTVoiceMaxGain, 기본 0.5가 예전 100%와 같은 크기
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")
-	float VoiceVolume = 1.0f;
+	float VoiceVolume = 0.5f;
+
+	// 목소리 볼륨 척도 버전. 0이면 예전 척도(슬라이더 1 = 원래 크기)라서 불러올 때 기본값으로 바꿈
+	UPROPERTY()
+	int32 VoiceScaleVersion = 0;
 
 	// 마이크 감도 0~1. 클수록 작은 소리도 보냄
 	UPROPERTY(BlueprintReadWrite, Category = "CT|Settings")

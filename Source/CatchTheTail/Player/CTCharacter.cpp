@@ -127,6 +127,10 @@ ACTCharacter::ACTCharacter(const FObjectInitializer& ObjectInitializer)
 	// 꼬리 잡기 F 연타 대결
 	Grapple = CreateDefaultSubobject<UCTGrappleComponent>(TEXT("Grapple"));
 
+	// 이모트 고르는 창 모양 (WBP). 디자인은 WBP 에서 함
+	static ConstructorHelpers::FClassFinder<UCTEmoteSelectWidget> EmoteMenuFinder(TEXT("/Game/UI/WBP_CTEmoteSelectWidget"));
+	if (EmoteMenuFinder.Succeeded()) { EmoteMenuClass = EmoteMenuFinder.Class; }
+
 	// 이모트 목록: 아틀라스(3x3) 3장 = 27개
 	static const TCHAR* const SheetPaths[3] =
 	{
@@ -1428,7 +1432,9 @@ void ACTCharacter::ToggleEmoteMenu()
 		return;
 	}
 
-	EmoteMenu = CreateWidget<UCTEmoteSelectWidget>(PlayerController, UCTEmoteSelectWidget::StaticClass());
+	// 창 모양 WBP 가 없으면 열지 않음 (빈 화면에 입력만 막히는 것을 방지)
+	if (!EmoteMenuClass) { return; }
+	EmoteMenu = CreateWidget<UCTEmoteSelectWidget>(PlayerController, EmoteMenuClass);
 	if (!EmoteMenu) { return; }
 	EmoteMenu->Setup(this);
 	EmoteMenu->OnCloseRequested.AddUObject(this, &ACTCharacter::CloseEmoteMenu);

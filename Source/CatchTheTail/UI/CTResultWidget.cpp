@@ -7,7 +7,10 @@
 #include "../Core/CTGameInstance.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTPlayerController.h"
+#include "../Core/CTMatchHistory.h"
+#include "../Core/CTMapSettings.h"
 #include "Components/Button.h"
+#include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "UObject/ConstructorHelpers.h"
@@ -85,29 +88,28 @@ void UCTResultWidget::ShowResult()
 	if (!GameState) { return; }
 
 	const ACTPlayerState* MyPlayerState = GetOwningCTPlayerState();
-	const TArray<ACTPlayerState*> Winners = GameState->GetWinners();
 	const bool bIsTie = GameState->IsTie();
 	const bool bLocalPlayerWon = GameState->IsWinner(MyPlayerState);
 
+	// 내 등수 (꼬리 수가 같으면 같은 등수). 순위표 목록과 같은 규칙
+	int32 MyRank = INDEX_NONE;
+	{
+		const TArray<ACTPlayerState*> Sorted = GetSortedPlayers(GameState);
+		int32 Rank = 0;
+		int32 PreviousTailCount = INDEX_NONE;
+		for (int32 Index = 0; Index < Sorted.Num(); ++Index)
+		{
+			if (Sorted[Index]->GetTailCount() != PreviousTailCount)
+			{
+				Rank = Index + 1;
+				PreviousTailCount = Sorted[Index]->GetTailCount();
+			}
+			if (Sorted[Index] == MyPlayerState) { MyRank = Rank; break; }
+		}
+	}
+
 	if (Text_ResultTitle)
 	{
-		// 내 등수 (꼬리 수가 같으면 같은 등수). 순위표 목록과 같은 규칙
-		int32 MyRank = INDEX_NONE;
-		{
-			const TArray<ACTPlayerState*> Sorted = GetSortedPlayers(GameState);
-			int32 Rank = 0;
-			int32 PreviousTailCount = INDEX_NONE;
-			for (int32 Index = 0; Index < Sorted.Num(); ++Index)
-			{
-				if (Sorted[Index]->GetTailCount() != PreviousTailCount)
-				{
-					Rank = Index + 1;
-					PreviousTailCount = Sorted[Index]->GetTailCount();
-				}
-				if (Sorted[Index] == MyPlayerState) { MyRank = Rank; break; }
-			}
-		}
-
 		// 연장전이면 안내 문구, 아니면 "N등" (순위에 없는 관전자는 기존 승리/패배 문구)
 		FText Title;
 		if (bIsTie && bLocalPlayerWon) { Title = TieText; }
@@ -116,14 +118,16 @@ void UCTResultWidget::ShowResult()
 		Text_ResultTitle->SetText(Title);
 	}
 
+	// 1등이면 등수 옆에 왕관
+	if (Image_RankCrown)
+	{
+		Image_RankCrown->SetVisibility((MyRank == 1 && !(bIsTie && bLocalPlayerWon)) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
+	// 위에는 내 순위만 보여줌 (우승자 이름 줄은 숨김)
 	if (Text_Winners)
 	{
-		TArray<FString> WinnerNames;
-		for (const ACTPlayerState* Winner : Winners)
-		{
-			WinnerNames.Add(Winner->GetPlayerName());
-		}
-		Text_Winners->SetText(FText::FromString(FString::Join(WinnerNames, TEXT(", "))));
+		Text_Winners->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	if (!VerticalBox_Ranking || !ScoreEntryClass)
@@ -157,6 +161,42 @@ void UCTResultWidget::ShowResult()
 			VerticalBox_Ranking->AddChildToVerticalBox(Entry);
 			Entry->RefreshEntry(Rank, PlayerState == MyPlayerState);
 		}
+	}
+
+	// 전적 저장 (이 판 한 번만. 관전자는 제외)
+	if (!bRecordedToHistory && MyRank != INDEX_NONE && MyPlayerState)
+	{
+		bRecordedToHistory = true;
+
+		FCTMatchRecord Record;
+		Record.Time = FDateTime::Now();
+		Record.MyRank = MyRank;
+		Record.MyTailCount = MyPlayerState->GetTailCount();
+		Record.PlayerCount = GetSortedPlayers(GameState).Num();
+		{
+			FCTMapInfo MapInfo;
+			if (UCTMapSettings::GetMapInfo(GameState->GetSelectedMapIndex(), MapInfo)) { Record.MapName = MapInfo.DisplayName.ToString(); }
+		}
+
+		const TArray<ACTPlayerState*> Sorted = GetSortedPlayers(GameState);
+		int32 Rank = 0;
+		int32 PreviousTailCount = INDEX_NONE;
+		for (int32 Index = 0; Index < Sorted.Num(); ++Index)
+		{
+			if (Sorted[Index]->GetTailCount() != PreviousTailCount)
+			{
+				Rank = Index + 1;
+				PreviousTailCount = Sorted[Index]->GetTailCount();
+			}
+			// 1~3등만 기록 (동점이면 같은 등수 사람이 모두 들어감)
+			if (Rank > 3) { break; }
+			FCTMatchRecordEntry& Entry = Record.Entries.AddDefaulted_GetRef();
+			Entry.PlayerName = Sorted[Index]->GetPlayerName();
+			Entry.Rank = Rank;
+			Entry.TailCount = Sorted[Index]->GetTailCount();
+			Entry.bIsMe = (Sorted[Index] == MyPlayerState);
+		}
+		UCTMatchHistory::AddRecord(Record);
 	}
 
 	BP_OnResultShown(bLocalPlayerWon, bIsTie);

@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTMainMenuWidget.h"
+#include "../Core/CTMatchHistory.h"
 #include "CTButtonHoverEffect.h"
 #include "CTVersionLabel.h"
 #include "../Core/CTAudioSubsystem.h"
@@ -20,6 +21,9 @@
 void UCTMainMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// 메인 메뉴로 나왔다면 이전 방은 끝난 것: 방 전적 비움
+	UCTMatchHistory::ClearRecords();
 	UCTButtonHoverEffect::Attach(this);
 
 	// 버튼 소리 (올림 / 누름)

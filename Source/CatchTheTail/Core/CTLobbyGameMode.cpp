@@ -140,6 +140,16 @@ void ACTLobbyGameMode::HandleSeamlessTravelPlayer(AController*& C)
 {
 	Super::HandleSeamlessTravelPlayer(C);
 	InitLobbyPlayer(Cast<APlayerController>(C));
+
+	// 이전 게임의 AI 상태가 남아 있으면 정리 (로비에는 AI가 없고, 인원은 경기 설정으로만 표시)
+	if (GameState)
+	{
+		const TArray<TObjectPtr<APlayerState>> States = GameState->PlayerArray;
+		for (APlayerState* State : States)
+		{
+			if (State && State->IsABot()) { State->Destroy(); }
+		}
+	}
 }
 
 void ACTLobbyGameMode::InitLobbyPlayer(APlayerController* NewPlayer)

@@ -44,6 +44,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildPauseMenu(UBlueprint* WidgetBlueprint);
 
+	// 이모트 선택창 WBP 처음 뼈대 만들기 (한 번만. 이후 모양은 WBP 에서 직접 꾸밈)
+	// 칸(WBP_CTEmoteCellWidget): 배경, 이모지 그림, 선택 표시, 키 번호, 버튼
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildEmoteCellDesign(UBlueprint* WidgetBlueprint);
+
+	// 창(WBP_CTEmoteSelectWidget): 어두운 배경, 틀, 제목, 숫자 키 자리 줄, 전체 목록 격자, 닫기 버튼
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildEmoteSelectDesign(UBlueprint* WidgetBlueprint);
+
 	// 위젯 트리를 글자로 설명 (이름, 종류, 캔버스 위치)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static FString DescribeWidgetTree(UBlueprint* WidgetBlueprint);
@@ -117,6 +126,21 @@ public:
 	static bool StyleSlider(UBlueprint* WidgetBlueprint, FName SliderName, FLinearColor BarColor, FLinearColor HandleColor, FLinearColor OutlineColor);
 
 	// 체크박스를 둥근 흰 상자 / 체크 시 색 상자(외곽선)로 바꿈
+	// 전적 팝업 줄 / 팝업 뼈대 (처음 한 번)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildMatchHistoryEntryDesign(UBlueprint* WidgetBlueprint);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildMatchHistoryDesign(UBlueprint* WidgetBlueprint);
+
+	// 로비 위젯에 전적 버튼 추가
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool AddLobbyHistoryButton(UBlueprint* WidgetBlueprint);
+
+	// 입력창 배경/글자 색 (어두운 배경 + 밝은 글자)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool StyleEditableTextBox(UBlueprint* WidgetBlueprint, FName BoxName, FLinearColor Fill, FLinearColor FocusedFill, FLinearColor OutlineColor, FLinearColor TextColor, float Radius);
+
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool StyleCheckBox(UBlueprint* WidgetBlueprint, FName CheckBoxName, FLinearColor UncheckedFill, FLinearColor CheckedFill, FLinearColor OutlineColor, float BoxSize);
 

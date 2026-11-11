@@ -40,6 +40,8 @@ class CATCHTHETAIL_API UCTLobbyWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	UCTLobbyWidget(const FObjectInitializer& ObjectInitializer);
+
 	// 목록/버튼 즉시 갱신
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
 	void RefreshLobby();
@@ -95,6 +97,14 @@ protected:
 	// 나가기 버튼
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Leave;
+
+	// 전적 팝업 열기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_History;
+
+	// 전적 팝업 (기본 /Game/UI/WBP_CTMatchHistoryWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UUserWidget> HistoryClass;
 
 	// 채팅 스크롤 박스
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -187,6 +197,9 @@ private:
 
 	UFUNCTION()
 	void HandleLeaveClicked();
+
+	UFUNCTION()
+	void HandleHistoryClicked();
 
 	// 포커스를 게임 화면으로 복귀
 	void ReturnFocusToGame();

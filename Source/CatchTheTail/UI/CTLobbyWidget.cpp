@@ -19,6 +19,28 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "UObject/ConstructorHelpers.h"
+
+UCTLobbyWidget::UCTLobbyWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	static ConstructorHelpers::FClassFinder<UUserWidget> HistoryFinder(TEXT("/Game/UI/WBP_CTMatchHistoryWidget"));
+	if (HistoryFinder.Succeeded())
+	{
+		HistoryClass = HistoryFinder.Class;
+	}
+}
+
+void UCTLobbyWidget::HandleHistoryClicked()
+{
+	if (!HistoryClass) { return; }
+
+	if (UUserWidget* Popup = CreateWidget<UUserWidget>(GetOwningPlayer(), HistoryClass))
+	{
+		Popup->AddToViewport(200);
+		Popup->SetKeyboardFocus();
+	}
+}
 
 void UCTLobbyWidget::NativeConstruct()
 {
@@ -36,6 +58,7 @@ void UCTLobbyWidget::NativeConstruct()
 	if (Button_CopyRoomCode)   { Button_CopyRoomCode->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleCopyRoomCodeClicked); }
 	if (Text_CopyResult)       { Text_CopyResult->SetVisibility(ESlateVisibility::Collapsed); }
 	if (Button_Leave) { Button_Leave->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleLeaveClicked); }
+	if (Button_History) { Button_History->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleHistoryClicked); }
 
 	// 맵 선택
 	if (Button_SelectMap)       { Button_SelectMap->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleSelectMapClicked); }
@@ -221,12 +244,20 @@ void UCTLobbyWidget::RefreshLobby()
 		for (const APlayerState* PlayerState : CTGameState->PlayerArray)
 		{
 			const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
-			if (!CTPlayerState) { continue; }
+			// AI 상태는 아래에서 경기 설정 인원만큼 따로 표시함 (남아 있던 이전 AI가 겹쳐 쌓이지 않게)
+			if (!CTPlayerState || CTPlayerState->IsABot()) { continue; }
 
 			const FText Mark = CTPlayerState->IsHost()
 				? NSLOCTEXT("CT", "Lobby_StateHost", "방장")
 				: (CTPlayerState->IsReady() ? NSLOCTEXT("CT", "Lobby_StateReady", "준비") : NSLOCTEXT("CT", "Lobby_StateWaiting", "대기"));
 			List += FString::Printf(TEXT("%s   [%s]\n"), *CTPlayerState->GetPlayerName(), *Mark.ToString());
+		}
+
+		// 게임에서 채워질 AI도 같은 목록에 보여줌 (AI는 항상 준비 상태)
+		const int32 AICount = CTGameState->GetLobbyAIPlayerCount();
+		for (int32 Index = 0; Index < AICount; ++Index)
+		{
+			List += FString::Printf(TEXT("AI %d   [%s]\n"), Index + 1, *NSLOCTEXT("CT", "Lobby_StateAI", "AI").ToString());
 		}
 		Text_PlayerList->SetText(FText::FromString(List));
 	}

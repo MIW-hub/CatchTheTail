@@ -26,6 +26,7 @@
 #include "Components/Slider.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
+#include "Components/UniformGridPanel.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/Blueprint.h"
@@ -1218,6 +1219,37 @@ bool UCTUIBuildTools::StyleSlider(UBlueprint* WidgetBlueprint, FName SliderName,
 	Slider->SetWidgetStyle(Style);
 	Slider->SetSliderBarColor(FLinearColor::White);
 	Slider->SetSliderHandleColor(FLinearColor::White);
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool UCTUIBuildTools::StyleEditableTextBox(UBlueprint* WidgetBlueprint, FName BoxName, FLinearColor Fill, FLinearColor FocusedFill, FLinearColor OutlineColor, FLinearColor TextColor, float Radius)
+{
+#if WITH_EDITOR
+	UWidgetTree* WidgetTree = GetBlueprintTree(WidgetBlueprint);
+	UEditableTextBox* Box = WidgetTree ? Cast<UEditableTextBox>(WidgetTree->FindWidget(BoxName)) : nullptr;
+	if (!Box) { return false; }
+
+	const FVector2D Size(16.f, 16.f);
+	const FSlateBrush Normal = MakeRoundedBrush(Fill, OutlineColor, Radius, 2.f, Size);
+	const FSlateBrush Focused = MakeRoundedBrush(FocusedFill, OutlineColor, Radius, 2.f, Size);
+
+	FEditableTextBoxStyle Style = Box->WidgetStyle;
+	Style.SetBackgroundImageNormal(Normal);
+	Style.SetBackgroundImageHovered(Normal);
+	Style.SetBackgroundImageFocused(Focused);
+	Style.SetBackgroundImageReadOnly(Normal);
+	Style.SetForegroundColor(FSlateColor(TextColor));
+	Style.SetFocusedForegroundColor(FSlateColor(TextColor));
+	Style.SetReadOnlyForegroundColor(FSlateColor(TextColor));
+	Style.TextStyle.SetColorAndOpacity(FSlateColor(TextColor));
+	Box->WidgetStyle = Style;
+	Box->SetForegroundColor(TextColor);
+
 	WidgetBlueprint->Modify();
 	WidgetBlueprint->MarkPackageDirty();
 	return true;
@@ -2591,5 +2623,435 @@ int32 UCTUIBuildTools::BuildPauseMenu(UBlueprint* WidgetBlueprint)
 	return Created;
 #else
 	return 0;
+#endif
+}
+
+// 이모트 선택창 뼈대 (처음 한 번). 만든 뒤의 모양은 WBP 에서 직접 바꿈
+
+#if WITH_EDITOR
+namespace
+{
+	FSlateBrush StyleTextureBrush(const TCHAR* Name, const FMargin& Margin, ESlateBrushDrawType::Type DrawAs)
+	{
+		FSlateBrush Brush;
+		UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/2D/UI/Style/%s.%s"), Name, Name));
+		Brush.SetResourceObject(Texture);
+		if (Texture) { Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY()); }
+		Brush.DrawAs = DrawAs;
+		Brush.Margin = Margin;
+		return Brush;
+	}
+
+	// 투명 눌림 버튼 (눌림만 받고 모양은 위에 겹친 그림으로)
+	void StyleClearButton(UButton* Button)
+	{
+		FButtonStyle Style = Button->GetStyle();
+		Style.Normal = FSlateNoResource();
+		FSlateBrush Hover;
+		Hover.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Hover.TintColor = FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.25f));
+		Hover.OutlineSettings.CornerRadii = FVector4(14.f, 14.f, 14.f, 14.f);
+		Style.Hovered = Hover;
+		FSlateBrush Press = Hover;
+		Press.TintColor = FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.15f));
+		Style.Pressed = Press;
+		Button->SetStyle(Style);
+	}
+}
+#endif
+
+int32 UCTUIBuildTools::BuildEmoteCellDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTEmoteCellWidget"))) { return -1; }
+
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+
+	// 칸 사이 간격은 바깥 여백으로
+	UBorder* Root = Make<UBorder>(TEXT("Border_CellRoot"));
+	Root->SetBrushColor(FLinearColor::Transparent);
+	Root->SetPadding(FMargin(4.f));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	USizeBox* Size = Make<USizeBox>(TEXT("Size_Cell"));
+	Size->SetWidthOverride(104.f);
+	Size->SetHeightOverride(104.f);
+	Size->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Root->SetContent(Size);
+
+	UOverlay* Overlay = Make<UOverlay>(TEXT("Overlay_Cell"));
+	Overlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Size->SetContent(Overlay);
+
+	auto AddFill = [Overlay](UWidget* Child, const FMargin& Padding)
+	{
+		UOverlaySlot* OverlaySlot = Overlay->AddChildToOverlay(Child);
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+		OverlaySlot->SetPadding(Padding);
+	};
+
+	// 배경: 테두리 없는 흰 상자
+	UImage* Back = Make<UImage>(TEXT("Image_CellBack"));
+	Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+	Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+	AddFill(Back, FMargin(0.f));
+
+	// 이모지 그림: 그림은 코드가 채움 (크기와 여백은 여기서 정함)
+	UImage* Icon = Make<UImage>(TEXT("Image_Icon"));
+	Icon->SetVisibility(ESlateVisibility::HitTestInvisible);
+	AddFill(Icon, FMargin(6.f));
+
+	// 고른 칸 표시 (분홍 테두리). 평소에는 숨김
+	UImage* Selected = Make<UImage>(TEXT("Widget_Selected"));
+	FSlateBrush SelectedBrush;
+	SelectedBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+	SelectedBrush.TintColor = FSlateColor(FLinearColor(1.f, 0.39f, 0.64f, 0.18f));
+	SelectedBrush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(14.f, 14.f, 14.f, 14.f), FSlateColor(Magenta), 5.f);
+	Selected->SetBrush(SelectedBrush);
+	Selected->SetVisibility(ESlateVisibility::Collapsed);
+	AddFill(Selected, FMargin(0.f));
+
+	// 키 번호 (숫자 키 자리일 때만 코드가 보이게 함)
+	UTextBlock* Key = Make<UTextBlock>(TEXT("Text_Key"));
+	Key->SetText(Loc(TEXT("Text_Key"), TEXT("1")));
+	Key->SetFont(MakeFont(TEXT("Bold"), 22));
+	Key->SetColorAndOpacity(FSlateColor(Magenta));
+	Key->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* KeySlot = Overlay->AddChildToOverlay(Key);
+	KeySlot->SetHorizontalAlignment(HAlign_Left);
+	KeySlot->SetVerticalAlignment(VAlign_Top);
+	KeySlot->SetPadding(FMargin(8.f, 2.f, 0.f, 0.f));
+
+	// 눌림만 받는 투명 버튼
+	UButton* Button = Make<UButton>(TEXT("Button_Cell"));
+	StyleClearButton(Button);
+	AddFill(Button, FMargin(0.f));
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}
+
+int32 UCTUIBuildTools::BuildEmoteSelectDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTEmoteSelectWidget"))) { return -1; }
+
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+
+	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_EmoteSelect"));
+	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Canvas;
+
+	// 뒤를 어둡게 (뒤 화면 클릭 막음)
+	UImage* Dim = Make<UImage>(TEXT("Image_EmoteDim"));
+	Dim->SetColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.45f));
+	Dim->SetVisibility(ESlateVisibility::Visible);
+	UCanvasPanelSlot* DimSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Dim));
+	DimSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+	DimSlot->SetOffsets(FMargin(0.f));
+
+	// 가운데 패널: 틀 그림 위에 내용
+	UOverlay* Panel = Make<UOverlay>(TEXT("Overlay_EmotePanel"));
+	Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Panel));
+	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+	PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	PanelSlot->SetAutoSize(true);
+
+	UImage* Frame = Make<UImage>(TEXT("Image_EmotePanel"));
+	Frame->SetBrush(StyleTextureBrush(TEXT("UI_Frame_Pink_L"), FMargin(0.018f, 0.12f, 0.018f, 0.026f), ESlateBrushDrawType::Box));
+	Frame->SetVisibility(ESlateVisibility::Visible);
+	UOverlaySlot* FrameSlot = Panel->AddChildToOverlay(Frame);
+	FrameSlot->SetHorizontalAlignment(HAlign_Fill);
+	FrameSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_Emote"));
+	Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* ColumnSlot = Panel->AddChildToOverlay(Column);
+	ColumnSlot->SetHorizontalAlignment(HAlign_Center);
+	ColumnSlot->SetVerticalAlignment(VAlign_Fill);
+	ColumnSlot->SetPadding(FMargin(40.f, 0.f, 40.f, 40.f));
+
+	// 제목은 틀의 분홍 머리 부분에
+	UTextBlock* Title = Make<UTextBlock>(TEXT("Text_EmoteTitle"));
+	Title->SetText(Loc(TEXT("Text_EmoteTitle"), TEXT("이모트 설정")));
+	FSlateFontInfo TitleFont = MakeFont(TEXT("Bold"), 44);
+	TitleFont.OutlineSettings.OutlineSize = 3;
+	TitleFont.OutlineSettings.OutlineColor = DarkPurple;
+	Title->SetFont(TitleFont);
+	Title->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	Title->SetJustification(ETextJustify::Center);
+	Title->SetVisibility(ESlateVisibility::HitTestInvisible);
+	USizeBox* TitleBox = Sized(TEXT("Size_EmoteTitle"), Title, 0.f, 92.f);
+	UVerticalBoxSlot* TitleSlot = Column->AddChildToVerticalBox(TitleBox);
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
+	TitleSlot->SetVerticalAlignment(VAlign_Center);
+
+	AddV(Column, MakeText(TEXT("Text_EmoteHint"), TEXT("숫자 키 자리를 고른 뒤, 아래에서 넣을 이모트를 누르세요"), TEXT("Regular"), 20, DarkPurple, ETextJustify::Center), 14.f);
+
+	// 숫자 키 자리 줄 (코드가 칸을 채움)
+	UHorizontalBox* SlotRow = Make<UHorizontalBox>(TEXT("Row_EmoteSlots"));
+	UVerticalBoxSlot* SlotRowSlot = Column->AddChildToVerticalBox(SlotRow);
+	SlotRowSlot->SetHorizontalAlignment(HAlign_Center);
+	SlotRowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 18.f));
+
+	// 전체 이모트 격자 (코드가 칸을 채움)
+	UUniformGridPanel* Grid = Make<UUniformGridPanel>(TEXT("Grid_EmoteLibrary"));
+	UVerticalBoxSlot* GridSlot = Column->AddChildToVerticalBox(Grid);
+	GridSlot->SetHorizontalAlignment(HAlign_Center);
+
+	// 닫기 버튼
+	UButton* Close = Make<UButton>(TEXT("Button_Close"));
+	FButtonStyle CloseStyle = Close->GetStyle();
+	const FSlateBrush CloseBrush = StyleTextureBrush(TEXT("UI_Btn_Pink_L"), FMargin(0.1f, 0.3f, 0.1f, 0.35f), ESlateBrushDrawType::Box);
+	CloseStyle.Normal = CloseBrush;
+	CloseStyle.Hovered = CloseBrush;
+	CloseStyle.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	CloseStyle.Pressed = CloseBrush;
+	CloseStyle.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Close->SetStyle(CloseStyle);
+	UTextBlock* CloseText = MakeText(TEXT("Label_Button_Close"), TEXT("닫기 (R)"), TEXT("Bold"), 24, FLinearColor::White, ETextJustify::Center);
+	Close->SetContent(CloseText);
+	USizeBox* CloseBox = Sized(TEXT("Size_Button_Close"), Close, 300.f, 80.f);
+	UVerticalBoxSlot* CloseSlot = Column->AddChildToVerticalBox(CloseBox);
+	CloseSlot->SetHorizontalAlignment(HAlign_Center);
+	CloseSlot->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}
+
+// 전적 팝업 뼈대 (처음 한 번). 만든 뒤의 모양은 WBP 에서 직접 바꿈
+
+int32 UCTUIBuildTools::BuildMatchHistoryEntryDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTMatchHistoryEntryWidget"))) { return -1; }
+
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+
+	// 줄 사이 간격은 바깥 여백으로
+	UBorder* Root = Make<UBorder>(TEXT("Border_EntryRoot"));
+	Root->SetBrushColor(FLinearColor::Transparent);
+	Root->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	UOverlay* Overlay = Make<UOverlay>(TEXT("Overlay_Entry"));
+	Overlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Root->SetContent(Overlay);
+
+	// 배경: 테두리 없는 분홍 줄
+	UImage* Back = Make<UImage>(TEXT("Image_EntryBack"));
+	Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+	Back->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC)));
+	Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* BackSlot = Overlay->AddChildToOverlay(Back);
+	BackSlot->SetHorizontalAlignment(HAlign_Fill);
+	BackSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_Entry"));
+	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* RowSlot = Overlay->AddChildToOverlay(Row);
+	RowSlot->SetHorizontalAlignment(HAlign_Fill);
+	RowSlot->SetVerticalAlignment(VAlign_Fill);
+	RowSlot->SetPadding(FMargin(24.f, 12.f, 24.f, 12.f));
+
+	// 판 번호 + 맵 이름
+	UTextBlock* Index = MakeText(TEXT("Text_Index"), TEXT("1"), TEXT("Bold"), 36, Magenta, ETextJustify::Center);
+	Index->SetAutoWrapText(false);
+	AddH(Row, Sized(TEXT("Size_Index"), Index, 56.f, 0.f), 10.f, false);
+
+	UTextBlock* MapName = MakeText(TEXT("Text_MapName"), TEXT("시골맵"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Left);
+	AddH(Row, Sized(TEXT("Size_MapName"), MapName, 190.f, 0.f), 14.f, false);
+
+	// 1~3등 칸
+	for (int32 Slot = 1; Slot <= 3; ++Slot)
+	{
+		const FString Suffix = FString::FromInt(Slot);
+		UOverlay* Cell = Make<UOverlay>(*(TEXT("Overlay_Cell") + Suffix));
+		Cell->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		UImage* CellBack = Make<UImage>(*(TEXT("Image_Cell") + Suffix));
+		FSlateBrush CellBrush;
+		CellBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		CellBrush.TintColor = FSlateColor(FLinearColor::White);
+		CellBrush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(12.f, 12.f, 12.f, 12.f), FSlateColor(Magenta), 3.f);
+		CellBack->SetBrush(CellBrush);
+		CellBack->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* CellBackSlot = Cell->AddChildToOverlay(CellBack);
+		CellBackSlot->SetHorizontalAlignment(HAlign_Fill);
+		CellBackSlot->SetVerticalAlignment(VAlign_Fill);
+
+		UVerticalBox* Column = Make<UVerticalBox>(*(TEXT("Column_Cell") + Suffix));
+		Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlaySlot* ColumnSlot = Cell->AddChildToOverlay(Column);
+		ColumnSlot->SetHorizontalAlignment(HAlign_Fill);
+		ColumnSlot->SetVerticalAlignment(VAlign_Center);
+		ColumnSlot->SetPadding(FMargin(6.f, 4.f, 6.f, 4.f));
+
+		UTextBlock* Place = MakeText(*(TEXT("Text_Place") + Suffix), *Suffix, TEXT("Bold"), 18, Magenta, ETextJustify::Center);
+		AddV(Column, Place, 0.f);
+		UTextBlock* Name = MakeText(*(TEXT("Text_Name") + Suffix), TEXT("이름"), TEXT("Bold"), 22, DarkPurple, ETextJustify::Center);
+		Name->SetAutoWrapText(false);
+		AddV(Column, Name, 0.f);
+		UTextBlock* Tail = MakeText(*(TEXT("Text_Tail") + Suffix), TEXT("0"), TEXT("Regular"), 17, DarkPurple, ETextJustify::Center);
+		AddV(Column, Tail, 0.f);
+
+		USizeBox* CellSize = Sized(*(TEXT("Size_Cell") + Suffix), Cell, 150.f, 0.f);
+		CellSize->SetMinDesiredHeight(92.f);
+		AddH(Row, CellSize, Slot < 3 ? 14.f : 0.f, false, VAlign_Fill);
+	}
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}
+
+int32 UCTUIBuildTools::BuildMatchHistoryDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTMatchHistoryWidget"))) { return -1; }
+
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+
+	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_History"));
+	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Canvas;
+
+	// 뒤를 어둡게 (뒤 화면 클릭 막음)
+	UImage* Dim = Make<UImage>(TEXT("Image_HistoryDim"));
+	Dim->SetColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.55f));
+	Dim->SetVisibility(ESlateVisibility::Visible);
+	UCanvasPanelSlot* DimSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Dim));
+	DimSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+	DimSlot->SetOffsets(FMargin(0.f));
+
+	UOverlay* Panel = Make<UOverlay>(TEXT("Overlay_HistoryPanel"));
+	Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Panel));
+	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+	PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	PanelSlot->SetAutoSize(true);
+
+	UImage* Frame = Make<UImage>(TEXT("Image_HistoryPanel"));
+	Frame->SetBrush(StyleTextureBrush(TEXT("UI_Frame_Pink_L"), FMargin(0.018f, 0.12f, 0.018f, 0.026f), ESlateBrushDrawType::Box));
+	Frame->SetVisibility(ESlateVisibility::Visible);
+	UOverlaySlot* FrameSlot = Panel->AddChildToOverlay(Frame);
+	FrameSlot->SetHorizontalAlignment(HAlign_Fill);
+	FrameSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_History"));
+	Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* ColumnSlot = Panel->AddChildToOverlay(Column);
+	ColumnSlot->SetHorizontalAlignment(HAlign_Center);
+	ColumnSlot->SetVerticalAlignment(VAlign_Fill);
+	ColumnSlot->SetPadding(FMargin(40.f, 0.f, 40.f, 40.f));
+
+	// 제목은 틀의 분홍 머리 부분에
+	UTextBlock* Title = Make<UTextBlock>(TEXT("Text_HistoryTitle"));
+	Title->SetText(Loc(TEXT("Text_HistoryTitle"), TEXT("방 전적")));
+	FSlateFontInfo TitleFont = MakeFont(TEXT("Bold"), 44);
+	TitleFont.OutlineSettings.OutlineSize = 3;
+	TitleFont.OutlineSettings.OutlineColor = DarkPurple;
+	Title->SetFont(TitleFont);
+	Title->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	Title->SetJustification(ETextJustify::Center);
+	Title->SetVisibility(ESlateVisibility::HitTestInvisible);
+	USizeBox* TitleBox = Sized(TEXT("Size_HistoryTitle"), Title, 0.f, 92.f);
+	UVerticalBoxSlot* TitleSlot = Column->AddChildToVerticalBox(TitleBox);
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
+	TitleSlot->SetVerticalAlignment(VAlign_Center);
+
+	AddV(Column, MakeText(TEXT("Text_Total"), TEXT("총 0판 / 1등 0번"), TEXT("Bold"), 24, DarkPurple, ETextJustify::Center), 14.f);
+
+	// 목록 (코드가 줄을 채움). 없을 때는 안내 글자가 가운데에
+	UOverlay* ListOverlay = Make<UOverlay>(TEXT("Overlay_HistoryList"));
+	ListOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	UScrollBox* Scroll = Make<UScrollBox>(TEXT("Scroll_History"));
+	UOverlaySlot* ScrollSlot = ListOverlay->AddChildToOverlay(Scroll);
+	ScrollSlot->SetHorizontalAlignment(HAlign_Fill);
+	ScrollSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UTextBlock* Empty = MakeText(TEXT("Text_Empty"), TEXT("아직 전적이 없어요. 한 판 해 보세요!"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Center);
+	UOverlaySlot* EmptySlot = ListOverlay->AddChildToOverlay(Empty);
+	EmptySlot->SetHorizontalAlignment(HAlign_Center);
+	EmptySlot->SetVerticalAlignment(VAlign_Center);
+
+	USizeBox* ListBox = Sized(TEXT("Size_HistoryList"), ListOverlay, 900.f, 460.f);
+	UVerticalBoxSlot* ListSlot = Column->AddChildToVerticalBox(ListBox);
+	ListSlot->SetHorizontalAlignment(HAlign_Center);
+
+	// 닫기 버튼
+	UButton* Close = Make<UButton>(TEXT("Button_Close"));
+	FButtonStyle CloseStyle = Close->GetStyle();
+	const FSlateBrush CloseBrush = StyleTextureBrush(TEXT("UI_Btn_Pink_L"), FMargin(0.1f, 0.3f, 0.1f, 0.35f), ESlateBrushDrawType::Box);
+	CloseStyle.Normal = CloseBrush;
+	CloseStyle.Hovered = CloseBrush;
+	CloseStyle.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	CloseStyle.Pressed = CloseBrush;
+	CloseStyle.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Close->SetStyle(CloseStyle);
+	UTextBlock* CloseText = MakeText(TEXT("Label_Button_Close"), TEXT("닫기"), TEXT("Bold"), 24, FLinearColor::White, ETextJustify::Center);
+	Close->SetContent(CloseText);
+	USizeBox* CloseBox = Sized(TEXT("Size_Button_Close"), Close, 300.f, 80.f);
+	UVerticalBoxSlot* CloseSlot = Column->AddChildToVerticalBox(CloseBox);
+	CloseSlot->SetHorizontalAlignment(HAlign_Center);
+	CloseSlot->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}
+
+// 로비 가운데 위에 전적 버튼 하나 추가 (이미 있으면 건너뜀)
+bool UCTUIBuildTools::AddLobbyHistoryButton(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	// 주의: OpenTree 는 기존 위젯을 모두 지우므로 쓰지 않고 기존 트리에 그대로 덧붙임
+	Tree = WidgetBlueprint ? GetBlueprintTree(WidgetBlueprint) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyWidget");
+
+	if (Tree->FindWidget(TEXT("Button_History")))
+	{
+		Tree = nullptr;
+		return true;
+	}
+	UCanvasPanel* Canvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_Lobby")));
+	if (!Canvas) { Tree = nullptr; return false; }
+
+	UButton* Button = Make<UButton>(TEXT("Button_History"));
+	FButtonStyle Style = Button->GetStyle();
+	const FSlateBrush Brush = StyleTextureBrush(TEXT("UI_Btn_Pink_M"), FMargin(0.1f, 0.3f, 0.1f, 0.35f), ESlateBrushDrawType::Box);
+	Style.Normal = Brush;
+	Style.Hovered = Brush;
+	Style.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	Style.Pressed = Brush;
+	Style.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Button->SetStyle(Style);
+	Button->SetContent(MakeText(TEXT("Label_Button_History"), TEXT("전적"), TEXT("Bold"), 26, FLinearColor::White, ETextJustify::Center));
+
+	UCanvasPanelSlot* ButtonSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Button));
+	ButtonSlot->SetAnchors(FAnchors(0.5f, 0.f));
+	ButtonSlot->SetAlignment(FVector2D(0.5f, 0.f));
+	ButtonSlot->SetPosition(FVector2D(0.f, 24.f));
+	ButtonSlot->SetSize(FVector2D(240.f, 72.f));
+	ButtonSlot->SetZOrder(5);
+
+	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
 #endif
 }

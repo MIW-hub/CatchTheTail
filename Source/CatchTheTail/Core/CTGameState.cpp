@@ -182,18 +182,45 @@ int32 ACTGameState::GetLobbyReadyCount() const
 	return Count;
 }
 
-bool ACTGameState::CanStartLobby() const
+int32 ACTGameState::GetLobbyAIPlayerCount() const
 {
-	int32 PlayerCount = 0;
+	// 사람 수 (관전자 제외)
+	int32 HumanCount = 0;
 	for (const APlayerState* PlayerState : PlayerArray)
 	{
 		const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
-		if (!CTPlayerState || CTPlayerState->IsOnlyASpectator()) { continue; }
+		if (CTPlayerState && !CTPlayerState->IsOnlyASpectator() && !CTPlayerState->IsABot()) { ++HumanCount; }
+	}
 
-		++PlayerCount;
+	// 게임 맵에서 AI가 채워지는 규칙과 같음: 최대 인원(색 수 이하)에서 사람을 뺀 만큼까지
+	const int32 MaxPlayers = FMath::Min(MatchSettings.MaxPlayers, CTColorCount);
+	return FMath::Clamp(MatchSettings.AiPlayers, 0, FMath::Max(MaxPlayers - HumanCount, 0));
+}
+
+int32 ACTGameState::GetLobbyParticipantCount() const
+{
+	int32 HumanCount = 0;
+	for (const APlayerState* PlayerState : PlayerArray)
+	{
+		const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
+		if (CTPlayerState && !CTPlayerState->IsOnlyASpectator() && !CTPlayerState->IsABot()) { ++HumanCount; }
+	}
+	return HumanCount + GetLobbyAIPlayerCount();
+}
+
+bool ACTGameState::CanStartLobby() const
+{
+	for (const APlayerState* PlayerState : PlayerArray)
+	{
+		const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
+		// AI는 준비 개념이 없음 (이전 게임에서 남은 AI 상태가 있어도 시작을 막지 않음)
+		if (!CTPlayerState || CTPlayerState->IsOnlyASpectator() || CTPlayerState->IsABot()) { continue; }
+
 		if (!CTPlayerState->IsHost() && !CTPlayerState->IsReady()) { return false; }
 	}
-	return PlayerCount >= LobbyMinPlayers;
+
+	// 혼자서는 시작할 수 없음 (AI를 채워 두 명 이상이면 가능). BP에서 최소 인원을 1로 해도 2 미만은 막음
+	return GetLobbyParticipantCount() >= FMath::Max(LobbyMinPlayers, 2);
 }
 
 void ACTGameState::SetStartCountdown(double NewStartServerTime)

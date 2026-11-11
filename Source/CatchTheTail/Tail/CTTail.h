@@ -97,7 +97,7 @@ protected:
 	// 터치
 	// 끝 접촉 거리(cm), 캡슐 반지름 가산
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Tail", meta = (ClampMin = "0"))
-	float TouchRadius = 90.f;
+	float TouchRadius = 105.f;
 
 	// 겉모습
 	// 켜짐 불빛 세기 (EmissiveStrength)

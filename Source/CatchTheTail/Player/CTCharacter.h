@@ -578,7 +578,7 @@ protected:
 	// 잡기 / 밀기 설정
 	// 잡기 거리(cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat", meta = (ClampMin = "0"))
-	float GrabDistance = 150.f;
+	float GrabDistance = 170.f;
 
 	// true: Grab Window 구간만 판정, 노티파이 없으면 타이머
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Combat")
@@ -706,6 +706,10 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<class UCTEmoteSelectWidget> EmoteMenu;
+
+	// 이모트 고르는 창의 모양 (WBP_CTEmoteSelectWidget). 없으면 R 키를 눌러도 열리지 않음
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote")
+	TSubclassOf<class UCTEmoteSelectWidget> EmoteMenuClass;
 
 	bool bEmoteMenuPrevCursor = false;
 

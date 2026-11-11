@@ -164,6 +164,12 @@ void UCTSettingsSubsystem::LoadSettings()
 		Data = Saved->Data;
 		Data.MusicVolume = FMath::Clamp(Data.MusicVolume, 0.f, 1.f);
 		Data.SfxVolume = FMath::Clamp(Data.SfxVolume, 0.f, 1.f);
+		if (Data.VoiceScaleVersion < 2)
+		{
+			// 척도가 바뀌었으므로 기본값(예전 100%와 같은 크기)으로 되돌림
+			Data.VoiceVolume = 1.f / CTVoiceMaxGain;
+			Data.VoiceScaleVersion = 2;
+		}
 		Data.VoiceVolume = FMath::Clamp(Data.VoiceVolume, 0.f, 1.f);
 		Data.MicSensitivity = FMath::Clamp(Data.MicSensitivity, 0.f, 1.f);
 	}
@@ -298,7 +304,7 @@ void UCTSettingsSubsystem::ApplyAudio()
 	}
 
 	// 다른 사람 목소리 (음소거 포함)
-	const float VoiceVolume = Data.bMuteAll ? 0.f : Data.VoiceVolume;
+	const float VoiceVolume = Data.bMuteAll ? 0.f : Data.VoiceVolume * CTVoiceMaxGain;
 	if (USoundClass* VoiceClass = Config()->VoiceSoundClass.LoadSynchronous())
 	{
 		UGameplayStatics::SetSoundMixClassOverride(World, Mix, VoiceClass, VoiceVolume, 1.f, 0.f, true);

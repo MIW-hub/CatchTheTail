@@ -360,7 +360,17 @@ void ACTGameMode::ReturnToLobby()
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 대기 로비로 복귀: %s"), *TravelName);
+	// AI 플레이어는 게임에서만 존재함. 이동 전에 정리하지 않으면 로비 인원 목록에 이전 AI가 남아 쌓임
+	TArray<ACTAIController*> BotControllers;
+	for (TActorIterator<ACTAIController> It(World); It; ++It) { BotControllers.Add(*It); }
+	for (ACTAIController* Bot : BotControllers)
+	{
+		if (APawn* BotPawn = Bot->GetPawn()) { BotPawn->Destroy(); }
+		if (APlayerState* BotState = Bot->PlayerState) { BotState->Destroy(); }
+		Bot->Destroy();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 대기 로비로 복귀: %s (AI %d명 정리)"), *TravelName, BotControllers.Num());
 	World->ServerTravel(TravelName);
 }
 

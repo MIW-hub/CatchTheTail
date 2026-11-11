@@ -77,6 +77,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	int32 GetLobbyMinPlayers() const { return LobbyMinPlayers; }
 
+	// 로비: 게임에 채워질 AI 인원 (경기 설정의 AI 인원, 사람과 합쳐 최대 인원을 넘지 않음)
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	int32 GetLobbyAIPlayerCount() const;
+
+	// 로비: 사람 + AI 를 합친 참가 인원
+	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
+	int32 GetLobbyParticipantCount() const;
+
 	// 로비: 준비 완료한 인원 (방장 제외)
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	int32 GetLobbyReadyCount() const;
