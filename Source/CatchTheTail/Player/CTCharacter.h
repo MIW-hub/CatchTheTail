@@ -695,6 +695,7 @@ protected:
 	void OnVoiceReleased();
 
 	// 이 캐릭터 주인의 목소리를 캐릭터 위치에서 거리에 따라 들리게 함 (모든 화면)
+	void FillMissingEmoteDefaults();
 	void EnsureVoiceTalker();
 	bool bVoiceTalkerCreated = false;
 	bool bVoiceTransmitting = false;

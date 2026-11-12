@@ -137,20 +137,20 @@ ACTCharacter::ACTCharacter(const FObjectInitializer& ObjectInitializer)
 	static const TCHAR* const SheetPathsKo[3] =
 	{
 		TEXT("/Game/2D/UI/Emote/Emote_Ko_Team.Emote_Ko_Team"),
-		TEXT("/Game/2D/UI/Emote/Emote_Ko_Feelings.Emote_Ko_Feelings"),
 		TEXT("/Game/2D/UI/Emote/Emote_Ko_Game.Emote_Ko_Game"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ko_Feelings.Emote_Ko_Feelings"),
 	};
 	static const TCHAR* const SheetPathsEn[3] =
 	{
 		TEXT("/Game/2D/UI/Emote/Emote_En_Team.Emote_En_Team"),
-		TEXT("/Game/2D/UI/Emote/Emote_En_Feelings.Emote_En_Feelings"),
 		TEXT("/Game/2D/UI/Emote/Emote_En_Game.Emote_En_Game"),
+		TEXT("/Game/2D/UI/Emote/Emote_En_Feelings.Emote_En_Feelings"),
 	};
 	static const TCHAR* const SheetPathsJa[3] =
 	{
 		TEXT("/Game/2D/UI/Emote/Emote_Ja_Team.Emote_Ja_Team"),
-		TEXT("/Game/2D/UI/Emote/Emote_Ja_Feelings.Emote_Ja_Feelings"),
 		TEXT("/Game/2D/UI/Emote/Emote_Ja_Game.Emote_Ja_Game"),
+		TEXT("/Game/2D/UI/Emote/Emote_Ja_Feelings.Emote_Ja_Feelings"),
 	};
 	static const TCHAR* const SheetLabels[27] =
 	{
@@ -228,8 +228,28 @@ void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTCharacter, bBoothLocked);
 }
 
+// 블루프린트에 저장된 이모트 칸에 빠진 그림/이름(특히 영어, 일본어)을 코드 기본값으로 채움
+void ACTCharacter::FillMissingEmoteDefaults()
+{
+	const ACTCharacter* NativeDefaults = ACTCharacter::StaticClass()->GetDefaultObject<ACTCharacter>();
+	if (!NativeDefaults || NativeDefaults == this) { return; }
+
+	for (int32 Index = 0; Index < EmoteSlots.Num() && Index < NativeDefaults->EmoteSlots.Num(); ++Index)
+	{
+		FCTEmoteSlot& Slot = EmoteSlots[Index];
+		const FCTEmoteSlot& Default = NativeDefaults->EmoteSlots[Index];
+		if (!Slot.Atlas) { Slot.Atlas = Default.Atlas; }
+		if (!Slot.AtlasEn) { Slot.AtlasEn = Default.AtlasEn; }
+		if (!Slot.AtlasJa) { Slot.AtlasJa = Default.AtlasJa; }
+		if (Slot.Label.IsEmpty()) { Slot.Label = Default.Label; }
+		if (Slot.LabelEn.IsEmpty()) { Slot.LabelEn = Default.LabelEn; }
+		if (Slot.LabelJa.IsEmpty()) { Slot.LabelJa = Default.LabelJa; }
+	}
+}
+
 void ACTCharacter::BeginPlay()
 {
+	FillMissingEmoteDefaults();
 	Super::BeginPlay();
 
 	EnsureVoiceTalker();
