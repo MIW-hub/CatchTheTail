@@ -4,8 +4,9 @@
 
 namespace
 {
-	// 개발용: 보물찾기를 로비에서 시작할 수 있게 함 (기본 0). 실행할 때 -ExecCmds="ct.EnableTreasureHunt 1" 로 켬
-	TAutoConsoleVariable<int32> CVarEnableTreasureHunt(TEXT("ct.EnableTreasureHunt"), 0, TEXT("1이면 로비에서 보물찾기 모드를 시작할 수 있음 (개발 중)"), ECVF_Default);
+	// 보물찾기를 로비에서 시작할 수 있게 함. 개발 빌드(Development)는 기본 1이라 바로 시험할 수 있고, 출시 빌드(Shipping)는 이 값과 상관없이 항상 막힘 (IsModePlayable).
+	// 개발 빌드에서 끄려면 -ExecCmds="ct.EnableTreasureHunt 0"
+	TAutoConsoleVariable<int32> CVarEnableTreasureHunt(TEXT("ct.EnableTreasureHunt"), 1, TEXT("1이면 로비에서 보물찾기 모드를 시작할 수 있음 (개발 중)"), ECVF_Default);
 }
 
 bool FCTMatchSettings::IsModePlayable() const

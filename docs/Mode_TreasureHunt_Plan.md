@@ -285,5 +285,5 @@
 
 **개발용 실행 방법**
 - 로비 없이 한 판: `HeyChicken.exe /Game/Levels/L_Building -game -CTMode=1` (AI 수는 GameMode 기본값을 따름)
-- 로비에서 시작: `HeyChicken.exe -ExecCmds="ct.EnableTreasureHunt 1"`로 실행한 뒤 경기 설정에서 게임 모드를 보물찾기로 고르고 AI 인원을 정함
+- 로비에서 시작: 개발 빌드(Development, 에디터 포함)는 기본으로 시작할 수 있어서 경기 설정에서 게임 모드를 보물찾기로 고르고 AI 인원을 정하면 됩니다. 출시 빌드(Shipping)는 항상 막혀 있습니다. 개발 빌드에서 막으려면 `-ExecCmds="ct.EnableTreasureHunt 0"`
 - 자동 검사: `Tools\CTTreasureCheck.ps1` (AI 3명과 한 판을 돌려 시작, 에너지 배치, 정산, 종료를 확인)
