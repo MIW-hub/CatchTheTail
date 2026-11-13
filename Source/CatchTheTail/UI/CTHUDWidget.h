@@ -1,0 +1,297 @@
+﻿// Copyright Moon Party Games. All Rights Reserved.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "CTUserWidget.h"
+#include "CTHUDWidget.generated.h"
+
+class UCTDirectionArrow;
+class UCTScoreEntryWidget;
+class UMaterialInstanceDynamic;
+class UVerticalBox;
+class USizeBox;
+class UWidget;
+
+UCLASS(Abstract)
+class CATCHTHETAIL_API UCTHUDWidget : public UCTUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	// 상단 안내 문구
+	void ShowNotice(const FText& Message, float Seconds);
+
+	// 월드의 한 지점을 가리키는 화살표를 잠시 보여 줌 (카메라가 돌면 같은 지점을 계속 가리킴)
+	void ShowDirectionArrow(const FVector& TargetLocation, float Seconds);
+
+protected:
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	// 블루프린트 이벤트 (연출용)
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnPhaseChanged(ECTGamePhase NewPhase);
+
+	// 새 라운드 시작
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnRoundChanged(int32 NewRoundNumber);
+
+	// 카운트다운 숫자 변경
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnCountdownTick(int32 Number);
+
+	// 경기 전 카운트다운 숫자 변경
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnGameStartCountdownTick(int32 Number);
+
+	// 색/목표/꼬리 수/유령 상태 변경
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnMyStateChanged(ACTPlayerState* MyPlayerState);
+
+	// 유령 전환/부활
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnMyGhostChanged(bool bIsGhost);
+
+	// 내 꼬리 수 변경
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnMyTailCountChanged(int32 NewTailCount, int32 Delta);
+
+	// 점수판 한 줄 위젯
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTScoreEntryWidget> ScoreEntryClass;
+
+	// 목록 확인 간격(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0.05"))
+	float ScoreboardSyncInterval = 0.25f;
+
+	// 최대 순위 줄 수. 0이면 전부
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0"))
+	int32 MaxScoreboardEntries = 0;
+
+	// 타겟 이름 글자색 (흰 카드 위라 색 이름 대신 어두운 색. 색은 옆 점으로 보임)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor TargetNameTextColor = FLinearColor(0.2f, 0.06f, 0.24f, 1.f);
+
+	// 위젯 (WBP 같은 이름 자동 연결)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_Phase;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_GameTime;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_RoundNumber;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_RoundTime;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Widget_Countdown;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_Countdown;
+
+	// 나를 잡으러 오는 사람 (나를 목표로 가진 사람)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_HunterColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_Hunter;
+
+	// 나
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MyColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_My;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TargetColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TargetColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TailCount;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Widget_Ghost;
+
+	// 스킬 슬롯 쿨다운 이미지
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_CoolTime;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_RunCooldown;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_CoolTime_1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_GrabCooldown;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_CoolTime_2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PushCooldown;
+
+	// 쿨다운 머티리얼 남은 비율 파라미터
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FName CooldownProgressParameter = TEXT("Progress");
+
+	// 달리는 중 글자색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor RunActiveTextColor = FLinearColor(0.1f, 0.8f, 1.f, 1.f);
+
+	// 쿨타임 글자색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor CooldownTextColor = FLinearColor::White;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> VerticalBox_Scoreboard;
+
+	// 마이크 상태 (패널 + 아이콘 + 파장 막대). 그림은 WBP에서 지정, 막대는 흰 네모를 색칠해서 씀
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicIcon;
+
+	// 파장 막대 3개. 크기 상자의 높이를 바꿔서 움직임
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> Size_MicWave3;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MicWave3;
+
+	// 마이크 아이콘 아래의 눌러서 말하기 키 이름
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MicKey;
+
+	// 평소(켜짐, 말하지 않음): 흰 패널, 마젠타 아이콘과 막대
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicPanelColor = FLinearColor::White;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicIconColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+
+	// 말하는 중: 마젠타 패널(#FF2783), 흰 아이콘과 막대
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicTalkingPanelColor = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicTalkingIconColor = FLinearColor::White;
+
+	// 설정에서 마이크를 끔: 회색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicOffPanelColor = FLinearColor(0.62f, 0.62f, 0.62f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic")
+	FLinearColor MicOffIconColor = FLinearColor(0.3f, 0.3f, 0.3f, 1.f);
+
+	// 파장 막대 높이 범위(px)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "1"))
+	float MicWaveMinHeight = 8.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "1"))
+	float MicWaveMaxHeight = 34.f;
+
+	// 말할 때 파장이 움직이는 빠르기
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI|Mic", meta = (ClampMin = "0"))
+	float MicWaveSpeed = 11.f;
+
+	// 안내 문구. 없으면 코드에서 생성
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_Notice;
+
+private:
+	// 연결 (매 프레임 재시도)
+	void TryBindGameState();
+	void TryBindMyPlayerState();
+	void UnbindAll();
+
+	UFUNCTION()
+	void HandlePhaseChanged(ECTGamePhase NewPhase);
+
+	UFUNCTION()
+	void HandleRoundChanged(int32 NewRoundNumber);
+
+	UFUNCTION()
+	void HandleMyPlayerStateChanged(ACTPlayerState* ChangedPlayerState);
+
+	UFUNCTION()
+	void HandleAnyPlayerStateChanged(ACTPlayerState* ChangedPlayerState);
+
+	// 갱신
+	void UpdateTimeDisplay();
+	void UpdateMicIndicator(float DeltaSeconds);
+	FString LastMicKeyName;
+	float MicWaveTime = 0.f;
+	float MicWaveBlend = 0.f; // 0: 평소 높이, 1: 움직이는 높이
+	void UpdateSkillSlots();
+	void RefreshMyState();
+	void RefreshHunter(bool bForce);
+
+	// 쿨타임/달리기/사용불가 표시
+	void UpdateSkillSlot(UImage* Overlay, UTextBlock* Text, float Remaining, float Total, bool bRunning, bool bAvailable);
+
+	UMaterialInstanceDynamic* GetOverlayMaterial(UImage* Overlay);
+
+	// 쿨다운 이미지별 머티리얼
+	UPROPERTY(Transient)
+	TMap<TObjectPtr<UImage>, TObjectPtr<UMaterialInstanceDynamic>> OverlayMaterials;
+
+	UTextBlock* EnsureNoticeText();
+	float NoticeRemaining = 0.f;
+
+	// 방향 화살표. 코드에서 생성
+	UCTDirectionArrow* EnsureDirectionArrow();
+	void UpdateDirectionArrow(float DeltaSeconds);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCTDirectionArrow> DirectionArrow;
+
+	FVector ArrowTargetLocation = FVector::ZeroVector;
+	float ArrowRemaining = 0.f;
+
+	ECTColor LastHunterColor = ECTColor::None;
+	bool bHunterInitialized = false;
+	void SyncScoreboardPlayers();
+	void RefreshScoreboard();
+
+	TWeakObjectPtr<ACTGameState> BoundGameState;
+	TWeakObjectPtr<ACTPlayerState> BoundMyPlayerState;
+
+	// 점수판 줄 보관
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTScoreEntryWidget>> ScoreEntries;
+
+	// 이벤트 연결한 PlayerState
+	TArray<TWeakObjectPtr<ACTPlayerState>> BoundScorePlayerStates;
+
+	float ScoreboardSyncAccumulator = 0.f;
+	bool bScoreboardDirty = true;
+
+	int32 LastCountdownNumber = -1;
+
+	// 카운트다운 아래 글자(Label_Countdown): 기본은 "라운드 시작", 마지막 라운드는 "라운드 종료"
+	void UpdateCountdownLabel(bool bFinalRound);
+	FText CountdownLabelDefault;
+	bool bCountdownLabelCached = false;
+	int32 LastTailCount = INDEX_NONE;
+	bool bLastIsGhost = false;
+};

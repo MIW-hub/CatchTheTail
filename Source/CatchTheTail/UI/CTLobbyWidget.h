@@ -1,0 +1,326 @@
+// Copyright Moon Party Games. All Rights Reserved.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Types/SlateEnums.h"
+#include "../Core/CTMatchSettings.h"
+#include "CTLobbyWidget.generated.h"
+
+class UButton;
+class UCTMapEntryWidget;
+class UCTLobbyPlayerEntryWidget;
+class UCTTeamSwapRequestWidget;
+class UVerticalBox;
+class UEditableTextBox;
+class UImage;
+class UPanelWidget;
+class UScrollBox;
+class UTextBlock;
+class UWidget;
+
+// 경기 설정 < > 버튼 하나
+UCLASS()
+class CATCHTHETAIL_API UCTMatchSettingArrow : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	DECLARE_DELEGATE_TwoParams(FOnArrowClicked, ECTMatchSetting, int32);
+	FOnArrowClicked OnArrowClicked;
+
+	ECTMatchSetting Setting = ECTMatchSetting::GameMinutes;
+	int32 Direction = 1;
+
+	UFUNCTION()
+	void HandleClicked() { OnArrowClicked.ExecuteIfBound(Setting, Direction); }
+};
+
+// 대기 로비 화면
+UCLASS(Abstract)
+class CATCHTHETAIL_API UCTLobbyWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	UCTLobbyWidget(const FObjectInitializer& ObjectInitializer);
+
+	// 목록/버튼 즉시 갱신
+	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
+	void RefreshLobby();
+
+protected:
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+
+	// 갱신 후 (연출용)
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Lobby")
+	void BP_OnLobbyRefreshed(bool bIsHost, bool bCanStart, float StartRemainingSeconds);
+
+	// 플레이어 목록
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PlayerList;
+
+	// 플레이어 줄을 담는 스크롤 박스 (있으면 줄 위젯으로 표시, 없으면 Text_PlayerList 글자로 표시)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_LobbyPlayers;
+
+	// 참가 인원 "현재 / 최대" 문구
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PlayerCount;
+
+	// 플레이어 한 줄 위젯 (기본 /Game/UI/WBP_CTLobbyPlayerEntryWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UCTLobbyPlayerEntryWidget> PlayerEntryClass;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> PlayerEntries;
+
+	// ---- 팀 패널 (보물찾기 모드에서만 보임. 꼬리잡기에서는 위의 일반 목록을 씀) ----
+	// 팀 두 칸을 담은 덩어리 (모드가 팀전일 때만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_TeamLists;
+
+	// 팀 A(0번), 팀 B(1번)의 플레이어 줄 목록
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_TeamA;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_TeamB;
+
+	// 팀 머리글의 색 칩(색이 입혀짐)과 팀 이름 (예: "빨강팀")
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TeamAColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TeamBColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TeamAName;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TeamBName;
+
+	// 팀 변경 버튼 (반대 팀이 가득 차면 글자가 "팀 변경 신청"으로 바뀜)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_ChangeTeam;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ChangeTeamLabel;
+
+	// 팀 변경 요청 패널이 쌓이는 곳
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> Box_SwapRequests;
+
+	// 요청 패널 한 장 (기본 /Game/UI/WBP_CTTeamSwapRequestWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UCTTeamSwapRequestWidget> SwapRequestClass;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> TeamAEntries;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> TeamBEntries;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTTeamSwapRequestWidget>> SwapRequestWidgets;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	FText PlayerCountText = NSLOCTEXT("CT", "Lobby_PlayerCount", "{0} / {1}");
+
+	// 인원/카운트다운 문구
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_Status;
+
+	// 방 코드 (스팀 연결 후 표시)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_RoomCode;
+
+	// 방 코드 보기/숨기기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_ToggleRoomCode;
+
+	// 위 버튼 안 글자: 방 코드 보기 / 숨기기
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ToggleRoomCodeLabel;
+
+	// 방 코드 복사 버튼 (가려져 있어도 복사됨)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_CopyRoomCode;
+
+	// 복사 안내 문구
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_CopyResult;
+
+	// 준비 버튼 (방장에게는 숨김)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_Ready;
+
+	// 버튼 안 글자: 준비 / 준비 취소
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ReadyLabel;
+
+	// 시작 버튼 (방장에게만 보임, 조건 충족 시 활성)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_Start;
+
+	// 나가기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_Leave;
+
+	// 전적 팝업 열기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_History;
+
+	// 전적 팝업 (기본 /Game/UI/WBP_CTMatchHistoryWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UUserWidget> HistoryClass;
+
+	// 채팅 스크롤 박스
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> ScrollBox_Chat;
+
+	// 채팅 로그
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ChatLog;
+
+	// 채팅 입력칸
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UEditableTextBox> EditableTextBox_Chat;
+
+	// 선택된 맵 이미지 (모두에게 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_MapPreview;
+
+	// 선택된 맵 이름
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MapName;
+
+	// 선택된 맵 설명
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MapDescription;
+
+	// 경기 설정 요약
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MatchSettings;
+
+	// 맵 선택 창을 여는 버튼 (방장에게만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_SelectMap;
+
+	// 맵 선택 창
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_MapSelect;
+
+	// 맵 항목이 들어갈 패널
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> Panel_MapList;
+
+	// 맵 선택 창 닫기 버튼
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_MapSelectClose;
+
+	// 맵 항목 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby|Map")
+	TSubclassOf<UCTMapEntryWidget> MapEntryClass;
+
+	// 로그에 남길 최대 줄 수
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby|Chat", meta = (ClampMin = "1"))
+	int32 MaxChatLines = 50;
+
+private:
+	UFUNCTION()
+	void HandleToggleRoomCodeClicked();
+
+	UFUNCTION()
+	void HandleCopyRoomCodeClicked();
+
+	void ClearCopyResult();
+	void RefreshRoomCode();
+
+	// 방 코드 표시 중
+	bool bRoomCodeVisible = false;
+
+	FTimerHandle CopyResultTimerHandle;
+
+	UFUNCTION()
+	void HandleChatReceived(const FString& SenderName, const FString& Message);
+
+	UFUNCTION()
+	void HandleChatFocusRequested();
+
+	UFUNCTION()
+	void HandleChatCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleChatTextChanged(const FText& Text);
+
+	void RefreshChatLog();
+
+	TArray<FString> ChatLines;
+
+	UFUNCTION()
+	void HandleReadyClicked();
+
+	UFUNCTION()
+	void HandleStartClicked();
+
+	UFUNCTION()
+	void HandleLeaveClicked();
+
+	UFUNCTION()
+	void HandleHistoryClicked();
+
+	UFUNCTION()
+	void HandleChangeTeamClicked();
+
+	// 팀 변경 요청 패널을 서버 요청 목록에 맞춤
+	void RefreshSwapRequests(const class ACTGameState& GameState);
+
+	// 포커스를 게임 화면으로 복귀
+	void ReturnFocusToGame();
+
+	// 맵 선택
+	void RefreshMap(bool bIsHost, bool bStarting);
+	void SetMapSelectOpen(bool bOpen);
+	void RebuildMapEntries();
+
+	UFUNCTION()
+	void HandleSelectMapClicked();
+
+	UFUNCTION()
+	void HandleMapSelectCloseClicked();
+
+	UFUNCTION()
+	void HandleMapEntryClicked(int32 MapIndex);
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTMapEntryWidget>> MapEntries;
+
+	bool bMapSelectOpen = false;
+
+	// 경기 설정 항목별 값 글자와 < > 버튼
+	void BindMatchSettingWidgets();
+	void RefreshMatchSettings(bool bIsHost, bool bStarting);
+	void HandleSettingArrow(ECTMatchSetting Setting, int32 Direction);
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTMatchSettingArrow>> SettingArrows;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UTextBlock>> SettingLabelTexts;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UTextBlock>> SettingValueTexts;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UButton>> SettingPrevButtons;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UButton>> SettingNextButtons;
+
+	// 마지막 미리보기 맵 번호
+	int32 LastShownMapIndex = -2;
+
+	FTimerHandle RefreshTimerHandle;
+};
