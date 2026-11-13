@@ -578,6 +578,7 @@ bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* V
 	if (ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn()))
 	{
 		VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);
+		VictimCharacter->MulticastPlayCatchVfx(); // 별이 팅기는 효과
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] %s 이(가) %s 의 꼬리를 잡음"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());

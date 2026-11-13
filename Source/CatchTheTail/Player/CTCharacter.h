@@ -280,6 +280,10 @@ public:
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayHitSfx(ECTSfx Sfx);
 
+	// 꼬리를 빼앗길 때 꼬리 끝에서 별이 팅기는 효과 (서버가 호출, 모든 화면에서 재생)
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayCatchVfx();
+
 	// 이모트 재생 요청. SlotIndex 는 숫자 키 순서(0이 키 1번)이고 EmoteLoadout 에 등록된 이모트가 나옴. 서버 확인 뒤 전원 화면에 동작과 말풍선이 나옴
 	UFUNCTION(BlueprintCallable, Category = "CT|Emote")
 	void RequestEmote(int32 SlotIndex);
@@ -402,6 +406,10 @@ protected:
 	// 최대 크기 거리에서 이만큼(cm) 더 멀어지면 안 들림
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Voice", meta = (ClampMin = "0"))
 	float VoiceFalloffDistance = 1500.f;
+
+	// 꼬리를 잡힐 때 별이 팅기는 효과의 크기 배율
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|VFX", meta = (ClampMin = "0.1"))
+	float CatchVfxScale = 1.f;
 
 	// 이모트 목록 (전체). 기본으로 아틀라스 3장의 27개가 들어 있음. BP에서 그림과 동작을 바꿀 수 있음
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Emote")

@@ -7,6 +7,7 @@
 #include "../Player/CTLobbyPlayerController.h"
 #include "../Player/CTPlayerState.h"
 #include "CTMapEntryWidget.h"
+#include "CTLobbyPlayerEntryWidget.h"
 #include "../Core/CTMapSettings.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
@@ -28,6 +29,12 @@ UCTLobbyWidget::UCTLobbyWidget(const FObjectInitializer& ObjectInitializer)
 	if (HistoryFinder.Succeeded())
 	{
 		HistoryClass = HistoryFinder.Class;
+	}
+
+	static ConstructorHelpers::FClassFinder<UCTLobbyPlayerEntryWidget> PlayerEntryFinder(TEXT("/Game/UI/WBP_CTLobbyPlayerEntryWidget"));
+	if (PlayerEntryFinder.Succeeded())
+	{
+		PlayerEntryClass = PlayerEntryFinder.Class;
 	}
 }
 
@@ -237,29 +244,64 @@ void UCTLobbyWidget::RefreshLobby()
 	const float StartRemaining = CTGameState->GetLobbyStartRemainingSeconds();
 	const bool bStarting = StartRemaining > 0.f;
 
-	// 플레이어 목록
-	if (Text_PlayerList)
+	// 플레이어 목록 (사람은 접속 순서, 그 뒤에 게임에서 채워질 AI. AI는 항상 준비 상태)
 	{
-		FString List;
+		struct FRow { FString Name; ECTLobbyPlayerKind Kind; bool bIsMe; };
+		TArray<FRow> Rows;
 		for (const APlayerState* PlayerState : CTGameState->PlayerArray)
 		{
 			const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
-			// AI 상태는 아래에서 경기 설정 인원만큼 따로 표시함 (남아 있던 이전 AI가 겹쳐 쌓이지 않게)
+			// 남아 있던 이전 게임의 AI 상태는 건너뜀 (아래에서 경기 설정 인원만큼 따로 표시)
 			if (!CTPlayerState || CTPlayerState->IsABot()) { continue; }
 
-			const FText Mark = CTPlayerState->IsHost()
-				? NSLOCTEXT("CT", "Lobby_StateHost", "방장")
-				: (CTPlayerState->IsReady() ? NSLOCTEXT("CT", "Lobby_StateReady", "준비") : NSLOCTEXT("CT", "Lobby_StateWaiting", "대기"));
-			List += FString::Printf(TEXT("%s   [%s]\n"), *CTPlayerState->GetPlayerName(), *Mark.ToString());
+			const ECTLobbyPlayerKind Kind = CTPlayerState->IsHost() ? ECTLobbyPlayerKind::Host
+				: (CTPlayerState->IsReady() ? ECTLobbyPlayerKind::Ready : ECTLobbyPlayerKind::Waiting);
+			Rows.Add({ CTPlayerState->GetPlayerName(), Kind, CTPlayerState == MyState });
 		}
-
-		// 게임에서 채워질 AI도 같은 목록에 보여줌 (AI는 항상 준비 상태)
 		const int32 AICount = CTGameState->GetLobbyAIPlayerCount();
 		for (int32 Index = 0; Index < AICount; ++Index)
 		{
-			List += FString::Printf(TEXT("AI %d   [%s]\n"), Index + 1, *NSLOCTEXT("CT", "Lobby_StateAI", "AI").ToString());
+			Rows.Add({ FString::Printf(TEXT("AI %d"), Index + 1), ECTLobbyPlayerKind::AI, false });
 		}
-		Text_PlayerList->SetText(FText::FromString(List));
+
+		if (Scroll_LobbyPlayers && PlayerEntryClass)
+		{
+			// 줄 수가 달라질 때만 위젯을 새로 만들고, 아니면 내용만 갱신 (깜빡임 방지)
+			if (PlayerEntries.Num() != Rows.Num())
+			{
+				Scroll_LobbyPlayers->ClearChildren();
+				PlayerEntries.Reset();
+				for (int32 Index = 0; Index < Rows.Num(); ++Index)
+				{
+					UCTLobbyPlayerEntryWidget* Entry = CreateWidget<UCTLobbyPlayerEntryWidget>(this, PlayerEntryClass);
+					if (!Entry) { continue; }
+					Scroll_LobbyPlayers->AddChild(Entry);
+					PlayerEntries.Add(Entry);
+				}
+			}
+			for (int32 Index = 0; Index < PlayerEntries.Num() && Index < Rows.Num(); ++Index)
+			{
+				if (PlayerEntries[Index]) { PlayerEntries[Index]->SetEntry(Rows[Index].Name, Rows[Index].Kind, Rows[Index].bIsMe); }
+			}
+			if (Text_PlayerList) { Text_PlayerList->SetVisibility(ESlateVisibility::Collapsed); }
+		}
+		else if (Text_PlayerList)
+		{
+			// 줄 위젯이 없을 때의 예전 글자 목록
+			FString List;
+			for (const FRow& Row : Rows)
+			{
+				List += FString::Printf(TEXT("%s\n"), *Row.Name);
+			}
+			Text_PlayerList->SetText(FText::FromString(List));
+		}
+
+		// 참가 인원 "현재 / 최대" (사람 + AI)
+		if (Text_PlayerCount)
+		{
+			const int32 MaxPlayers = FMath::Min(CTGameState->GetMatchSettings().MaxPlayers, CTColorCount);
+			Text_PlayerCount->SetText(FText::Format(PlayerCountText, Rows.Num(), MaxPlayers));
+		}
 	}
 
 	// 상태 문구: 인원/준비 안내와 패널 그림은 없앰. 시작 카운트다운일 때만 글자로 보임

@@ -5,6 +5,7 @@
 #include "../Core/CTGameState.h"
 #include "CTPlayerState.h"
 #include "../Tail/CTTail.h"
+#include "../World/CTStarBurstFx.h"
 #include "../World/CTBush.h"
 #include "../UI/CTHUDWidget.h"
 #include "../UI/CTEmoteBubbleComponent.h"
@@ -1980,4 +1981,15 @@ void ACTCharacter::UpdateBushXRay()
 	}
 
 	XRayMesh->SetVisibility(bWantXRay);
+}
+
+void ACTCharacter::MulticastPlayCatchVfx_Implementation()
+{
+	if (GetNetMode() == NM_DedicatedServer || !GetWorld()) { return; }
+
+	// 꼬리 끝에서, 꼬리가 없으면 몸 위쪽에서 터뜨림
+	FVector Location = GetActorLocation() + FVector(0.f, 0.f, 80.f);
+	if (OwnedTail) { Location = OwnedTail->GetTouchLocation(); }
+
+	ACTStarBurstFx::Spawn(GetWorld(), Location, CatchVfxScale);
 }

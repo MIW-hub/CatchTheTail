@@ -9,6 +9,7 @@
 
 class UButton;
 class UCTMapEntryWidget;
+class UCTLobbyPlayerEntryWidget;
 class UEditableTextBox;
 class UImage;
 class UPanelWidget;
@@ -57,6 +58,24 @@ protected:
 	// 플레이어 목록
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_PlayerList;
+
+	// 플레이어 줄을 담는 스크롤 박스 (있으면 줄 위젯으로 표시, 없으면 Text_PlayerList 글자로 표시)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_LobbyPlayers;
+
+	// 참가 인원 "현재 / 최대" 문구
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_PlayerCount;
+
+	// 플레이어 한 줄 위젯 (기본 /Game/UI/WBP_CTLobbyPlayerEntryWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UCTLobbyPlayerEntryWidget> PlayerEntryClass;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> PlayerEntries;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	FText PlayerCountText = NSLOCTEXT("CT", "Lobby_PlayerCount", "{0} / {1}");
 
 	// 인원/카운트다운 문구
 	UPROPERTY(meta = (BindWidgetOptional))

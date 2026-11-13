@@ -3055,3 +3055,136 @@ bool UCTUIBuildTools::AddLobbyHistoryButton(UBlueprint* WidgetBlueprint)
 	return false;
 #endif
 }
+
+// 로비 플레이어 한 줄 뼈대 (처음 한 번). 만든 뒤의 모양은 WBP 에서 직접 바꿈
+int32 UCTUIBuildTools::BuildLobbyPlayerEntryDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTLobbyPlayerEntryWidget"))) { return -1; }
+
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+
+	// 줄 사이 간격은 바깥 여백으로
+	UBorder* Root = Make<UBorder>(TEXT("Border_PlayerRoot"));
+	Root->SetBrushColor(FLinearColor::Transparent);
+	Root->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	UOverlay* Overlay = Make<UOverlay>(TEXT("Overlay_Player"));
+	Overlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Root->SetContent(Overlay);
+
+	// 배경: 테두리 없는 분홍 줄
+	UImage* Back = Make<UImage>(TEXT("Image_PlayerBack"));
+	Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+	Back->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC)));
+	Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* BackSlot = Overlay->AddChildToOverlay(Back);
+	BackSlot->SetHorizontalAlignment(HAlign_Fill);
+	BackSlot->SetVerticalAlignment(VAlign_Fill);
+
+	// 내 줄 강조 (평소 숨김)
+	UImage* Me = Make<UImage>(TEXT("Image_Me"));
+	FSlateBrush MeBrush;
+	MeBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+	MeBrush.TintColor = FSlateColor(FLinearColor(1.f, 0.39f, 0.64f, 0.18f));
+	MeBrush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(14.f, 14.f, 14.f, 14.f), FSlateColor(Magenta), 3.f);
+	Me->SetBrush(MeBrush);
+	Me->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlaySlot* MeSlot = Overlay->AddChildToOverlay(Me);
+	MeSlot->SetHorizontalAlignment(HAlign_Fill);
+	MeSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_Player"));
+	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* RowSlot = Overlay->AddChildToOverlay(Row);
+	RowSlot->SetHorizontalAlignment(HAlign_Fill);
+	RowSlot->SetVerticalAlignment(VAlign_Center);
+	RowSlot->SetPadding(FMargin(18.f, 10.f, 18.f, 10.f));
+
+	// 사람 아이콘
+	UImage* Icon = Make<UImage>(TEXT("Image_PlayerIcon"));
+	if (UTexture2D* PersonTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/ico/Ico_Person.Ico_Person")))
+	{
+		Icon->SetBrushFromTexture(PersonTexture);
+	}
+	Icon->SetColorAndOpacity(Magenta);
+	Icon->SetVisibility(ESlateVisibility::HitTestInvisible);
+	AddH(Row, Sized(TEXT("Size_PlayerIcon"), Icon, 32.f, 32.f), 14.f, false);
+
+	// 이름
+	UTextBlock* Name = MakeText(TEXT("Text_Name"), TEXT("플레이어"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Left);
+	Name->SetAutoWrapText(false);
+	AddH(Row, Name, 12.f, true);
+
+	// 방장 왕관 (방장일 때만 보임)
+	UImage* Crown = Make<UImage>(TEXT("Image_Host"));
+	if (UTexture2D* CrownTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/ico/ico_crown.ico_crown")))
+	{
+		Crown->SetBrushFromTexture(CrownTexture);
+	}
+	Crown->SetVisibility(ESlateVisibility::Collapsed);
+	AddH(Row, Sized(TEXT("Size_Host"), Crown, 30.f, 30.f), 12.f, false);
+
+	// 상태 알약 (색은 코드가 상태에 따라 바꿈)
+	UOverlay* Pill = Make<UOverlay>(TEXT("Overlay_StatePill"));
+	Pill->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UImage* PillBack = Make<UImage>(TEXT("Image_StatePill"));
+	FSlateBrush PillBrush;
+	PillBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+	PillBrush.TintColor = FSlateColor(FLinearColor::White);
+	PillBrush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(17.f, 17.f, 17.f, 17.f), FSlateColor(FLinearColor::White), 0.f);
+	PillBack->SetBrush(PillBrush);
+	PillBack->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* PillBackSlot = Pill->AddChildToOverlay(PillBack);
+	PillBackSlot->SetHorizontalAlignment(HAlign_Fill);
+	PillBackSlot->SetVerticalAlignment(VAlign_Fill);
+	UTextBlock* State = MakeText(TEXT("Text_State"), TEXT("대기"), TEXT("Bold"), 19, FLinearColor::White, ETextJustify::Center);
+	State->SetAutoWrapText(false);
+	UOverlaySlot* StateSlot = Pill->AddChildToOverlay(State);
+	StateSlot->SetHorizontalAlignment(HAlign_Center);
+	StateSlot->SetVerticalAlignment(VAlign_Center);
+	AddH(Row, Sized(TEXT("Size_StatePill"), Pill, 92.f, 34.f), 0.f, false);
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}
+
+// 로비 플레이어 패널 머리에 "현재 / 최대" 인원 글자 추가 (기존 위젯은 건드리지 않고 덧붙임)
+bool UCTUIBuildTools::AddLobbyPlayerCountText(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	Tree = WidgetBlueprint ? GetBlueprintTree(WidgetBlueprint) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyWidget");
+
+	if (Tree->FindWidget(TEXT("Text_PlayerCount"))) { Tree = nullptr; return true; }
+	UCanvasPanel* Canvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_CompactPlayers")));
+	UTextBlock* Label = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_LobbyPlayers")));
+	if (!Canvas || !Label) { Tree = nullptr; return false; }
+
+	// 제목 글자와 같은 글꼴과 색을 써서 어울리게
+	UTextBlock* Count = Make<UTextBlock>(TEXT("Text_PlayerCount"));
+	Count->SetText(Loc(TEXT("Text_PlayerCount"), TEXT("0 / 8")));
+	Count->SetFont(Label->GetFont());
+	Count->SetColorAndOpacity(Label->GetColorAndOpacity());
+	Count->SetJustification(ETextJustify::Right);
+	Count->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	UCanvasPanelSlot* CountSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Count));
+	CountSlot->SetAnchors(FAnchors(0.f, 0.f));
+	CountSlot->SetAlignment(FVector2D(0.f, 0.f));
+	CountSlot->SetPosition(FVector2D(440.f, 2.f));
+	CountSlot->SetSize(FVector2D(200.f, 44.f));
+	CountSlot->SetZOrder(5);
+
+	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
+#endif
+}

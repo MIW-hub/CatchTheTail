@@ -133,6 +133,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildMatchHistoryDesign(UBlueprint* WidgetBlueprint);
 
+	// 로비 플레이어 한 줄 뼈대 (처음 한 번)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildLobbyPlayerEntryDesign(UBlueprint* WidgetBlueprint);
+
+	// 로비 플레이어 패널에 "현재 / 최대" 인원 글자 추가
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool AddLobbyPlayerCountText(UBlueprint* WidgetBlueprint);
+
 	// 로비 위젯에 전적 버튼 추가
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool AddLobbyHistoryButton(UBlueprint* WidgetBlueprint);
