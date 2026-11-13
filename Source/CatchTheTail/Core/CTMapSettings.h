@@ -5,6 +5,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "CTMapSettings.generated.h"
 
+class ACTThrowable;
 class UTexture2D;
 class UWorld;
 
@@ -29,6 +30,10 @@ struct FCTMapInfo
 	// 열릴 레벨
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|Map")
 	TSoftObjectPtr<UWorld> Level;
+
+	// 보물찾기에서 이 맵에 흩어 둘 던지기 오브젝트 (ACTThrowable 을 상속한 블루프린트). 비면 기본 공. 꼬리잡기에서는 쓰지 않음
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|Map")
+	TSoftClassPtr<ACTThrowable> TreasureThrowable;
 
 	// 끄면 목록에서 숨김
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|Map")

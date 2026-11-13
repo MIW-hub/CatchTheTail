@@ -1,11 +1,11 @@
 ﻿# 보물찾기 한 판(AI 3명 + 사람 1명)을 돌려 흐름을 검사합니다. 에디터를 끄고, 빌드 성공 후 실행하세요.
 # 사용법: powershell -File Tools\CTTreasureCheck.ps1            (에디터 빌드로 확인)
 #         powershell -File Tools\CTTreasureCheck.ps1 -Packaged   (패키징된 HeyChicken.exe로 확인)
-param([switch]$Packaged, [int]$AiCount = 3, [int]$RoundSeconds = 20)
+param([string]$Map = "/Game/Levels/L_Building", [switch]$Packaged, [int]$AiCount = 3, [int]$RoundSeconds = 20)
 
 $root = Split-Path -Parent $PSScriptRoot
 $name = "treasure_check"
-$args2 = @("-ExecutionPolicy", "Bypass", "-File", "$root\Tools\CTBaseline.ps1", "-Name", $name, "-Mode", 1, "-AiCount", $AiCount, "-GameSeconds", ($RoundSeconds * 3), "-RoundSeconds", $RoundSeconds, "-TimeoutSeconds", 220)
+$args2 = @("-ExecutionPolicy", "Bypass", "-File", "$root\Tools\CTBaseline.ps1", "-Name", $name, "-Map", $Map, "-Mode", 1, "-AiCount", $AiCount, "-GameSeconds", ($RoundSeconds * 3), "-RoundSeconds", $RoundSeconds, "-TimeoutSeconds", 220)
 if ($Packaged) { $args2 += "-Packaged" }
 & powershell @args2 | Out-Null
 

@@ -2,6 +2,7 @@
 #include "CTRule_TreasureHunt.h"
 #include "CTGameMode.h"
 #include "CTGameInstance.h"
+#include "CTMapSettings.h"
 #include "CTGameState.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTCharacter.h"
@@ -125,19 +126,39 @@ bool UCTRule_TreasureHunt::PickClearPoint(const FVector& Origin, float Radius, f
 {
 	UWorld* World = GetGameMode() ? GetGameMode()->GetWorld() : nullptr;
 	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
-	if (!Nav) { return false; }
+	if (!World) { return false; }
 
+	FVector GroundPoint = FVector::ZeroVector;
 	FNavLocation NavPoint;
-	if (!Nav->GetRandomReachablePointInRadius(Origin, Radius, NavPoint)) { return false; }
+	if (Nav && Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) && Nav->GetRandomReachablePointInRadius(Origin, Radius, NavPoint))
+	{
+		GroundPoint = NavPoint.Location;
+	}
+	else if (!Nav || !Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate))
+	{
+		// 이동 지도(NavMesh)가 없는 맵: 시작 지점 주변의 임의 위치에서 아래로 쏴서 평평한 바닥을 찾음 (갈 수 있는지는 알 수 없어 범위를 좁게 잡음)
+		const float FallbackRadius = FMath::Min(Radius, 3000.f);
+		const FVector2D Offset = FMath::RandPointInCircle(FallbackRadius);
+		const FVector Top = Origin + FVector(Offset.X, Offset.Y, 1500.f);
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(CTTreasureGround), false);
+		if (!World->LineTraceSingleByChannel(Hit, Top, Top - FVector(0.f, 0.f, 4000.f), ECC_Visibility, Params)) { return false; }
+		if (Hit.ImpactNormal.Z < 0.85f || Hit.ImpactPoint.Z > Origin.Z + 300.f) { return false; }
+		GroundPoint = Hit.ImpactPoint;
+	}
+	else
+	{
+		return false;
+	}
 
 	// 벽이나 오브젝트에 겹치는 자리는 제외
-	const FVector Center = NavPoint.Location + FVector(0.f, 0.f, ClearHalfHeight + 5.f);
+	const FVector Center = GroundPoint + FVector(0.f, 0.f, ClearHalfHeight + 5.f);
 	if (World->OverlapBlockingTestByChannel(Center, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(ClearRadius, ClearHalfHeight)))
 	{
 		return false;
 	}
 
-	OutPoint = NavPoint.Location;
+	OutPoint = GroundPoint;
 	return true;
 }
 
@@ -193,6 +214,20 @@ void UCTRule_TreasureHunt::SpawnThrowables()
 	for (TActorIterator<APlayerStart> It(World); It; ++It) { Origins.Add(It->GetActorLocation()); }
 	if (Origins.IsEmpty()) { return; }
 
+	// 이 맵에 맞는 오브젝트 모양: 프로젝트 설정(CT Maps)의 맵 항목 > 게임 모드 기본값 > 기본 공
+	TSubclassOf<ACTThrowable> ThrowableClass = Mode->TreasureThrowableClass;
+	{
+		const FString LevelName = UWorld::RemovePIEPrefix(World->GetOutermost()->GetName());
+		for (const FCTMapInfo& Info : GetDefault<UCTMapSettings>()->Maps)
+		{
+			if (Info.Level.GetLongPackageName() == LevelName && !Info.TreasureThrowable.IsNull())
+			{
+				if (UClass* Loaded = Info.TreasureThrowable.LoadSynchronous()) { ThrowableClass = Loaded; }
+				break;
+			}
+		}
+	}
+
 	TArray<FVector> Placed;
 	const int32 Wanted = Mode->TreasureThrowableCount;
 	for (int32 Attempt = 0; Attempt < Wanted * 60 && Placed.Num() < Wanted; ++Attempt)
@@ -209,10 +244,11 @@ void UCTRule_TreasureHunt::SpawnThrowables()
 		if (bTooClose) { continue; }
 
 		Placed.Add(Point);
-		ACTThrowable::Spawn(World, Mode->TreasureThrowableClass, Point + FVector(0.f, 0.f, 70.f));
+		ACTThrowable::Spawn(World, ThrowableClass, Point + FVector(0.f, 0.f, 70.f));
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 던지기 오브젝트 %d개 배치"), CurrentRound, Placed.Num());
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 던지기 오브젝트 모양: %s"), ThrowableClass ? *ThrowableClass->GetName() : TEXT("기본 공"));
 }
 
 void UCTRule_TreasureHunt::PlacePlayersRandomly()

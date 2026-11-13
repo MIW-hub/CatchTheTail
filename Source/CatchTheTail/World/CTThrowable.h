@@ -7,10 +7,13 @@
 
 class ACTCharacter;
 class UStaticMeshComponent;
+class USphereComponent;
 
 // 보물찾기 모드의 던지기 오브젝트 (농구공처럼 물리가 적용되어 월드에 계속 남음).
 // 꼬리잡기 키로 집어 들고(머리 위), 같은 키로 캐릭터가 보는 방향으로 던짐. 던져서 캐릭터에 맞으면 서버의 게임 규칙이 에너지를 떨어뜨림.
-// 맵마다 다른 모양을 쓰려면 이 클래스를 블루프린트로 상속해 메시만 바꾸고, 그 맵의 GameMode 의 TreasureThrowableClass 에 지정함.
+// 물리 몸체는 항상 구(공처럼 구르고 튐)이고, 보이는 모양(Mesh)만 바꿀 수 있음.
+// 맵마다 다른 모양을 쓰려면 이 클래스를 블루프린트로 상속해 Mesh 와 크기만 바꾸고, 프로젝트 설정 > CT Maps 의 그 맵 항목에 지정함.
+// 보물찾기 모드에서만 만들어짐 (꼬리잡기에서는 만들지 않음).
 UCLASS(Blueprintable)
 class CATCHTHETAIL_API ACTThrowable : public AActor
 {
@@ -38,10 +41,23 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	// 물리 몸체 (구). 충돌과 구르기를 맡음
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Throwable")
+	TObjectPtr<USphereComponent> Body;
+
+	// 보이는 모양 (충돌 없음). 블루프린트에서 메시를 바꿈
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CT|Throwable")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
-	// 보이는 크기 배율 (엔진 기본 구 100cm 기준)
+	// 물리 구의 반지름(cm). 모양이 크면 함께 키움
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable", meta = (ClampMin = "5"))
+	float BodyRadius = 22.5f;
+
+	// 기본 주황색 공 머티리얼을 입힐지. 직접 만든 모양은 끔
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable")
+	bool bUseBallMaterial = true;
+
+	// 보이는 크기 배율 (메시 원래 크기 기준. 엔진 기본 구는 100cm)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable", meta = (ClampMin = "0.1"))
 	float VisualScale = 0.45f;
 
