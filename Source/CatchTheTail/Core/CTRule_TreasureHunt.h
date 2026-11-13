@@ -27,6 +27,7 @@ public:
 	virtual void ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie) override;
 	virtual bool HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) override;
 	virtual bool OnEnergyPicked(ACTCharacter* Picker, int32 Amount) override;
+	virtual void OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity) override;
 	virtual bool UsesTargetColors() const override { return false; }
 
 private:
@@ -49,6 +50,11 @@ private:
 	// 라운드 시작 준비
 	void ClearEnergies();
 	void SpawnEnergies();
+	void ClearThrowables();
+	void SpawnThrowables();
+
+	// 맞은 캐릭터 주변 바닥에 에너지를 흩뿌림
+	void DropEnergies(ACTCharacter* Victim, int32 Count);
 	void PlacePlayersRandomly();
 
 	// 갈 수 있는 바닥에서 막히지 않은 임의의 위치를 하나 고름. 못 찾으면 false

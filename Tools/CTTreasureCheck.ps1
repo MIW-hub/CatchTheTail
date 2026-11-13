@@ -20,7 +20,10 @@ if ((Count "에너지 100개 배치") -ne 3) { $fail += "라운드마다 에너�
 if ((Count "무작위 스폰") -ne 3) { $fail += "라운드마다 무작위 스폰이 3번이 아님" }
 if ((Count "보물찾기 라운드 \d 정산") -ne 3) { $fail += "라운드 정산이 3번이 아님" }
 if ((Count "보물찾기 종료") -ne 1) { $fail += "보물찾기 종료 결과가 1번이 아님" }
+if ((Count "던지기 오브젝트 20개 배치") -ne 3) { $fail += "라운드마다 던지기 오브젝트 20개 배치가 3번이 아님" }
 if ((Count "게임 종료") -ne 1) { $fail += "게임 종료가 1번이 아님" }
+$picked = Count "오브젝트 들기"; $thrown = Count "오브젝트 던짐"; $hit = Count "보물찾기 맞음"
+if ($AiCount -gt 0 -and $picked -le 0) { $fail += "AI가 오브젝트를 한 번도 들지 않음" }
 # 에너지를 누가 먹기는 했는지 (AI가 있으면 합계가 0이 아니어야 함)
 $sum = 0
 foreach ($e in ($events | Where-Object { $_ -match "정산: 팀0 (\d+) / 팀1 (\d+)" })) { if ($e -match "팀0 (\d+) / 팀1 (\d+)") { $sum += [int]$Matches[1] + [int]$Matches[2] } }
@@ -29,4 +32,4 @@ if (Select-String -Path $log -Pattern "Fatal error|Assertion failed" -Quiet -Enc
 
 $events | ForEach-Object { $_ }
 if ($fail.Count -gt 0) { Write-Output "보물찾기 검사: FAIL"; $fail | ForEach-Object { "  - $_" }; exit 3 }
-Write-Output "보물찾기 검사: PASS (먹은 에너지 합계 $sum)"
+Write-Output "보물찾기 검사: PASS (먹은 에너지 합계 $sum, 오브젝트 들기 $picked / 던짐 $thrown / 맞음 $hit)"

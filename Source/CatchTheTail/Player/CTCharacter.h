@@ -16,6 +16,7 @@ class UAnimSequence;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class ACTTail;
+class ACTThrowable;
 class ACTBush;
 class UCTTongueComponent;
 class UCTEmoteBubbleComponent;
@@ -297,6 +298,14 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CT|Emote")
 	const TArray<int32>& GetEmoteLoadout() const { return EmoteLoadout; }
+
+	// 보물찾기: 던지기 오브젝트를 들고 있는가 (머리 위). 들고 있으면 꼬리잡기 키가 던지기로 바뀜
+	UFUNCTION(BlueprintPure, Category = "CT|Combat")
+	bool IsHoldingThrowable() const { return HeldThrowable != nullptr; }
+
+	// 서버 전용: 들고 있던 오브젝트가 사라질 때 손에서 뺌 / AI 가 던짐
+	void ClearHeldThrowable(ACTThrowable* Throwable);
+	void AIThrow();
 
 	// 서버 호출: 날아가는 방향(수평)에 따라 넘어지는 연출을 고름. 보는 방향으로 날아가면 앞으로 엎어지고, 반대면 뒤로 넘어짐
 	void PlayKnockedDown(const FVector& KnockDirection);
@@ -695,6 +704,30 @@ protected:
 	void OnRunPressed();
 	void OnRunReleased();
 	void OnGrabPressed();
+
+	// 보물찾기: 오브젝트 던지기 (서버). 캐릭터가 보는 방향으로 고정된 힘으로 던짐, 쿨타임 없음
+	UFUNCTION(Server, Reliable)
+	void ServerThrow();
+
+	// 서버: 앞쪽 가까이 있는 오브젝트를 하나 집어 듦. 집었으면 true
+	bool TryPickupThrowable();
+
+	// 오브젝트를 집을 수 있는 거리(cm)와 정면 기준 각도 절반(도)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throw", meta = (ClampMin = "0"))
+	float ThrowPickupDistance = 600.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throw", meta = (ClampMin = "0", ClampMax = "180"))
+	float ThrowPickupHalfAngleDegrees = 80.f;
+
+	// 던지는 속도(cm/s)와 위로 올려 던지는 각도(도). 고정값
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throw", meta = (ClampMin = "0"))
+	float ThrowSpeed = 1500.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throw", meta = (ClampMin = "0", ClampMax = "60"))
+	float ThrowUpAngleDegrees = 12.f;
+
+	UPROPERTY(Replicated)
+	TObjectPtr<ACTThrowable> HeldThrowable;
 
 	// 마우스 왼쪽 클릭: 꼬리 줄다리기 중에만 게이지 연타로 인정
 	void OnGrappleMouseClick();

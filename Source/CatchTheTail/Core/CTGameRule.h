@@ -52,6 +52,9 @@ public:
 	// 캐릭터가 에너지를 먹었을 때. 처리했으면 true (에너지는 사라짐)
 	virtual bool OnEnergyPicked(ACTCharacter* Picker, int32 Amount) { return false; }
 
+	// 던진 오브젝트가 캐릭터에 맞았을 때 (서버). Thrower 는 없을 수 있음
+	virtual void OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity) {}
+
 	// 목표 색(내가 노리는 색) 규칙을 쓰는 모드인가
 	virtual bool UsesTargetColors() const { return true; }
 

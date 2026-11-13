@@ -12,6 +12,7 @@ class ACTPlayerState;
 class ACTGameState;
 class UCTGameRule;
 class ACTCharacter;
+class ACTThrowable;
 
 UCLASS()
 class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
@@ -54,6 +55,17 @@ public:
 
 	// 서버, 캐릭터가 에너지를 먹음 (보물찾기). 규칙이 처리하면 true
 	bool HandleEnergyPickup(ACTCharacter* Picker, int32 Amount);
+
+	// 서버, 던진 오브젝트가 캐릭터에 맞음 (보물찾기)
+	void HandleThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity);
+
+	// 보물찾기: 이 맵에서 쓰는 던지기 오브젝트 (비면 기본 공). 맵마다 다른 모양은 블루프린트 상속 클래스를 맵의 GameMode 에 지정
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Treasure")
+	TSubclassOf<ACTThrowable> TreasureThrowableClass;
+
+	// 보물찾기: 라운드마다 맵에 놓는 던지기 오브젝트 수
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Treasure", meta = (ClampMin = "0"))
+	int32 TreasureThrowableCount = 20;
 
 	// 서버, 기권 요청. 경기 중이고 기권이 열린 뒤에만 가능. 꼬리를 잃고 순위에서 빠져 유령으로 남음
 	bool HandleForfeit(ACTPlayerState* Forfeiter);

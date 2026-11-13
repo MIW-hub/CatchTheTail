@@ -5,6 +5,7 @@
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTCharacter.h"
 #include "../World/CTEnergyPickup.h"
+#include "../World/CTThrowable.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -93,7 +94,9 @@ void UCTRule_TreasureHunt::OnRoundStart(int32 RoundNumber)
 	}
 
 	ClearEnergies();
+	ClearThrowables();
 	SpawnEnergies();
+	SpawnThrowables();
 	PlacePlayersRandomly();
 }
 
@@ -156,6 +159,49 @@ void UCTRule_TreasureHunt::SpawnEnergies()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 에너지 %d개 배치"), CurrentRound, Placed.Num());
+}
+
+void UCTRule_TreasureHunt::ClearThrowables()
+{
+	UWorld* World = GetGameMode() ? GetGameMode()->GetWorld() : nullptr;
+	if (!World) { return; }
+
+	// 들고 있는 것도 함께 정리됨 (들고 있던 캐릭터 손에서 빠짐)
+	TArray<ACTThrowable*> Existing;
+	for (TActorIterator<ACTThrowable> It(World); It; ++It) { Existing.Add(*It); }
+	for (ACTThrowable* Throwable : Existing) { Throwable->Destroy(); }
+}
+
+void UCTRule_TreasureHunt::SpawnThrowables()
+{
+	ACTGameMode* Mode = GetGameMode();
+	UWorld* World = Mode ? Mode->GetWorld() : nullptr;
+	if (!World) { return; }
+
+	TArray<FVector> Origins;
+	for (TActorIterator<APlayerStart> It(World); It; ++It) { Origins.Add(It->GetActorLocation()); }
+	if (Origins.IsEmpty()) { return; }
+
+	TArray<FVector> Placed;
+	const int32 Wanted = Mode->TreasureThrowableCount;
+	for (int32 Attempt = 0; Attempt < Wanted * 60 && Placed.Num() < Wanted; ++Attempt)
+	{
+		FVector Point;
+		if (!PickClearPoint(Origins[FMath::RandRange(0, Origins.Num() - 1)], 30000.f, 60.f, 60.f, Point)) { continue; }
+
+		// 오브젝트끼리 멀리 흩어지게
+		bool bTooClose = false;
+		for (const FVector& Other : Placed)
+		{
+			if (FVector::DistSquared2D(Point, Other) < FMath::Square(600.f)) { bTooClose = true; break; }
+		}
+		if (bTooClose) { continue; }
+
+		Placed.Add(Point);
+		ACTThrowable::Spawn(World, Mode->TreasureThrowableClass, Point + FVector(0.f, 0.f, 70.f));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 던지기 오브젝트 %d개 배치"), CurrentRound, Placed.Num());
 }
 
 void UCTRule_TreasureHunt::PlacePlayersRandomly()
@@ -238,6 +284,57 @@ int32 UCTRule_TreasureHunt::GetTeamEnergy(int32 TeamId) const
 		if (Player->GetTeamId() == TeamId) { Total += Player->GetEnergy(); }
 	}
 	return Total;
+}
+
+// 던진 오브젝트에 맞음: 에너지의 절반(내림, 1개 이상이면 최소 1개)을 떨어뜨림. 아군이 맞아도 똑같음
+
+void UCTRule_TreasureHunt::OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity)
+{
+	ACTPlayerState* VictimState = Victim ? Victim->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!VictimState || VictimState->IsForfeited() || VictimState->IsOnlyASpectator()) { return; }
+
+	const int32 Energy = VictimState->GetEnergy();
+	const int32 Loss = (Energy <= 0) ? 0 : FMath::Max(Energy / 2, 1);
+
+	const ACTPlayerState* ThrowerState = Thrower ? Thrower->GetPlayerState<ACTPlayerState>() : nullptr;
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 맞음: %s -> %s, 에너지 %d -> %d (-%d)%s"),
+		ThrowerState ? *ThrowerState->GetPlayerName() : TEXT("?"), *VictimState->GetPlayerName(), Energy, Energy - Loss, Loss,
+		(ThrowerState && ThrowerState->GetTeamId() == VictimState->GetTeamId()) ? TEXT(" [아군]") : TEXT(""));
+
+	// 맞은 연출은 에너지가 없어도 보여줌
+	Victim->PlayKnockedDown(Velocity);
+	if (Loss <= 0) { return; }
+
+	SetPlayerEnergy(VictimState, Energy - Loss);
+	DropEnergies(Victim, Loss);
+}
+
+void UCTRule_TreasureHunt::DropEnergies(ACTCharacter* Victim, int32 Count)
+{
+	UWorld* World = Victim ? Victim->GetWorld() : nullptr;
+	if (!World) { return; }
+
+	const FVector Origin = Victim->GetActorLocation();
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		// 몸에서 조금 떨어진 바닥에 흩뿌림 (바로 다시 먹히지 않을 거리)
+		const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+		const float Radius = FMath::FRandRange(170.f, 320.f);
+		FVector Spot = Origin + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.f);
+
+		// 바닥 높이를 찾음. 못 찾으면 몸 아래 높이로
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(CTEnergyDrop), false, Victim);
+		if (World->LineTraceSingleByChannel(Hit, Spot + FVector(0.f, 0.f, 200.f), Spot - FVector(0.f, 0.f, 600.f), ECC_Visibility, Params))
+		{
+			Spot.Z = Hit.ImpactPoint.Z;
+		}
+		else
+		{
+			Spot.Z = Origin.Z - Victim->GetSimpleCollisionHalfHeight();
+		}
+		ACTEnergyPickup::Spawn(World, Spot + FVector(0.f, 0.f, 60.f), 1);
+	}
 }
 
 // 라운드 정산과 결과

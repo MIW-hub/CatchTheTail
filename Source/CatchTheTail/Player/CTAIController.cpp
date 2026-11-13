@@ -11,6 +11,7 @@
 #include "../World/CTRollingLog.h"
 #include "../World/CTTailPickup.h"
 #include "../World/CTEnergyPickup.h"
+#include "../World/CTThrowable.h"
 #include "Components/SplineComponent.h"
 #include "EngineUtils.h"
 #include "CollisionQueryParams.h"
@@ -719,12 +720,54 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 	// 위험물 회피가 가장 우선
 	if (AvoidHazards(Me, Now)) { return; }
 
-	// 에너지 목록은 0.5초마다 다시 모음
+	// 에너지와 던지기 오브젝트 목록은 0.5초마다 다시 모음
 	if (Now >= NextEnergyRefreshTime)
 	{
 		NextEnergyRefreshTime = Now + 0.5;
 		EnergyList.Reset();
 		for (TActorIterator<ACTEnergyPickup> It(GetWorld()); It; ++It) { EnergyList.Add(*It); }
+		ThrowableList.Reset();
+		for (TActorIterator<ACTThrowable> It(GetWorld()); It; ++It) { ThrowableList.Add(*It); }
+	}
+
+	const ACTPlayerState* MyState = GetPlayerState<ACTPlayerState>();
+	const ACTGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+
+	// 오브젝트를 들고 있으면: 가까운 상대 팀에게 던짐 (상대가 없으면 계속 들고 다님)
+	if (Me.IsHoldingThrowable() && MyState && GameState)
+	{
+		if (HoldStartTime <= 0.0) { HoldStartTime = Now; }
+
+		ACTCharacter* Target = nullptr;
+		float TargetDistance = 2500.f;
+		for (APlayerState* State : GameState->PlayerArray)
+		{
+			const ACTPlayerState* Other = Cast<ACTPlayerState>(State);
+			if (!Other || Other == MyState || Other->GetTeamId() == MyState->GetTeamId() || Other->IsForfeited() || Other->IsOnlyASpectator()) { continue; }
+
+			ACTCharacter* OtherCharacter = Cast<ACTCharacter>(Other->GetPawn());
+			if (!OtherCharacter) { continue; }
+			const float Distance = FVector::Dist2D(Me.GetActorLocation(), OtherCharacter->GetActorLocation());
+			if (Distance < TargetDistance && (Now - HoldStartTime > 3.0 || SeesLocation(Me, OtherCharacter->GetActorLocation(), OtherCharacter))) { Target = OtherCharacter; TargetDistance = Distance; }
+		}
+
+		if (Target && Now - HoldStartTime > 0.7)
+		{
+			Halt();
+			SetAIRun(Me, false);
+			FaceLocation(Me, Target->GetActorLocation());
+			if (Now >= NextThrowTime)
+			{
+				NextThrowTime = Now + 1.0;
+				Me.AIThrow();
+				HoldStartTime = 0.0;
+			}
+			return;
+		}
+	}
+	else
+	{
+		HoldStartTime = 0.0;
 	}
 
 	const FVector MyLocation = Me.GetActorLocation();
@@ -737,6 +780,42 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 
 		const float Distance = FVector::Dist2D(MyLocation, Energy->GetActorLocation());
 		if (Distance < BestDistance) { Best = Energy; BestDistance = Distance; }
+	}
+
+	// 오브젝트를 안 들고 있고 가까이에 있으면 집으러 감 (에너지보다 가까울 때)
+	if (!Me.IsHoldingThrowable())
+	{
+		ACTThrowable* NearThrowable = nullptr;
+		float NearThrowableDistance = TNumericLimits<float>::Max();
+		for (const TWeakObjectPtr<ACTThrowable>& Weak : ThrowableList)
+		{
+			ACTThrowable* Throwable = Weak.Get();
+			if (!Throwable || !Throwable->CanBePickedUp()) { continue; }
+			const float Distance = FVector::Dist2D(MyLocation, Throwable->GetActorLocation());
+			if (Distance < NearThrowableDistance) { NearThrowable = Throwable; NearThrowableDistance = Distance; }
+		}
+
+		if (NearThrowable && NearThrowableDistance < 900.f && NearThrowableDistance < BestDistance)
+		{
+			if (NearThrowableDistance < 450.f)
+			{
+				// 바라보고 집기 (쿨타임은 서버가 검사)
+				Halt();
+				SetAIRun(Me, false);
+				FaceLocation(Me, NearThrowable->GetActorLocation());
+				Me.AIGrab();
+			}
+			else
+			{
+				SetAIRun(Me, false);
+				if (Now >= NextMoveCommandTime || GetMoveStatus() == EPathFollowingStatus::Idle)
+				{
+					NextMoveCommandTime = Now + 0.2;
+					MoveToPoint(NearThrowable->GetActorLocation(), 250.f);
+				}
+			}
+			return;
+		}
 	}
 
 	if (Best)

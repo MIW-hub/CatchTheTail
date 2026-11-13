@@ -8,6 +8,7 @@
 class ACTCharacter;
 class ACTTailPickup;
 class ACTEnergyPickup;
+class ACTThrowable;
 
 /**
  * AI 플레이어 조종자 (서버에서만 동작).
@@ -174,6 +175,9 @@ private:
 	// 보물찾기 모드: 가장 가까운 에너지를 주우러 다니고, 없으면 돌아다님 (위험물은 피함)
 	void ThinkTreasure(ACTCharacter& Me, double Now);
 	TArray<TWeakObjectPtr<ACTEnergyPickup>> EnergyList;
+	TArray<TWeakObjectPtr<ACTThrowable>> ThrowableList;
+	double NextThrowTime = 0.0;
+	double HoldStartTime = 0.0;
 	double NextEnergyRefreshTime = 0.0;
 
 	// 위치가 눈에 보이는가 (거리, 부채꼴, 시선이 안 가림)

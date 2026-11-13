@@ -437,6 +437,12 @@ bool ACTGameMode::HandleEnergyPickup(ACTCharacter* Picker, int32 Amount)
 	return GetRule()->OnEnergyPicked(Picker, Amount);
 }
 
+void ACTGameMode::HandleThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity)
+{
+	// 맞았을 때의 처리는 모드 규칙이 함
+	GetRule()->OnThrowableHit(Thrower, Victim, Velocity);
+}
+
 bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim)
 {
 	// 점수 변경과 유령 처리는 모드 규칙이 함

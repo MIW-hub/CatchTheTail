@@ -6,6 +6,7 @@
 #include "CTPlayerState.h"
 #include "../Tail/CTTail.h"
 #include "../World/CTStarBurstFx.h"
+#include "../World/CTThrowable.h"
 #include "../World/CTBush.h"
 #include "../UI/CTHUDWidget.h"
 #include "../UI/CTEmoteBubbleComponent.h"
@@ -227,6 +228,7 @@ void ACTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTCharacter, OwnedTail);
 	DOREPLIFETIME(ACTCharacter, CurrentBush);
 	DOREPLIFETIME(ACTCharacter, bBoothLocked);
+	DOREPLIFETIME(ACTCharacter, HeldThrowable);
 }
 
 // 블루프린트에 저장된 이모트 칸에 빠진 그림/이름(특히 영어, 일본어)을 코드 기본값으로 채움
@@ -970,6 +972,14 @@ void ACTCharacter::OnGrabPressed()
 
 	if (!CanUseActions()) { return; }
 
+	// 보물찾기: 오브젝트를 들고 있으면 같은 키로 던짐 (쿨타임 없음)
+	if (IsHoldingThrowable())
+	{
+		PlayActionMontage(ECTCharacterAction::Grab);
+		ServerThrow();
+		return;
+	}
+
 	// 쿨타임 중 서버 거절
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Now - LocalLastGrabTime < GrabCooldownSeconds) { return; }
@@ -1273,6 +1283,13 @@ void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 이모트 창을 연 채로 사라지면 입력 막힘이 남지 않게 닫음
 	if (EmoteMenu) { CloseEmoteMenu(); }
 
+	// 오브젝트를 들고 있었다면 그 자리에 내려놓음
+	if (HasAuthority() && HeldThrowable)
+	{
+		HeldThrowable->Release();
+		HeldThrowable = nullptr;
+	}
+
 	GetWorldTimerManager().ClearTimer(GrabWindowStartTimerHandle);
 	GetWorldTimerManager().ClearTimer(GrabWindowTickTimerHandle);
 
@@ -1356,7 +1373,7 @@ void ACTCharacter::TickGrabWindow()
 		return;
 	}
 
-	// 닿으면 시도, 성공 시 구간 종료
+	// 닿으면 시도, 성공 시 구간 종료 (꼬리가 먼저)
 	for (TActorIterator<ACTTail> It(World); It; ++It)
 	{
 		if (It->TryTouch(this))
@@ -1365,6 +1382,77 @@ void ACTCharacter::TickGrabWindow()
 			return;
 		}
 	}
+
+	// 보물찾기: 꼬리를 못 잡았으면 앞쪽의 오브젝트를 집음
+	if (CTGameState->GetModeType() == ECTGameModeType::TreasureHunt && !IsHoldingThrowable() && TryPickupThrowable())
+	{
+		EndGrabWindow();
+	}
+}
+
+bool ACTCharacter::TryPickupThrowable()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || IsHoldingThrowable()) { return false; }
+
+	const FVector MyLocation = GetActorLocation();
+	const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
+	const float CosLimit = FMath::Cos(FMath::DegreesToRadians(ThrowPickupHalfAngleDegrees));
+
+	ACTThrowable* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (TActorIterator<ACTThrowable> It(World); It; ++It)
+	{
+		ACTThrowable* Throwable = *It;
+		if (!Throwable->CanBePickedUp()) { continue; }
+
+		FVector ToThrowable = Throwable->GetActorLocation() - MyLocation;
+		if (FMath::Abs(ToThrowable.Z) > 250.f) { continue; }
+		ToThrowable.Z = 0.f;
+		const float Distance = ToThrowable.Size();
+		if (Distance > ThrowPickupDistance || Distance >= BestDistance) { continue; }
+		if (Distance > 120.f && FVector::DotProduct(Forward, ToThrowable / Distance) < CosLimit) { continue; } // 가까우면 방향 상관없이
+
+		Best = Throwable;
+		BestDistance = Distance;
+	}
+	if (!Best) { return false; }
+
+	HeldThrowable = Best;
+	Best->AttachToHolder(this);
+	ForceNetUpdate();
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 오브젝트 들기: %s"), *GetPlayerState()->GetPlayerName());
+	return true;
+}
+
+void ACTCharacter::ClearHeldThrowable(ACTThrowable* Throwable)
+{
+	if (HasAuthority() && HeldThrowable == Throwable) { HeldThrowable = nullptr; }
+}
+
+void ACTCharacter::ServerThrow_Implementation()
+{
+	UWorld* World = GetWorld();
+	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
+	if (!HeldThrowable || bBoothLocked || IsGhost() || IsGrappling()) { return; }
+
+	// 캐릭터가 보는 방향(카메라가 아님)으로 조금 위를 향해 고정된 힘으로 던짐
+	FVector Direction = GetActorForwardVector().GetSafeNormal2D();
+	Direction = Direction.RotateAngleAxis(-ThrowUpAngleDegrees, GetActorRightVector());
+
+	ACTThrowable* Thrown = HeldThrowable;
+	HeldThrowable = nullptr;
+	Thrown->Throw(Direction * ThrowSpeed);
+	ForceNetUpdate();
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 오브젝트 던짐: %s"), *GetPlayerState()->GetPlayerName());
+
+	MulticastPlayAction(ECTCharacterAction::Grab, true);
+}
+
+void ACTCharacter::AIThrow()
+{
+	if (HasAuthority()) { ServerThrow_Implementation(); }
 }
 
 void ACTCharacter::AIGrab()
