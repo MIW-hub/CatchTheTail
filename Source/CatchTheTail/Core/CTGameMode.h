@@ -153,11 +153,6 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCTGameRule> Rule;
 
-	// 꼬리잡기 규칙 (규칙 객체가 부름. 3단계에서 UCTRule_TailChase 로 옮길 예정)
-	void TailChase_InitPlayers();
-	void TailChase_BeginRound();
-	void TailChase_ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie);
-	bool TailChase_HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
 	// 이탈자 반영: 남은 사람끼리 목표 색 재연결
 	void HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer);
@@ -174,9 +169,6 @@ private:
 
 	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();
-
-	// 색 배정, 직전 색 회피
-	void AssignColorsAndTargets();
 
 	// 0.2초마다 라운드/게임 종료 확인
 	void TickGameFlow();

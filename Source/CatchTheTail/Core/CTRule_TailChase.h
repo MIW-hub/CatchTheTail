@@ -19,4 +19,9 @@ public:
 	virtual void OnRoundStart(int32 RoundNumber) override;
 	virtual void ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie) override;
 	virtual bool HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) override;
+	virtual bool FinalizeGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) override;
+
+private:
+	// 라운드마다 색을 중복 없이 무작위로 배정하고 목표 색을 정함 (직전 색은 되도록 피함)
+	void AssignColorsAndTargets();
 };

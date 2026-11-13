@@ -36,6 +36,9 @@ public:
 	// 꼬리잡기 시도 처리. 시작됐거나 성립하면 true
 	virtual bool HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) { return false; }
 
+	// 잡기가 성립했을 때 점수 변경 / 유령 처리 (대결에서 이긴 뒤나 대결이 꺼진 경우). 처리했으면 true
+	virtual bool FinalizeGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) { return false; }
+
 protected:
 	ACTGameMode* GetGameMode() const { return GameMode.Get(); }
 

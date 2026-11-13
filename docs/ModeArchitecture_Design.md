@@ -156,3 +156,13 @@ ACTGameMode (공통 흐름: 접속, 카운트다운, 시간 진행, AI 생성, �
 | 0. 기준선 기록 | 2026-11-13 | 완료 | `Tools/CTBaseline.ps1`, `docs/baseline/` |
 | 1. 모드 설정 항목 + 로비 선택 | 2026-11-13 | 완료 | `FCTMatchSettings::Mode`(0 꼬리잡기, 1 보물찾기), 로비 경기 설정 맨 위 줄, 보물찾기는 "준비 중"이라 시작 불가(`CanStartLobby`). 기준선 비교 PASS |
 | 2. 규칙 객체 껍데기 | 2026-11-13 | 완료 | `UCTGameRule`(베이스), `UCTRule_TailChase`. GameMode가 `InitGameState`에서 규칙 객체를 만들고 경기 시작, 라운드 시작, 결과 계산, 잡기 처리를 규칙 객체로 넘김. 본체 코드는 `ACTGameMode::TailChase_*` 4개 함수로 **그 자리에서 분리만** 했고(내용 변경 없음), 3단계에서 규칙 클래스로 옮김. 기준선 비교 PASS (규칙 생성 로그 확인) |
+| 3. 코드 옮기기 | 2026-11-13 | 완료 | 꼬리잡기 코드 본체를 `UCTRule_TailChase`로 이동: 경기 시작 초기화, 라운드 시작(꼬리 아이템 정리, 유령 부활, 꼬리 보충, 색·목표 배정), 결과 계산, 잡기 시도(`HandleGrab`), 잡기 성립 처리(`FinalizeGrab`: 꼬리 빼앗기와 유령). 베이스에 `FinalizeGrab` 추가, `ACTGameMode::FinalizeTailGrabbed`는 규칙에 위임. 세 묶음으로 나눠 옮기고 매번 빌드 성공 확인 후 기준선 비교 PASS(마지막 확인에서 AI 잡기 3회 발생) |
+
+### 3단계 이후에도 GameMode에 남아 있는 꼬리잡기 전용 코드 (다음 단계에서 훅으로 뺄 후보)
+| 함수 | 내용 | 보물찾기에서 |
+|---|---|---|
+| `HandlePlayerLeftDuringGame` | 이탈 시 목표 색 재연결 | 팀 인원 변화 처리로 교체 |
+| `HandleForfeit` | 기권(꼬리 0, 순위 제외, 유령) | 기권 규칙 별도 결정 필요 |
+| `HandleGhostRelocate` | 유령 이동(F) | 유령이 없어서 사용 안 함 |
+| `RefreshAllChaseBuffs` | 목표 추격 속도 버프 | 목표 색이 없어서 사용 안 함 |
+| `EndGame`의 "혼자 남으면 종료" 조건 | 남은 인원 2명 미만이면 종료 | 팀 기준(한 팀이 0명이면 종료)으로 교체 |
