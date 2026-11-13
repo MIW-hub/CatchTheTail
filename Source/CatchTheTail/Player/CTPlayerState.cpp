@@ -40,6 +40,10 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(ACTPlayerState, TargetColor, COND_OwnerOnly);
 	DOREPLIFETIME(ACTPlayerState, TailCount);
 	DOREPLIFETIME(ACTPlayerState, PhoneReadyServerTime);
+	DOREPLIFETIME(ACTPlayerState, TeamId);
+	// 개인 에너지는 본인에게만 알림. 상대 팀 에너지를 클라이언트에서 알 수 없게 함 (결과 화면은 ResultEnergy 로 경기 후 공개)
+	DOREPLIFETIME_CONDITION(ACTPlayerState, Energy, COND_OwnerOnly);
+	DOREPLIFETIME(ACTPlayerState, ResultEnergy);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
 	DOREPLIFETIME(ACTPlayerState, bForfeited);
 	DOREPLIFETIME(ACTPlayerState, bReady);
@@ -95,6 +99,47 @@ void ACTPlayerState::AddTailCount(int32 Delta)
 	SetTailCount(TailCount + Delta);
 }
 
+void ACTPlayerState::SetTeamId(int32 NewTeamId)
+{
+	if (!HasAuthority()) { return; }
+
+	NewTeamId = FMath::Max<int32>(NewTeamId, INDEX_NONE);
+	if (TeamId == NewTeamId) { return; }
+
+	TeamId = NewTeamId;
+	ForceNetUpdate();
+	OnRep_Lobby();
+}
+
+void ACTPlayerState::SetEnergy(int32 NewEnergy)
+{
+	if (!HasAuthority()) { return; }
+
+	NewEnergy = FMath::Max(0, NewEnergy);
+	if (Energy == NewEnergy) { return; }
+
+	Energy = NewEnergy;
+	ForceNetUpdate();
+	OnRep_Energy();
+}
+
+void ACTPlayerState::AddEnergy(int32 Delta)
+{
+	SetEnergy(Energy + Delta);
+}
+
+void ACTPlayerState::SetResultEnergy(int32 NewResultEnergy)
+{
+	if (!HasAuthority()) { return; }
+
+	NewResultEnergy = FMath::Max(0, NewResultEnergy);
+	if (ResultEnergy == NewResultEnergy) { return; }
+
+	ResultEnergy = NewResultEnergy;
+	ForceNetUpdate();
+	OnRep_Energy();
+}
+
 void ACTPlayerState::SetIsGhost(bool bNewIsGhost)
 {
 	if (!HasAuthority()) { return; }
@@ -137,6 +182,11 @@ void ACTPlayerState::SetIsHost(bool bNewIsHost)
 }
 
 void ACTPlayerState::OnRep_Lobby()
+{
+	NotifyChanged();
+}
+
+void ACTPlayerState::OnRep_Energy()
 {
 	NotifyChanged();
 }

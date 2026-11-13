@@ -432,6 +432,12 @@ void ACTGameMode::CreateRule(ECTGameModeType Mode)
 
 	Rule = NewObject<UCTRule_TailChase>(this);
 	Rule->Init(this);
+
+	// 클라이언트 화면이 모드를 알 수 있게 GameState 에 기록
+	if (ACTGameState* CTGameState = GetGameState<ACTGameState>())
+	{
+		CTGameState->SetModeType(Rule->GetModeType());
+	}
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 모드 규칙 생성: 꼬리잡기"));
 }
 

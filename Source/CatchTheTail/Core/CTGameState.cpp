@@ -25,6 +25,9 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, ForfeitUnlockServerTime);
 	DOREPLIFETIME(ACTGameState, RoundDurationSeconds);
 	DOREPLIFETIME(ACTGameState, CountdownSeconds);
+	DOREPLIFETIME(ACTGameState, ModeType);
+	DOREPLIFETIME(ACTGameState, TeamColors);
+	DOREPLIFETIME(ACTGameState, TeamRoundWins);
 	DOREPLIFETIME(ACTGameState, Winners);
 	DOREPLIFETIME(ACTGameState, bIsTie);
 }
@@ -107,6 +110,30 @@ int32 ACTGameState::GetCountdownNumber() const
 {
 	if (!IsCountdownActive()) { return 0; }
 	return FMath::CeilToInt(Phase == ECTGamePhase::Countdown ? GetStartCountdownRemainingSeconds() : GetRoundRemainingSeconds());
+}
+
+void ACTGameState::SetModeType(ECTGameModeType NewModeType)
+{
+	if (!HasAuthority()) { return; }
+
+	ModeType = NewModeType;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetTeamColors(const TArray<ECTColor>& NewTeamColors)
+{
+	if (!HasAuthority()) { return; }
+
+	TeamColors = NewTeamColors;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetTeamRoundWins(const TArray<int32>& NewTeamRoundWins)
+{
+	if (!HasAuthority()) { return; }
+
+	TeamRoundWins = NewTeamRoundWins;
+	ForceNetUpdate();
 }
 
 void ACTGameState::SetPhase(ECTGamePhase NewPhase)

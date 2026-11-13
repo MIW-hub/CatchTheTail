@@ -34,6 +34,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsGhost() const { return bIsGhost; }
 
+	// 팀 번호 (팀전 모드에서만 사용, 없으면 -1). 모두에게 복제
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	int32 GetTeamId() const { return TeamId; }
+
+	// 내가 모은 에너지 (보물찾기). 본인 화면에만 복제됨
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	int32 GetEnergy() const { return Energy; }
+
+	// 경기가 끝난 뒤 모두에게 공개되는 개인 에너지 점수 (결과 화면용)
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	int32 GetResultEnergy() const { return ResultEnergy; }
+
 	// 이번 경기에서 기권함. 순위와 라운드 진행에서 빠지고 유령으로 관전만 함
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsForfeited() const { return bForfeited; }
@@ -60,6 +72,12 @@ public:
 	// 꼬리 수 증감, 0 미만 불가
 	void AddTailCount(int32 Delta);
 	void SetIsGhost(bool bNewIsGhost);
+
+	// 서버 전용 쓰기: 팀 번호, 에너지 (0 미만 불가), 결과 공개용 에너지 점수
+	void SetTeamId(int32 NewTeamId);
+	void SetEnergy(int32 NewEnergy);
+	void AddEnergy(int32 Delta);
+	void SetResultEnergy(int32 NewResultEnergy);
 
 	// 서버 전용: 이번 유령 상태에서 F키 이동을 이미 썼는가 (유령이 될 때마다 초기화)
 	bool HasUsedGhostRelocate() const { return bGhostRelocateUsed; }
@@ -92,6 +110,15 @@ protected:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|PlayerState")
 	double PhoneReadyServerTime = 0.0;
 
+	UPROPERTY(ReplicatedUsing = OnRep_Lobby, BlueprintReadOnly, Category = "CT|PlayerState")
+	int32 TeamId = INDEX_NONE;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Energy, BlueprintReadOnly, Category = "CT|PlayerState")
+	int32 Energy = 0;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Energy, BlueprintReadOnly, Category = "CT|PlayerState")
+	int32 ResultEnergy = 0;
+
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;
 
@@ -115,6 +142,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_TailCount();
+
+	UFUNCTION()
+	void OnRep_Energy();
 
 	UFUNCTION()
 	void OnRep_IsGhost();

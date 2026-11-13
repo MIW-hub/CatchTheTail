@@ -69,6 +69,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	const FCTMatchSettings& GetMatchSettings() const { return MatchSettings; }
 
+	// 이 경기의 게임 모드 (경기 맵의 GameMode 가 정함)
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	ECTGameModeType GetModeType() const { return ModeType; }
+
+	// 팀전: 팀 색(팀 번호 0, 1)과 팀별 라운드 승점. 없는 번호는 None / 0
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	ECTColor GetTeamColor(int32 TeamId) const { return TeamColors.IsValidIndex(TeamId) ? TeamColors[TeamId] : ECTColor::None; }
+
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	int32 GetTeamRoundWins(int32 TeamId) const { return TeamRoundWins.IsValidIndex(TeamId) ? TeamRoundWins[TeamId] : 0; }
+
+	// 서버 전용 쓰기
+	void SetModeType(ECTGameModeType NewModeType);
+	void SetTeamColors(const TArray<ECTColor>& NewTeamColors);
+	void SetTeamRoundWins(const TArray<int32>& NewTeamRoundWins);
+
 	// 로비: 방 코드, 없으면 빈 문자열
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
 	FString GetRoomCode() const { return RoomCode; }
@@ -189,6 +205,17 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "CT|Game")
 	float CountdownSeconds = 5.f;
+
+	// 게임 모드 (복제)
+	UPROPERTY(Replicated)
+	ECTGameModeType ModeType = ECTGameModeType::TailChase;
+
+	// 팀 색 / 팀별 라운드 승점 (팀전 모드에서만 채움, 복제)
+	UPROPERTY(Replicated)
+	TArray<ECTColor> TeamColors;
+
+	UPROPERTY(Replicated)
+	TArray<int32> TeamRoundWins;
 
 	// 결과: 승자
 	UPROPERTY(Replicated)
