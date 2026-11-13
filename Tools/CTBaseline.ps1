@@ -11,7 +11,8 @@ param(
 	[int]$GameSeconds = 45,
 	[int]$RoundSeconds = 18,
 	[int]$TimeoutSeconds = 150,
-	[string]$CompareTo = ""   # 비교할 이전 기준선 이름 (예: before). 비우면 비교 안 함
+	[string]$CompareTo = "",   # 비교할 이전 기준선 이름 (예: before). 비우면 비교 안 함
+	[switch]$Packaged           # 패키징된 실행 파일(Packaged\Windows\HeyChicken.exe)로 확인
 )
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -24,7 +25,13 @@ if (Get-Process UnrealEditor* -ErrorAction SilentlyContinue) { Write-Error "에�
 
 $exe = "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe"
 $cmds = "set CTGameMode DebugAIPlayerCount $AiCount,set CTGameMode GameDurationSeconds $GameSeconds,set CTGameMode RoundDurationSeconds $RoundSeconds"
-$arguments = "`"$root\CatchTheTail.uproject`" $Map -game -windowed -ResX=800 -ResY=450 -nosound -nosplash -nop4 -log -ExecCmds=`"$cmds`" -ABSLOG=`"$log`""
+$projectArg = "`"$root\CatchTheTail.uproject`" "
+if ($Packaged) {
+	$exe = Join-Path $root "Packaged\Windows\HeyChicken.exe"
+	$projectArg = ""
+	if (-not (Test-Path $exe)) { Write-Error "패키징 파일이 없습니다: $exe"; exit 1 }
+}
+$arguments = "$projectArg$Map -game -windowed -ResX=800 -ResY=450 -nosound -nosplash -nop4 -log -ExecCmds=`"$cmds`" -ABSLOG=`"$log`""
 $p = Start-Process $exe -ArgumentList $arguments -PassThru
 
 # 게임 종료 로그가 나오거나 시간이 다 되면 끝냄
