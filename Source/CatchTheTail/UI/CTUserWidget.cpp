@@ -15,6 +15,12 @@ ACTGameState* UCTUserWidget::GetCTGameState() const
 	return World ? World->GetGameState<ACTGameState>() : nullptr;
 }
 
+ECTGameModeType UCTUserWidget::GetModeType() const
+{
+	const ACTGameState* GameState = GetCTGameState();
+	return GameState ? GameState->GetModeType() : ECTGameModeType::TailChase;
+}
+
 ACTPlayerState* UCTUserWidget::GetOwningCTPlayerState() const
 {
 	const APlayerController* PlayerController = GetOwningPlayer();

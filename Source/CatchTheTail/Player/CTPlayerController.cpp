@@ -9,6 +9,7 @@
 #include "CTPlayerState.h"
 #include "../UI/CTHUDWidget.h"
 #include "../UI/CTResultWidget.h"
+#include "../UI/CTTreasureHudWidget.h"
 #include "../UI/CTPauseMenuWidget.h"
 #include "../UI/CTPhonePopupWidget.h"
 #include "../World/CTPhoneBooth.h"
@@ -34,6 +35,13 @@ ACTPlayerController::ACTPlayerController()
 	}
 
 	PhonePopupWidgetClass = UCTPhonePopupWidget::StaticClass();
+
+	// 보물찾기 전용 HUD (WBP). 디자인은 WBP 에서 함
+	static ConstructorHelpers::FClassFinder<UCTTreasureHudWidget> TreasureHudFinder(TEXT("/Game/UI/WBP_CTTreasureHudWidget"));
+	if (TreasureHudFinder.Succeeded())
+	{
+		TreasureHudWidgetClass = TreasureHudFinder.Class;
+	}
 }
 
 void ACTPlayerController::SetupInputComponent()
@@ -182,11 +190,56 @@ void ACTPlayerController::TryBindGameState()
 	}
 
 	BoundGameState = GameState;
+	ApplyModeUI();
 	GameState->OnPhaseChanged.AddUniqueDynamic(this, &ACTPlayerController::HandlePhaseChanged);
 	GameState->OnRoundChanged.AddUniqueDynamic(this, &ACTPlayerController::HandleRoundChanged);
 
 	// 이미 끝난 경기 대응
 	HandlePhaseChanged(GameState->GetPhase());
+}
+
+void ACTPlayerController::ApplyModeUI()
+{
+	if (!IsLocalController()) { return; }
+
+	const ACTGameState* GameState = BoundGameState.Get();
+	if (!GameState || GameState->GetModeType() != ECTGameModeType::TreasureHunt) { return; } // 꼬리잡기는 기본 HUD 를 그대로 씀
+
+	// 보물찾기: 기본 HUD 를 숨기고 전용 HUD 를 보여줌 (전용 HUD WBP 가 없으면 기본 HUD 유지)
+	if (!TreasureHudWidgetClass) { return; }
+	if (!TreasureHudWidget)
+	{
+		TreasureHudWidget = CreateWidget<UCTTreasureHudWidget>(this, TreasureHudWidgetClass);
+	}
+	if (!TreasureHudWidget) { return; }
+
+	if (!TreasureHudWidget->IsInViewport()) { TreasureHudWidget->AddToViewport(0); }
+	if (HUDWidget) { HUDWidget->SetVisibility(ESlateVisibility::Collapsed); }
+}
+
+void ACTPlayerController::CTPreviewTreasureHud()
+{
+	if (!IsLocalController() || !TreasureHudWidgetClass) { return; }
+
+	if (!bTreasureHudPreview)
+	{
+		if (!TreasureHudWidget) { TreasureHudWidget = CreateWidget<UCTTreasureHudWidget>(this, TreasureHudWidgetClass); }
+		if (!TreasureHudWidget) { return; }
+
+		bTreasureHudPreview = true;
+		if (!TreasureHudWidget->IsInViewport()) { TreasureHudWidget->AddToViewport(0); }
+		if (HUDWidget)
+		{
+			SavedHudVisibility = HUDWidget->GetVisibility();
+			HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	else
+	{
+		bTreasureHudPreview = false;
+		if (TreasureHudWidget) { TreasureHudWidget->RemoveFromParent(); }
+		if (HUDWidget) { HUDWidget->SetVisibility(SavedHudVisibility); }
+	}
 }
 
 void ACTPlayerController::HandleRoundChanged(int32 NewRoundNumber)

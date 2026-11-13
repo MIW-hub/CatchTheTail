@@ -3192,3 +3192,110 @@ bool UCTUIBuildTools::AddLobbyPlayerCountText(UBlueprint* WidgetBlueprint)
 	return false;
 #endif
 }
+
+// 보물찾기 HUD 임시 뼈대 (처음 한 번). 디자인은 이 위젯을 열어 직접 바꾸면 됨. 위젯 이름은 UCTTreasureHudWidget 이 값을 채우는 이름과 같아야 함
+int32 UCTUIBuildTools::BuildTreasureHudDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTTreasureHudWidget"))) { return -1; }
+
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+	const FLinearColor PinkFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC));
+
+	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_TreasureHud"));
+	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Canvas;
+
+	// 둥근 색 칩 (색은 코드가 입힘)
+	auto MakeColorChip = [&](const TCHAR* Name)
+	{
+		UImage* Chip = Make<UImage>(Name);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(DarkPurple), 3.f);
+		Chip->SetBrush(Brush);
+		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Chip;
+	};
+
+	// 위쪽 가운데: 라운드 승점 / 라운드 번호 / 남은 시간
+	{
+		UOverlay* TopBar = Make<UOverlay>(TEXT("Overlay_TopBar"));
+		TopBar->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UCanvasPanelSlot* TopSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(TopBar));
+		TopSlot->SetAnchors(FAnchors(0.5f, 0.f));
+		TopSlot->SetAlignment(FVector2D(0.5f, 0.f));
+		TopSlot->SetPosition(FVector2D(0.f, 24.f));
+		TopSlot->SetAutoSize(true);
+
+		UImage* Back = Make<UImage>(TEXT("Image_TopBarBack"));
+		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+		Back->SetColorAndOpacity(PinkFill);
+		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* BackSlot = TopBar->AddChildToOverlay(Back);
+		BackSlot->SetHorizontalAlignment(HAlign_Fill);
+		BackSlot->SetVerticalAlignment(VAlign_Fill);
+
+		UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_TopBar"));
+		Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlaySlot* RowSlot = TopBar->AddChildToOverlay(Row);
+		RowSlot->SetHorizontalAlignment(HAlign_Fill);
+		RowSlot->SetVerticalAlignment(VAlign_Center);
+		RowSlot->SetPadding(FMargin(32.f, 12.f, 32.f, 12.f));
+
+		AddH(Row, Sized(TEXT("Size_MyTeamColor"), MakeColorChip(TEXT("Image_MyTeamColor")), 40.f, 40.f), 14.f, false);
+		UTextBlock* MyWins = MakeText(TEXT("Text_MyTeamWins"), TEXT("0"), TEXT("Bold"), 44, DarkPurple, ETextJustify::Center);
+		MyWins->SetAutoWrapText(false);
+		AddH(Row, Sized(TEXT("Size_MyTeamWins"), MyWins, 64.f, 0.f), 22.f, false);
+
+		UVerticalBox* Center = Make<UVerticalBox>(TEXT("Column_Round"));
+		Center->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		AddV(Center, MakeText(TEXT("Text_RoundLabel"), TEXT("라운드"), TEXT("Bold"), 16, Magenta, ETextJustify::Center), 0.f);
+		AddV(Center, MakeText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), TEXT("Bold"), 32, Magenta, ETextJustify::Center), 0.f);
+		AddV(Center, MakeText(TEXT("Text_RoundTimer"), TEXT("1:00"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Center), 0.f);
+		AddH(Row, Sized(TEXT("Size_Round"), Center, 130.f, 0.f), 22.f, false);
+
+		UTextBlock* EnemyWins = MakeText(TEXT("Text_EnemyTeamWins"), TEXT("0"), TEXT("Bold"), 44, DarkPurple, ETextJustify::Center);
+		EnemyWins->SetAutoWrapText(false);
+		AddH(Row, Sized(TEXT("Size_EnemyTeamWins"), EnemyWins, 64.f, 0.f), 14.f, false);
+		AddH(Row, Sized(TEXT("Size_EnemyTeamColor"), MakeColorChip(TEXT("Image_EnemyTeamColor")), 40.f, 40.f), 0.f, false);
+	}
+
+	// 왼쪽 아래: 내 에너지 / 우리 팀 에너지 (상대 팀 에너지는 표시하지 않음)
+	{
+		UOverlay* Energy = Make<UOverlay>(TEXT("Overlay_Energy"));
+		Energy->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UCanvasPanelSlot* EnergySlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Energy));
+		EnergySlot->SetAnchors(FAnchors(0.f, 1.f));
+		EnergySlot->SetAlignment(FVector2D(0.f, 1.f));
+		EnergySlot->SetPosition(FVector2D(32.f, -32.f));
+		EnergySlot->SetAutoSize(true);
+
+		UImage* Back = Make<UImage>(TEXT("Image_EnergyBack"));
+		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+		Back->SetColorAndOpacity(PinkFill);
+		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UOverlaySlot* BackSlot = Energy->AddChildToOverlay(Back);
+		BackSlot->SetHorizontalAlignment(HAlign_Fill);
+		BackSlot->SetVerticalAlignment(VAlign_Fill);
+
+		UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_Energy"));
+		Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlaySlot* ColumnSlot = Energy->AddChildToOverlay(Column);
+		ColumnSlot->SetHorizontalAlignment(HAlign_Fill);
+		ColumnSlot->SetVerticalAlignment(VAlign_Fill);
+		ColumnSlot->SetPadding(FMargin(28.f, 16.f, 28.f, 16.f));
+
+		AddV(Column, MakeText(TEXT("Label_MyEnergy"), TEXT("내 에너지"), TEXT("Bold"), 18, Magenta, ETextJustify::Left), 0.f);
+		AddV(Column, MakeText(TEXT("Text_MyEnergy"), TEXT("0"), TEXT("Bold"), 52, DarkPurple, ETextJustify::Left), 6.f);
+		AddV(Column, MakeText(TEXT("Label_TeamEnergy"), TEXT("우리 팀 에너지"), TEXT("Bold"), 18, Magenta, ETextJustify::Left), 0.f);
+		AddV(Column, MakeText(TEXT("Text_TeamEnergy"), TEXT("-"), TEXT("Bold"), 36, DarkPurple, ETextJustify::Left), 0.f);
+	}
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
+#endif
+}

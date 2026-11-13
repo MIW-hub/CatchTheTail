@@ -172,3 +172,4 @@ ACTGameMode (공통 흐름: 접속, 카운트다운, 시간 진행, AI 생성, �
 - **개인 에너지는 본인에게만** 보냅니다(`COND_OwnerOnly`). 상대 팀 에너지를 클라이언트가 알 수 없어야 하기 때문입니다.
 - **우리 팀 합산 에너지**는 아직 필드가 없습니다. 팀원에게만 보내야 해서 2주차(보물찾기 구현)에서 팀 단위 복제 조건으로 추가합니다.
 - 결과 화면의 개인 점수는 **경기가 끝난 뒤 `ResultEnergy`로 공개**합니다.
+| 5. UI 모드 분기 틀 | 2026-11-13 | 완료 | 보물찾기 전용 HUD `UCTTreasureHudWidget` + 임시 뼈대 `WBP_CTTreasureHudWidget`(디자인은 직접 수정), `ACTPlayerController::ApplyModeUI`(보물찾기일 때만 기본 HUD를 숨기고 전용 HUD 표시), `UCTUserWidget::GetModeType`, 결과 위젯 `BP_OnModeKnown`, 콘솔 `CTPreviewTreasureHud`(디자인 확인용 미리보기). 꼬리잡기 화면은 변화 없음. 기준선 PASS. 가이드: `docs/TreasureHud_UI_Guide.md`. 로비의 팀 편성 패널은 팀 편성 UI 작업 때 추가 |

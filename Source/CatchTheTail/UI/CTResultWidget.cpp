@@ -87,6 +87,9 @@ void UCTResultWidget::ShowResult()
 	const ACTGameState* GameState = GetCTGameState();
 	if (!GameState) { return; }
 
+	// 모드별로 표 모양을 나눌 수 있게 모드를 먼저 알림
+	BP_OnModeKnown(GameState->GetModeType());
+
 	const ACTPlayerState* MyPlayerState = GetOwningCTPlayerState();
 	const bool bIsTie = GameState->IsTie();
 	const bool bLocalPlayerWon = GameState->IsWinner(MyPlayerState);

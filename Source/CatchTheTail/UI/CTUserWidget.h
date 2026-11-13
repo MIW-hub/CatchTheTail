@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "../Type/CTTypes.h"
+#include "../Core/CTMatchSettings.h"
 #include "CTUserWidget.generated.h"
 
 class ACTGameState;
@@ -21,6 +22,10 @@ class CATCHTHETAIL_API UCTUserWidget : public UUserWidget
 public:
 	UFUNCTION(BlueprintPure, Category = "CT|UI")
 	ACTGameState* GetCTGameState() const;
+
+	// 지금 경기의 게임 모드 (GameState 가 없으면 꼬리잡기). 위젯 블루프린트에서 모드별로 나눌 때 씀
+	UFUNCTION(BlueprintPure, Category = "CT|UI")
+	ECTGameModeType GetModeType() const;
 
 	// 내 PlayerState (접속 직후 nullptr 가능)
 	UFUNCTION(BlueprintPure, Category = "CT|UI")

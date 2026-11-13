@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/SlateWrapperTypes.h"
 #include "../Type/CTTypes.h"
 #include "../Core/CTAudioSettings.h"
 #include "CTPlayerController.generated.h"
@@ -10,6 +11,7 @@
 class UInputMappingContext;
 class UCTHUDWidget;
 class UCTResultWidget;
+class UCTTreasureHudWidget;
 class UCTPauseMenuWidget;
 class UCTPhonePopupWidget;
 class ACTGameState;
@@ -90,6 +92,13 @@ protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
 	TObjectPtr<UCTHUDWidget> HUDWidget;
 
+	// 보물찾기 모드 전용 HUD (기본 /Game/UI/WBP_CTTreasureHudWidget). 모드가 보물찾기일 때만 보이고 기본 HUD는 숨김
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTTreasureHudWidget> TreasureHudWidgetClass;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
+	TObjectPtr<UCTTreasureHudWidget> TreasureHudWidget;
+
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
 	TObjectPtr<UCTResultWidget> ResultWidget;
 
@@ -163,6 +172,16 @@ private:
 
 	// GameState 지연 도착 재시도
 	void TryBindGameState();
+
+	// 디자인 확인용: 콘솔에서 CTPreviewTreasureHud 를 치면 보물찾기 HUD 가 보이고 한 번 더 치면 원래대로 돌아옴 (이 컴퓨터 화면에서만, 게임 규칙에는 영향 없음)
+	UFUNCTION(Exec)
+	void CTPreviewTreasureHud();
+
+	bool bTreasureHudPreview = false;
+	ESlateVisibility SavedHudVisibility = ESlateVisibility::SelfHitTestInvisible;
+
+	// 게임 모드에 맞는 HUD 로 전환 (꼬리잡기는 기본 HUD 그대로, 보물찾기는 전용 HUD)
+	void ApplyModeUI();
 
 	UFUNCTION()
 	void HandlePhaseChanged(ECTGamePhase NewPhase);

@@ -27,6 +27,10 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
+	// 결과를 채우기 전에 모드를 알려 줌 (모드별로 표 모양을 나눌 때 씀)
+	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
+	void BP_OnModeKnown(ECTGameModeType Mode);
+
 	// 결과 표시 끝 (연출용)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnResultShown(bool bLocalPlayerWon, bool bIsTie);

@@ -133,6 +133,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildMatchHistoryDesign(UBlueprint* WidgetBlueprint);
 
+	// 보물찾기 HUD 임시 뼈대 (처음 한 번). 디자인은 WBP 에서 직접 바꿈
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildTreasureHudDesign(UBlueprint* WidgetBlueprint);
+
 	// 로비 플레이어 한 줄 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildLobbyPlayerEntryDesign(UBlueprint* WidgetBlueprint);
