@@ -11,6 +11,7 @@
 class ACTPlayerState;
 class ACTGameState;
 class UCTGameRule;
+class ACTCharacter;
 
 UCLASS()
 class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
@@ -50,6 +51,9 @@ public:
 
 	// 서버, 점수 변경 + 유령 처리 (꼬리를 실제로 뺏음). 대결에서 잡은 쪽이 이기면 호출됨
 	bool FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
+
+	// 서버, 캐릭터가 에너지를 먹음 (보물찾기). 규칙이 처리하면 true
+	bool HandleEnergyPickup(ACTCharacter* Picker, int32 Amount);
 
 	// 서버, 기권 요청. 경기 중이고 기권이 열린 뒤에만 가능. 꼬리를 잃고 순위에서 빠져 유령으로 남음
 	bool HandleForfeit(ACTPlayerState* Forfeiter);
@@ -143,6 +147,7 @@ protected:
 private:
 	// 모드별 규칙 객체가 이 클래스의 꼬리잡기 함수들을 부름
 	friend class UCTRule_TailChase;
+	friend class UCTRule_TreasureHunt;
 
 	// 지금 모드의 규칙 객체 (없으면 꼬리잡기로 만듦)
 	UCTGameRule* GetRule();

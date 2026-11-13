@@ -4,6 +4,9 @@
 #include "CTGameState.h"
 #include "CTGameRule.h"
 #include "CTRule_TailChase.h"
+#include "CTRule_TreasureHunt.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTPlayerController.h"
 #include "../Player/CTAIController.h"
@@ -37,7 +40,16 @@ void ACTGameMode::InitGameState()
 
 	// 로비 없이 시작한 테스트는 BP 값 사용
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
-	CreateRule(GameInstance && GameInstance->HasStoredMatchSettings() ? GameInstance->GetStoredMatchSettings().GetMode() : ECTGameModeType::TailChase);
+	ECTGameModeType Mode = GameInstance && GameInstance->HasStoredMatchSettings() ? GameInstance->GetStoredMatchSettings().GetMode() : ECTGameModeType::TailChase;
+#if !UE_BUILD_SHIPPING
+	// 개발용: 로비 없이 시작할 때 명령줄 -CTMode=1 로 보물찾기를 켤 수 있음 (출시 빌드에서는 제외)
+	int32 ModeOverride = INDEX_NONE;
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTMode="), ModeOverride) && ModeOverride >= 0 && ModeOverride < static_cast<int32>(ECTGameModeType::Count))
+	{
+		Mode = static_cast<ECTGameModeType>(ModeOverride);
+	}
+#endif
+	CreateRule(Mode);
 	if (!GameInstance || !GameInstance->HasStoredMatchSettings()) { return; }
 
 	const FCTMatchSettings& Settings = GameInstance->GetStoredMatchSettings();
@@ -132,8 +144,8 @@ void ACTGameMode::HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer
 		return;
 	}
 
-	// 목표를 잃지 않게 남은 색끼리 재연결
-	if (!bTargetFromActiveColorsOnly) { return; }
+	// 목표를 잃지 않게 남은 색끼리 재연결 (목표 색 규칙을 쓰는 모드만)
+	if (!bTargetFromActiveColorsOnly || !GetRule()->UsesTargetColors()) { return; }
 
 	TArray<uint8> UsedColors;
 	for (const ACTPlayerState* PlayerState : Remaining)
@@ -207,8 +219,9 @@ void ACTGameMode::StartGame()
 	GetRule()->OnMatchStart();
 
 	const double Now = CTGameState->GetServerWorldTimeSeconds();
-	CTGameState->SetGameInfo(Now + GameDurationSeconds, RoundDurationSeconds, CountdownSeconds);
-	CTGameState->SetForfeitUnlockTime(Now + GameDurationSeconds * ForfeitAvailableRatio);
+	const float MatchDurationSeconds = GetRule()->GetGameDurationSeconds(GameDurationSeconds);
+	CTGameState->SetGameInfo(Now + MatchDurationSeconds, RoundDurationSeconds, CountdownSeconds);
+	CTGameState->SetForfeitUnlockTime(Now + MatchDurationSeconds * ForfeitAvailableRatio);
 	CTGameState->SetRoundInfo(0, Now);
 	CTGameState->SetPhase(ECTGamePhase::Playing);
 
@@ -218,7 +231,7 @@ void ACTGameMode::StartGame()
 
 	GetWorldTimerManager().SetTimer(FlowTimerHandle, this, &ACTGameMode::TickGameFlow, 0.2f, true);
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 시작: 전체 %.0f초, 라운드 %.0f초"), GameDurationSeconds, RoundDurationSeconds);
+	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 시작: 전체 %.0f초, 라운드 %.0f초"), MatchDurationSeconds, RoundDurationSeconds);
 }
 
 void ACTGameMode::SpawnAIPlayers()
@@ -278,6 +291,9 @@ void ACTGameMode::EndGame()
 	}
 
 	GetWorldTimerManager().ClearTimer(FlowTimerHandle);
+
+	// 마지막 정산 (모드 규칙)
+	GetRule()->OnGameEnding();
 
 	// 승자 계산 (모드 규칙)
 	TArray<ACTPlayerState*> Winners;
@@ -376,7 +392,15 @@ void ACTGameMode::TickGameFlow()
 	}
 	else if (Now >= CTGameState->GetRoundEndServerTime())
 	{
-		StartNewRound();
+		// 라운드 정산 (모드 규칙). 규칙이 경기를 끝내라고 하면 종료
+		if (GetRule()->OnRoundTimeUp(CTGameState->GetRoundNumber()))
+		{
+			EndGame();
+		}
+		else
+		{
+			StartNewRound();
+		}
 	}
 }
 
@@ -407,6 +431,12 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 	return GetRule()->HandleGrab(Grabber, Victim);
 }
 
+bool ACTGameMode::HandleEnergyPickup(ACTCharacter* Picker, int32 Amount)
+{
+	// 에너지 처리는 모드 규칙이 함
+	return GetRule()->OnEnergyPicked(Picker, Amount);
+}
+
 bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim)
 {
 	// 점수 변경과 유령 처리는 모드 규칙이 함
@@ -424,13 +454,14 @@ UCTGameRule* ACTGameMode::GetRule()
 
 void ACTGameMode::CreateRule(ECTGameModeType Mode)
 {
-	// 보물찾기는 아직 규칙이 없어서 꼬리잡기로 대신함 (로비에서도 시작이 막혀 있음)
-	if (Mode != ECTGameModeType::TailChase)
+	if (Mode == ECTGameModeType::TreasureHunt)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[CT] 아직 지원하지 않는 모드(%d): 꼬리잡기로 진행"), static_cast<int32>(Mode));
+		Rule = NewObject<UCTRule_TreasureHunt>(this);
 	}
-
-	Rule = NewObject<UCTRule_TailChase>(this);
+	else
+	{
+		Rule = NewObject<UCTRule_TailChase>(this);
+	}
 	Rule->Init(this);
 
 	// 클라이언트 화면이 모드를 알 수 있게 GameState 에 기록
@@ -438,7 +469,7 @@ void ACTGameMode::CreateRule(ECTGameModeType Mode)
 	{
 		CTGameState->SetModeType(Rule->GetModeType());
 	}
-	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 모드 규칙 생성: 꼬리잡기"));
+	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 모드 규칙 생성: %s"), Mode == ECTGameModeType::TreasureHunt ? TEXT("보물찾기") : TEXT("꼬리잡기"));
 }
 
 bool ACTGameMode::HandleForfeit(ACTPlayerState* Forfeiter)

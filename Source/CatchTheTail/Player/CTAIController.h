@@ -7,6 +7,7 @@
 
 class ACTCharacter;
 class ACTTailPickup;
+class ACTEnergyPickup;
 
 /**
  * AI 플레이어 조종자 (서버에서만 동작).
@@ -169,6 +170,11 @@ private:
 	// 눈에 보이는(앞쪽 시야, 가까운 둘레, 벽에 안 가림) 꼬리 아이템 중 가장 가까운 것을 향해 감. 가는 중이면 true
 	// bIgnoreHazards: 유령은 위험물에 안 맞으므로 도로 근처 아이템도 먹으러 감
 	bool GoToTailPickup(ACTCharacter& Me, double Now, bool bIgnoreHazards);
+
+	// 보물찾기 모드: 가장 가까운 에너지를 주우러 다니고, 없으면 돌아다님 (위험물은 피함)
+	void ThinkTreasure(ACTCharacter& Me, double Now);
+	TArray<TWeakObjectPtr<ACTEnergyPickup>> EnergyList;
+	double NextEnergyRefreshTime = 0.0;
 
 	// 위치가 눈에 보이는가 (거리, 부채꼴, 시선이 안 가림)
 	bool SeesLocation(const ACTCharacter& Me, const FVector& Location, const AActor* IgnoredActor) const;

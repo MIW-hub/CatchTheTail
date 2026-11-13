@@ -1,5 +1,22 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTMatchSettings.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	// 개발용: 보물찾기를 로비에서 시작할 수 있게 함 (기본 0). 실행할 때 -ExecCmds="ct.EnableTreasureHunt 1" 로 켬
+	TAutoConsoleVariable<int32> CVarEnableTreasureHunt(TEXT("ct.EnableTreasureHunt"), 0, TEXT("1이면 로비에서 보물찾기 모드를 시작할 수 있음 (개발 중)"), ECVF_Default);
+}
+
+bool FCTMatchSettings::IsModePlayable() const
+{
+	if (GetMode() == ECTGameModeType::TailChase) { return true; }
+#if UE_BUILD_SHIPPING
+	return false;
+#else
+	return CVarEnableTreasureHunt.GetValueOnAnyThread() != 0;
+#endif
+}
 
 int32 FCTMatchSettings::Get(ECTMatchSetting Setting) const
 {

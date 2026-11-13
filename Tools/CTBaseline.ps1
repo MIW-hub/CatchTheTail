@@ -12,7 +12,8 @@ param(
 	[int]$RoundSeconds = 18,
 	[int]$TimeoutSeconds = 150,
 	[string]$CompareTo = "",   # 비교할 이전 기준선 이름 (예: before). 비우면 비교 안 함
-	[switch]$Packaged           # 패키징된 실행 파일(Packaged\Windows\HeyChicken.exe)로 확인
+	[int]$Mode = -1,            # 게임 모드 강제 (1 = 보물찾기, 개발용). -1이면 기본(꼬리잡기)
+	[switch]$Packaged          # 패키징된 실행 파일(Packaged\Windows\HeyChicken.exe)로 확인
 )
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -31,7 +32,9 @@ if ($Packaged) {
 	$projectArg = ""
 	if (-not (Test-Path $exe)) { Write-Error "패키징 파일이 없습니다: $exe"; exit 1 }
 }
-$arguments = "$projectArg$Map -game -windowed -ResX=800 -ResY=450 -nosound -nosplash -nop4 -log -ExecCmds=`"$cmds`" -ABSLOG=`"$log`""
+$modeArg = ""
+if ($Mode -ge 0) { $modeArg = " -CTMode=$Mode" }
+$arguments ="$projectArg$Map -game -windowed -ResX=800 -ResY=450 -nosound -nosplash -nop4 -log -ExecCmds=`"$cmds`"$modeArg -ABSLOG=`"$log`""
 $p = Start-Process $exe -ArgumentList $arguments -PassThru
 
 # 게임 종료 로그가 나오거나 시간이 다 되면 끝냄
@@ -45,7 +48,7 @@ if (-not $p.HasExited) { Stop-Process $p -Force }
 
 # 흐름 로그만 추려서 시각, 좌표, 번호 같은 매번 달라지는 값을 지움
 $lines = Select-String -Path $log -Pattern "\[CT\]" -Encoding UTF8 | ForEach-Object { $_.Line }
-$flow = $lines | Where-Object { $_ -match "게임 시작|라운드 \d+ 시작|새 라운드 시작|AI 플레이어|게임 종료|잡음|꼬리 보충|메인 메뉴로 이동|입장 거절|이탈" } |
+$flow = $lines | Where-Object { $_ -match "게임 시작|보물찾기|라운드 \d+ 시작|새 라운드 시작|AI 플레이어|게임 종료|잡음|꼬리 보충|메인 메뉴로 이동|입장 거절|이탈" } |
 	ForEach-Object { ($_ -replace '^\[[^\]]*\]\[[^\]]*\]', '' ) -replace '\(-?\d+(\.\d+)?, -?\d+(\.\d+)?, -?\d+(\.\d+)?\)', '(x,y,z)' }
 $eventsFile = Join-Path $out "$Name.events.txt"
 $flow | Set-Content -Encoding UTF8 $eventsFile

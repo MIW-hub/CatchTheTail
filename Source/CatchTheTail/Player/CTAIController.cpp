@@ -10,6 +10,7 @@
 #include "../World/CTRoadVehicle.h"
 #include "../World/CTRollingLog.h"
 #include "../World/CTTailPickup.h"
+#include "../World/CTEnergyPickup.h"
 #include "Components/SplineComponent.h"
 #include "EngineUtils.h"
 #include "CollisionQueryParams.h"
@@ -142,6 +143,13 @@ void ACTAIController::Think()
 
 	const double Now = World->GetTimeSeconds();
 	RefreshHazardList(Now);
+
+	// 보물찾기: 목표 색 대신 에너지를 모으러 다님
+	if (GameState->GetModeType() == ECTGameModeType::TreasureHunt)
+	{
+		ThinkTreasure(*Me, Now);
+		return;
+	}
 
 	// 유령: 위험물은 맞지 않으니 꼬리 아이템(먹으면 부활)을 찾아다님. 안 보이면 돌아다님
 	if (MyState->IsGhost())
@@ -704,6 +712,52 @@ bool ACTAIController::SeesLocation(const ACTCharacter& Me, const FVector& Locati
 	FHitResult Hit;
 	const FVector Eye(0.f, 0.f, EyeHeight);
 	return !GetWorld()->LineTraceSingleByChannel(Hit, From + Eye, Location + FVector(0.f, 0.f, 40.f), ECC_Visibility, Params);
+}
+
+void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
+{
+	// 위험물 회피가 가장 우선
+	if (AvoidHazards(Me, Now)) { return; }
+
+	// 에너지 목록은 0.5초마다 다시 모음
+	if (Now >= NextEnergyRefreshTime)
+	{
+		NextEnergyRefreshTime = Now + 0.5;
+		EnergyList.Reset();
+		for (TActorIterator<ACTEnergyPickup> It(GetWorld()); It; ++It) { EnergyList.Add(*It); }
+	}
+
+	const FVector MyLocation = Me.GetActorLocation();
+	ACTEnergyPickup* Best = nullptr;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (const TWeakObjectPtr<ACTEnergyPickup>& Weak : EnergyList)
+	{
+		ACTEnergyPickup* Energy = Weak.Get();
+		if (!Energy || Energy->IsActorBeingDestroyed()) { continue; }
+
+		const float Distance = FVector::Dist2D(MyLocation, Energy->GetActorLocation());
+		if (Distance < BestDistance) { Best = Energy; BestDistance = Distance; }
+	}
+
+	if (Best)
+	{
+		// 멀면 달려서, 가까우면 걸어서 정확히 닿음
+		SetAIRun(Me, BestDistance > 350.f);
+		if (Now >= NextMoveCommandTime || GetMoveStatus() == EPathFollowingStatus::Idle)
+		{
+			NextMoveCommandTime = Now + 0.2;
+			MoveToPoint(Best->GetActorLocation(), 10.f);
+		}
+		return;
+	}
+
+	// 에너지가 안 보이면 돌아다님
+	SetAIRun(Me, false);
+	if (GetMoveStatus() == EPathFollowingStatus::Idle && !bDirectMove && Now >= NextWanderTime)
+	{
+		NextWanderTime = Now + FMath::FRandRange(0.3f, 1.5f);
+		MoveToPoint(PickWanderPoint(MyLocation), 120.f);
+	}
 }
 
 bool ACTAIController::GoToTailPickup(ACTCharacter& Me, double Now, bool bIgnoreHazards)

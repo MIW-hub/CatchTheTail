@@ -85,8 +85,8 @@ struct CATCHTHETAIL_API FCTMatchSettings
 
 	ECTGameModeType GetMode() const { return Mode == static_cast<int32>(ECTGameModeType::TreasureHunt) ? ECTGameModeType::TreasureHunt : ECTGameModeType::TailChase; }
 
-	// 지금 실제로 시작할 수 있는 모드인가 (보물찾기는 개발 중이라 아직 막음)
-	bool IsModePlayable() const { return GetMode() == ECTGameModeType::TailChase; }
+	// 지금 실제로 시작할 수 있는 모드인가. 보물찾기는 개발 중이라 막혀 있고, 개발용 콘솔 변수 ct.EnableTreasureHunt 1 로만 열림
+	bool IsModePlayable() const;
 
 	// 항목의 선택지 (오름차순)
 	static const TArray<int32>& GetOptions(ECTMatchSetting Setting);
