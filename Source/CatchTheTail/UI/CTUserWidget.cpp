@@ -89,16 +89,24 @@ TArray<ACTPlayerState*> UCTUserWidget::GetSortedPlayers(const ACTGameState* Game
 		}
 	}
 
-	Result.Sort([](const ACTPlayerState& A, const ACTPlayerState& B)
+	Result.Sort([GameState](const ACTPlayerState& A, const ACTPlayerState& B)
 	{
-		if (A.GetTailCount() != B.GetTailCount())
+		const int32 ScoreA = GetPlayerScore(GameState, &A);
+		const int32 ScoreB = GetPlayerScore(GameState, &B);
+		if (ScoreA != ScoreB)
 		{
-			return A.GetTailCount() > B.GetTailCount();
+			return ScoreA > ScoreB;
 		}
 		return A.GetPlayerName() < B.GetPlayerName();
 	});
 
 	return Result;
+}
+
+int32 UCTUserWidget::GetPlayerScore(const ACTGameState* GameState, const ACTPlayerState* Player)
+{
+	if (!Player) { return 0; }
+	return (GameState && GameState->GetModeType() == ECTGameModeType::TreasureHunt) ? Player->GetResultEnergy() : Player->GetTailCount();
 }
 
 void UCTUserWidget::InheritColorIcons(const UCTUserWidget* From)

@@ -44,6 +44,7 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	// 개인 에너지는 본인에게만 알림. 상대 팀 에너지를 클라이언트에서 알 수 없게 함 (결과 화면은 ResultEnergy 로 경기 후 공개)
 	DOREPLIFETIME_CONDITION(ACTPlayerState, Energy, COND_OwnerOnly);
 	DOREPLIFETIME(ACTPlayerState, ResultEnergy);
+	DOREPLIFETIME_CONDITION(ACTPlayerState, TeamEnergy, COND_OwnerOnly);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
 	DOREPLIFETIME(ACTPlayerState, bForfeited);
 	DOREPLIFETIME(ACTPlayerState, bReady);
@@ -136,6 +137,17 @@ void ACTPlayerState::SetEnergy(int32 NewEnergy)
 void ACTPlayerState::AddEnergy(int32 Delta)
 {
 	SetEnergy(Energy + Delta);
+}
+
+void ACTPlayerState::SetTeamEnergy(int32 NewTeamEnergy)
+{
+	if (!HasAuthority()) { return; }
+
+	NewTeamEnergy = FMath::Max(0, NewTeamEnergy);
+	if (TeamEnergy == NewTeamEnergy) { return; }
+
+	TeamEnergy = NewTeamEnergy;
+	ForceNetUpdate();
 }
 
 void ACTPlayerState::SetResultEnergy(int32 NewResultEnergy)

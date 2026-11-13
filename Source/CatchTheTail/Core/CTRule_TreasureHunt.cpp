@@ -272,6 +272,17 @@ void UCTRule_TreasureHunt::SetPlayerEnergy(ACTPlayerState* Player, int32 NewEner
 
 	Player->SetEnergy(NewEnergy);
 	Player->SetTailCount(Player->GetEnergy() / EnergyPerTail); // 꼬리 1개 = 에너지 10개
+
+	// 같은 팀원 모두에게 우리 팀 합계를 알려 줌 (상대 팀에게는 복제되지 않음)
+	if (const ACTGameMode* Mode = GetGameMode())
+	{
+		const int32 Team = Player->GetTeamId();
+		const int32 Sum = GetTeamEnergy(Team);
+		for (ACTPlayerState* Other : Mode->CollectPlayers())
+		{
+			if (Other->GetTeamId() == Team) { Other->SetTeamEnergy(Sum); }
+		}
+	}
 }
 
 bool UCTRule_TreasureHunt::OnEnergyPicked(ACTCharacter* Picker, int32 Amount)

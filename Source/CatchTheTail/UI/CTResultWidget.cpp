@@ -90,6 +90,14 @@ void UCTResultWidget::ShowResult()
 	// 모드별로 표 모양을 나눌 수 있게 모드를 먼저 알림
 	BP_OnModeKnown(GameState->GetModeType());
 
+	// 보물찾기: 라운드 승점을 알림 (연출용)
+	if (GameState->GetModeType() == ECTGameModeType::TreasureHunt)
+	{
+		const ACTPlayerState* Me = GetOwningCTPlayerState();
+		const int32 MyTeam = Me ? Me->GetTeamId() : 0;
+		BP_OnTreasureResult(GameState->GetTeamRoundWins(MyTeam), GameState->GetTeamRoundWins(1 - MyTeam), GameState->IsTie());
+	}
+
 	const ACTPlayerState* MyPlayerState = GetOwningCTPlayerState();
 	const bool bIsTie = GameState->IsTie();
 	const bool bLocalPlayerWon = GameState->IsWinner(MyPlayerState);
@@ -102,10 +110,10 @@ void UCTResultWidget::ShowResult()
 		int32 PreviousTailCount = INDEX_NONE;
 		for (int32 Index = 0; Index < Sorted.Num(); ++Index)
 		{
-			if (Sorted[Index]->GetTailCount() != PreviousTailCount)
+			if (GetPlayerScore(GameState, Sorted[Index]) != PreviousTailCount)
 			{
 				Rank = Index + 1;
-				PreviousTailCount = Sorted[Index]->GetTailCount();
+				PreviousTailCount = GetPlayerScore(GameState, Sorted[Index]);
 			}
 			if (Sorted[Index] == MyPlayerState) { MyRank = Rank; break; }
 		}
@@ -115,7 +123,12 @@ void UCTResultWidget::ShowResult()
 	{
 		// 항상 "N등" (연장전 문구는 쓰지 않음) (순위에 없는 관전자는 기존 승리/패배 문구)
 		FText Title;
-		if (MyRank != INDEX_NONE) { Title = FText::Format(RankText, MyRank); }
+		if (GameState->GetModeType() == ECTGameModeType::TreasureHunt && MyPlayerState)
+		{
+			// 보물찾기는 팀 승패가 제목: 승리 / 패배 / 무승부 (개인 순위는 아래 표)
+			Title = bIsTie ? DrawText : (bLocalPlayerWon ? WinText : LoseText);
+		}
+		else if (MyRank != INDEX_NONE) { Title = FText::Format(RankText, MyRank); }
 		else { Title = bLocalPlayerWon ? WinText : LoseText; }
 		Text_ResultTitle->SetText(Title);
 	}
@@ -149,10 +162,10 @@ void UCTResultWidget::ShowResult()
 		for (int32 Index = 0; Index < Players.Num(); ++Index)
 		{
 			ACTPlayerState* PlayerState = Players[Index];
-			if (PlayerState->GetTailCount() != PreviousTailCount)
+			if (GetPlayerScore(GameState, PlayerState) != PreviousTailCount)
 			{
 				Rank = Index + 1;
-				PreviousTailCount = PlayerState->GetTailCount();
+				PreviousTailCount = GetPlayerScore(GameState, PlayerState);
 			}
 
 			UCTScoreEntryWidget* Entry = CreateWidget<UCTScoreEntryWidget>(this, ScoreEntryClass);
@@ -173,7 +186,7 @@ void UCTResultWidget::ShowResult()
 		FCTMatchRecord Record;
 		Record.Time = FDateTime::Now();
 		Record.MyRank = MyRank;
-		Record.MyTailCount = MyPlayerState->GetTailCount();
+		Record.MyTailCount = GetPlayerScore(GameState, MyPlayerState);
 		Record.PlayerCount = GetSortedPlayers(GameState).Num();
 		{
 			FCTMapInfo MapInfo;
@@ -185,17 +198,17 @@ void UCTResultWidget::ShowResult()
 		int32 PreviousTailCount = INDEX_NONE;
 		for (int32 Index = 0; Index < Sorted.Num(); ++Index)
 		{
-			if (Sorted[Index]->GetTailCount() != PreviousTailCount)
+			if (GetPlayerScore(GameState, Sorted[Index]) != PreviousTailCount)
 			{
 				Rank = Index + 1;
-				PreviousTailCount = Sorted[Index]->GetTailCount();
+				PreviousTailCount = GetPlayerScore(GameState, Sorted[Index]);
 			}
 			// 1~3등만 기록 (동점이면 같은 등수 사람이 모두 들어감)
 			if (Rank > 3) { break; }
 			FCTMatchRecordEntry& Entry = Record.Entries.AddDefaulted_GetRef();
 			Entry.PlayerName = Sorted[Index]->GetPlayerName();
 			Entry.Rank = Rank;
-			Entry.TailCount = Sorted[Index]->GetTailCount();
+			Entry.TailCount = GetPlayerScore(GameState, Sorted[Index]);
 			Entry.bIsMe = (Sorted[Index] == MyPlayerState);
 		}
 		UCTMatchHistory::AddRecord(Record);

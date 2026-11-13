@@ -28,7 +28,8 @@ void UCTScoreEntryWidget::RefreshEntry(int32 Rank, bool bIsLocalPlayer, bool bAl
 
 	if (Text_TailCount)
 	{
-		Text_TailCount->SetText(FText::AsNumber(PlayerState->GetTailCount()));
+		// 꼬리잡기는 꼬리 수, 보물찾기는 모은 에너지 합계
+		Text_TailCount->SetText(FText::AsNumber(GetPlayerScore(GetCTGameState(), PlayerState)));
 	}
 	if (Image_Crown)
 	{

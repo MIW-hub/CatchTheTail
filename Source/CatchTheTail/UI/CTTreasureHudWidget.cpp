@@ -64,6 +64,6 @@ void UCTTreasureHudWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		BP_OnMyEnergyChanged(Energy, Delta);
 	}
 
-	// 우리 팀 에너지는 서버가 팀원에게만 보내는 필드가 아직 없어서 자리만 채움 (보물찾기 구현 때 연결)
-	if (Text_TeamEnergy) { Text_TeamEnergy->SetText(FText::FromString(TEXT("-"))); }
+	// 우리 팀 에너지 합계 (서버가 팀원에게만 보냄)
+	if (Text_TeamEnergy) { Text_TeamEnergy->SetText(FText::AsNumber(MyState ? MyState->GetTeamEnergy() : 0)); }
 }

@@ -49,6 +49,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	int32 GetResultEnergy() const { return ResultEnergy; }
 
+	// 우리 팀 에너지 합계 (보물찾기). 본인 팀원에게만 복제되어 상대 팀은 알 수 없음
+	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
+	int32 GetTeamEnergy() const { return TeamEnergy; }
+
 	// 이번 경기에서 기권함. 순위와 라운드 진행에서 빠지고 유령으로 관전만 함
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	bool IsForfeited() const { return bForfeited; }
@@ -81,6 +85,7 @@ public:
 	void SetEnergy(int32 NewEnergy);
 	void AddEnergy(int32 Delta);
 	void SetResultEnergy(int32 NewResultEnergy);
+	void SetTeamEnergy(int32 NewTeamEnergy);
 
 	// 서버 전용: 이번 유령 상태에서 F키 이동을 이미 썼는가 (유령이 될 때마다 초기화)
 	bool HasUsedGhostRelocate() const { return bGhostRelocateUsed; }
@@ -121,6 +126,9 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Energy, BlueprintReadOnly, Category = "CT|PlayerState")
 	int32 ResultEnergy = 0;
+
+	UPROPERTY(Replicated)
+	int32 TeamEnergy = 0;
 
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;

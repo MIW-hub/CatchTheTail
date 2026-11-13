@@ -50,6 +50,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|UI")
 	static TArray<ACTPlayerState*> GetSortedPlayers(const ACTGameState* GameState);
 
+	// 순위에 쓰는 점수: 꼬리잡기는 꼬리 수, 보물찾기는 경기 동안 모은 에너지 합계
+	static int32 GetPlayerScore(const ACTGameState* GameState, const ACTPlayerState* Player);
+
 	// 부모 아이콘 설정 상속
 	void InheritColorIcons(const UCTUserWidget* From);
 
