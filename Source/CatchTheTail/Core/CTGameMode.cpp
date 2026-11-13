@@ -2,6 +2,8 @@
 #include "CTGameMode.h"
 #include "CTGameInstance.h"
 #include "CTGameState.h"
+#include "CTGameRule.h"
+#include "CTRule_TailChase.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTPlayerController.h"
 #include "../Player/CTAIController.h"
@@ -35,6 +37,7 @@ void ACTGameMode::InitGameState()
 
 	// 로비 없이 시작한 테스트는 BP 값 사용
 	const UCTGameInstance* GameInstance = GetGameInstance<UCTGameInstance>();
+	CreateRule(GameInstance && GameInstance->HasStoredMatchSettings() ? GameInstance->GetStoredMatchSettings().GetMode() : ECTGameModeType::TailChase);
 	if (!GameInstance || !GameInstance->HasStoredMatchSettings()) { return; }
 
 	const FCTMatchSettings& Settings = GameInstance->GetStoredMatchSettings();
@@ -200,14 +203,8 @@ void ACTGameMode::StartGame()
 	// 모두 입장한 뒤라 사람 수가 정확함. AI는 여기서 채움
 	SpawnAIPlayers();
 
-	// 플레이어 초기화
-	for (ACTPlayerState* PlayerState : CollectPlayers())
-	{
-		PlayerState->SetColors(ECTColor::None, ECTColor::None); // 직전 색 없음
-		PlayerState->SetTailCount(InitialTailCount);
-		PlayerState->SetIsGhost(false);
-		PlayerState->SetPhoneReadyServerTime(0.0); // 시작하자마자 한 번은 걸 수 있음
-	}
+	// 플레이어 초기화 (모드 규칙)
+	GetRule()->OnMatchStart();
 
 	const double Now = CTGameState->GetServerWorldTimeSeconds();
 	CTGameState->SetGameInfo(Now + GameDurationSeconds, RoundDurationSeconds, CountdownSeconds);
@@ -282,24 +279,10 @@ void ACTGameMode::EndGame()
 
 	GetWorldTimerManager().ClearTimer(FlowTimerHandle);
 
-	// 꼬리 최다 플레이어 찾기
-	const TArray<ACTPlayerState*> Players = CollectPlayers();
-	int32 MaxTailCount = -1;
-	for (const ACTPlayerState* PlayerState : Players)
-	{
-		MaxTailCount = FMath::Max(MaxTailCount, PlayerState->GetTailCount());
-	}
-
+	// 승자 계산 (모드 규칙)
 	TArray<ACTPlayerState*> Winners;
-	for (ACTPlayerState* PlayerState : Players)
-	{
-		if (PlayerState->GetTailCount() == MaxTailCount)
-		{
-			Winners.Add(PlayerState);
-		}
-	}
-
-	const bool bIsTie = Winners.Num() > 1;
+	bool bIsTie = false;
+	GetRule()->ComputeResult(Winners, bIsTie);
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 종료: 승자 %d명, 동점=%s"), Winners.Num(), bIsTie ? TEXT("예") : TEXT("아니오"));
 
 	// 결과 먼저 저장, 단계 나중. 결과 화면에 승자 동시 도착
@@ -405,37 +388,8 @@ void ACTGameMode::StartNewRound()
 	const double Now = CTGameState->GetServerWorldTimeSeconds();
 	const int32 NewRoundNumber = CTGameState->GetRoundNumber() + 1;
 
-	// 0) 맵에 남은 꼬리 아이템을 모두 치움. 라운드가 끝나기 전에 일부러 기믹에 맞아 꼬리를 떨어뜨리고,
-	//    새 라운드의 보충 꼬리와 함께 그 아이템까지 먹는 꼼수를 막음 (새 아이템은 스포너가 다시 만듦)
-	if (UWorld* World = GetWorld())
-	{
-		TArray<ACTTailPickup*> LeftoverPickups;
-		for (TActorIterator<ACTTailPickup> It(World); It; ++It) { LeftoverPickups.Add(*It); }
-		for (ACTTailPickup* Pickup : LeftoverPickups) { Pickup->Destroy(); }
-		if (LeftoverPickups.Num() > 0)
-		{
-			UE_LOG(LogTemp, Log, TEXT("[CT] 새 라운드 시작: 맵에 남은 꼬리 아이템 %d개 제거"), LeftoverPickups.Num());
-		}
-	}
-
-	// 1) 유령 부활
-	for (ACTPlayerState* PlayerState : CollectPlayers())
-	{
-		PlayerState->SetIsGhost(false);
-	}
-
-	// 1-2) 꼬리 부족한 플레이어에게 채움
-	for (ACTPlayerState* PlayerState : CollectPlayers())
-	{
-		if (PlayerState->GetTailCount() < MinTailCountAtRoundStart)
-		{
-			UE_LOG(LogTemp, Log, TEXT("[CT] 라운드 시작 꼬리 보충: %s  %d → %d"), *PlayerState->GetPlayerName(), PlayerState->GetTailCount(), MinTailCountAtRoundStart);
-			PlayerState->SetTailCount(MinTailCountAtRoundStart);
-		}
-	}
-
-	// 2) 색/목표 재배정
-	AssignColorsAndTargets();
+	// 꼬리 아이템 정리, 유령 부활, 꼬리 보충, 색과 목표 배정 (모드 규칙)
+	GetRule()->OnRoundStart(NewRoundNumber);
 
 	// 3) 라운드 종료 시각. 게임 종료 시각 초과 금지
 	const double RoundEnd = FMath::Min(Now + RoundDurationSeconds, CTGameState->GetGameEndServerTime());
@@ -535,29 +489,8 @@ void ACTGameMode::AssignColorsAndTargets()
 
 bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim)
 {
-	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
-	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
-	if (!Grabber || !Victim || Grabber == Victim) { return false; }
-
-	// 유령은 잡기/잡힘 불가
-	if (Grabber->IsGhost() || Victim->IsGhost()) { return false; }
-
-	// 목표 색만 가능
-	if (Grabber->GetTargetColor() == ECTColor::None) { return false; }
-	if (Victim->GetAssignedColor() != Grabber->GetTargetColor()) { return false; }
-
-	// 꼬리 줄다리기: 둘 다 대결에 들어감. 결과는 UCTGrappleComponent 가 FinalizeTailGrabbed 로 알림
-	if (bUseGrappleStruggle)
-	{
-		ACTCharacter* GrabberCharacter = Cast<ACTCharacter>(Grabber->GetPawn());
-		ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn());
-		if (GrabberCharacter && VictimCharacter && GrabberCharacter->GetGrapple() && VictimCharacter->GetGrapple())
-		{
-			return GrabberCharacter->GetGrapple()->BeginGrapple(VictimCharacter);
-		}
-	}
-
-	return FinalizeTailGrabbed(Grabber, Victim);
+	// 잡기 처리는 모드 규칙이 함
+	return GetRule()->HandleGrab(Grabber, Victim);
 }
 
 bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim)
@@ -584,6 +517,126 @@ bool ACTGameMode::FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* V
 	UE_LOG(LogTemp, Log, TEXT("[CT] %s 이(가) %s 의 꼬리를 잡음"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());
 	OnTailGrabbed(Grabber, Victim);
 	return true;
+}
+
+// 게임 모드 규칙 객체
+
+UCTGameRule* ACTGameMode::GetRule()
+{
+	// InitGameState 전에 불릴 일은 없지만, 없으면 꼬리잡기로 만들어 둠
+	if (!Rule) { CreateRule(ECTGameModeType::TailChase); }
+	return Rule;
+}
+
+void ACTGameMode::CreateRule(ECTGameModeType Mode)
+{
+	// 보물찾기는 아직 규칙이 없어서 꼬리잡기로 대신함 (로비에서도 시작이 막혀 있음)
+	if (Mode != ECTGameModeType::TailChase)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] 아직 지원하지 않는 모드(%d): 꼬리잡기로 진행"), static_cast<int32>(Mode));
+	}
+
+	Rule = NewObject<UCTRule_TailChase>(this);
+	Rule->Init(this);
+	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 모드 규칙 생성: 꼬리잡기"));
+}
+
+// 꼬리잡기 규칙 (UCTRule_TailChase 가 부름)
+
+void ACTGameMode::TailChase_InitPlayers()
+{
+	// 플레이어 초기화
+	for (ACTPlayerState* PlayerState : CollectPlayers())
+	{
+		PlayerState->SetColors(ECTColor::None, ECTColor::None); // 직전 색 없음
+		PlayerState->SetTailCount(InitialTailCount);
+		PlayerState->SetIsGhost(false);
+		PlayerState->SetPhoneReadyServerTime(0.0); // 시작하자마자 한 번은 걸 수 있음
+	}
+}
+
+void ACTGameMode::TailChase_BeginRound()
+{
+	// 0) 맵에 남은 꼬리 아이템을 모두 치움. 라운드가 끝나기 전에 일부러 기믹에 맞아 꼬리를 떨어뜨리고,
+	//    새 라운드의 보충 꼬리와 함께 그 아이템까지 먹는 꼼수를 막음 (새 아이템은 스포너가 다시 만듦)
+	if (UWorld* World = GetWorld())
+	{
+		TArray<ACTTailPickup*> LeftoverPickups;
+		for (TActorIterator<ACTTailPickup> It(World); It; ++It) { LeftoverPickups.Add(*It); }
+		for (ACTTailPickup* Pickup : LeftoverPickups) { Pickup->Destroy(); }
+		if (LeftoverPickups.Num() > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT] 새 라운드 시작: 맵에 남은 꼬리 아이템 %d개 제거"), LeftoverPickups.Num());
+		}
+	}
+
+	// 1) 유령 부활
+	for (ACTPlayerState* PlayerState : CollectPlayers())
+	{
+		PlayerState->SetIsGhost(false);
+	}
+
+	// 1-2) 꼬리 부족한 플레이어에게 채움
+	for (ACTPlayerState* PlayerState : CollectPlayers())
+	{
+		if (PlayerState->GetTailCount() < MinTailCountAtRoundStart)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT] 라운드 시작 꼬리 보충: %s  %d → %d"), *PlayerState->GetPlayerName(), PlayerState->GetTailCount(), MinTailCountAtRoundStart);
+			PlayerState->SetTailCount(MinTailCountAtRoundStart);
+		}
+	}
+
+	// 2) 색/목표 재배정
+	AssignColorsAndTargets();
+}
+
+void ACTGameMode::TailChase_ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie)
+{
+	// 꼬리 최다 플레이어 찾기
+	const TArray<ACTPlayerState*> Players = CollectPlayers();
+	int32 MaxTailCount = -1;
+	for (const ACTPlayerState* PlayerState : Players)
+	{
+		MaxTailCount = FMath::Max(MaxTailCount, PlayerState->GetTailCount());
+	}
+
+	OutWinners.Reset();
+	for (ACTPlayerState* PlayerState : Players)
+	{
+		if (PlayerState->GetTailCount() == MaxTailCount)
+		{
+			OutWinners.Add(PlayerState);
+		}
+	}
+
+	bOutTie = OutWinners.Num() > 1;
+}
+
+bool ACTGameMode::TailChase_HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim)
+{
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+	if (!Grabber || !Victim || Grabber == Victim) { return false; }
+
+	// 유령은 잡기/잡힘 불가
+	if (Grabber->IsGhost() || Victim->IsGhost()) { return false; }
+
+	// 목표 색만 가능
+	if (Grabber->GetTargetColor() == ECTColor::None) { return false; }
+	if (Victim->GetAssignedColor() != Grabber->GetTargetColor()) { return false; }
+
+	// 꼬리 줄다리기: 둘 다 대결에 들어감. 결과는 UCTGrappleComponent 가 FinalizeTailGrabbed 로 알림
+	if (bUseGrappleStruggle)
+	{
+		ACTCharacter* GrabberCharacter = Cast<ACTCharacter>(Grabber->GetPawn());
+		ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn());
+		if (GrabberCharacter && VictimCharacter && GrabberCharacter->GetGrapple() && VictimCharacter->GetGrapple())
+		{
+			return GrabberCharacter->GetGrapple()->BeginGrapple(VictimCharacter);
+		}
+	}
+
+	return FinalizeTailGrabbed(Grabber, Victim);
 }
 
 bool ACTGameMode::HandleForfeit(ACTPlayerState* Forfeiter)

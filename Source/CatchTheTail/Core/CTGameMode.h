@@ -5,10 +5,12 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/OnlineReplStructs.h"
 #include "../Type/CTTypes.h"
+#include "CTMatchSettings.h"
 #include "CTGameMode.generated.h"
 
 class ACTPlayerState;
 class ACTGameState;
+class UCTGameRule;
 
 UCLASS()
 class CATCHTHETAIL_API ACTGameMode : public AGameModeBase
@@ -139,6 +141,24 @@ protected:
 	float AutoStartDelaySeconds = 5.f;
 
 private:
+	// 모드별 규칙 객체가 이 클래스의 꼬리잡기 함수들을 부름
+	friend class UCTRule_TailChase;
+
+	// 지금 모드의 규칙 객체 (없으면 꼬리잡기로 만듦)
+	UCTGameRule* GetRule();
+
+	// 모드에 맞는 규칙 객체 생성
+	void CreateRule(ECTGameModeType Mode);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCTGameRule> Rule;
+
+	// 꼬리잡기 규칙 (규칙 객체가 부름. 3단계에서 UCTRule_TailChase 로 옮길 예정)
+	void TailChase_InitPlayers();
+	void TailChase_BeginRound();
+	void TailChase_ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie);
+	bool TailChase_HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim);
+
 	// 이탈자 반영: 남은 사람끼리 목표 색 재연결
 	void HandlePlayerLeftDuringGame(const ACTPlayerState* LeavingPlayer);
 

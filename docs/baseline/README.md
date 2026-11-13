@@ -13,6 +13,7 @@ powershell -File Tools\CTBaseline.ps1 -Name before
 powershell -File Tools\CTBaseline.ps1 -Name step1 -CompareTo before
 ```
 
+- **먼저 에디터 빌드가 성공했는지 확인하세요.** 스크립트는 빌드하지 않고 마지막으로 빌드된 실행 파일을 씁니다(빌드가 실패한 상태에서 돌리면 이전 코드를 확인하게 됩니다).
 - 경기 맵(`L_Building`)을 직접 실행하고 AI 3명, 경기 45초, 라운드 18초로 짧게 한 판을 돌려 `[CT]` 흐름 로그를 모읍니다. 게임 종료 로그가 나오면 자동으로 끝납니다(약 1분).
 - `<이름>.log`: 전체 로그, `<이름>.events.txt`: 흐름 로그, `<이름>.skeleton.txt`: 비교용 뼈대.
 - 비교는 **뼈대**만 합니다. AI가 누구를 잡는지, 아이템이 몇 개 남았는지는 판마다 달라서 뺐습니다.

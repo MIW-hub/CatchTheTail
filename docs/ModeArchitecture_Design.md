@@ -155,3 +155,4 @@ ACTGameMode (공통 흐름: 접속, 카운트다운, 시간 진행, AI 생성, �
 |---|---|---|---|
 | 0. 기준선 기록 | 2026-11-13 | 완료 | `Tools/CTBaseline.ps1`, `docs/baseline/` |
 | 1. 모드 설정 항목 + 로비 선택 | 2026-11-13 | 완료 | `FCTMatchSettings::Mode`(0 꼬리잡기, 1 보물찾기), 로비 경기 설정 맨 위 줄, 보물찾기는 "준비 중"이라 시작 불가(`CanStartLobby`). 기준선 비교 PASS |
+| 2. 규칙 객체 껍데기 | 2026-11-13 | 완료 | `UCTGameRule`(베이스), `UCTRule_TailChase`. GameMode가 `InitGameState`에서 규칙 객체를 만들고 경기 시작, 라운드 시작, 결과 계산, 잡기 처리를 규칙 객체로 넘김. 본체 코드는 `ACTGameMode::TailChase_*` 4개 함수로 **그 자리에서 분리만** 했고(내용 변경 없음), 3단계에서 규칙 클래스로 옮김. 기준선 비교 PASS (규칙 생성 로그 확인) |

@@ -1,0 +1,44 @@
+// Copyright Moon Party Games. All Rights Reserved.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "CTMatchSettings.h"
+#include "CTGameRule.generated.h"
+
+class ACTGameMode;
+class ACTPlayerState;
+
+// 게임 모드마다 달라지는 규칙을 맡는 객체 (서버에서만 존재, 복제하지 않음).
+// 접속, 카운트다운, 시간 진행, AI 생성, 로비 복귀 같은 공통 흐름은 ACTGameMode 가 하고,
+// 경기 시작 / 라운드 시작 / 결과 계산 / 잡기 처리처럼 모드마다 다른 부분만 여기서 처리함.
+UCLASS(Abstract)
+class CATCHTHETAIL_API UCTGameRule : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	// 만든 직후 소유 GameMode 연결
+	void Init(ACTGameMode* InGameMode);
+
+	// 이 규칙이 맡은 모드
+	virtual ECTGameModeType GetModeType() const PURE_VIRTUAL(UCTGameRule::GetModeType, return ECTGameModeType::TailChase;);
+
+	// 경기 시작 때 (플레이어 초기화)
+	virtual void OnMatchStart() {}
+
+	// 라운드가 시작될 때 (라운드 시간 설정 전에 부름)
+	virtual void OnRoundStart(int32 RoundNumber) {}
+
+	// 경기가 끝났을 때 승자 계산. 동점이면 bOutTie = true 이고 승자는 공동 승자
+	virtual void ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie) {}
+
+	// 꼬리잡기 시도 처리. 시작됐거나 성립하면 true
+	virtual bool HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) { return false; }
+
+protected:
+	ACTGameMode* GetGameMode() const { return GameMode.Get(); }
+
+private:
+	TWeakObjectPtr<ACTGameMode> GameMode;
+};
