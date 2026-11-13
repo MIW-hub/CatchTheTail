@@ -3,6 +3,7 @@
 #include "../Core/CTLobbyGameMode.h"
 #include "../Core/CTChatFilter.h"
 #include "../Core/CTGameState.h"
+#include "CTPlayerState.h"
 #include "../UI/CTLobbyWidget.h"
 #include "../UI/CTLoadingWidget.h"
 #include "../UI/CTMicIndicatorWidget.h"
@@ -213,6 +214,44 @@ void ACTLobbyPlayerController::ServerSetReady_Implementation(bool bReady)
 	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)
 	{
 		GameMode->SetPlayerReady(this, bReady);
+	}
+}
+
+void ACTLobbyPlayerController::CTLobbyPreview()
+{
+	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	if (!CTGameState) { return; }
+
+	if (CTGameState->GetMatchSettings().GetMode() != ECTGameModeType::TreasureHunt)
+	{
+		RequestChangeMatchSetting(ECTMatchSetting::Mode, 1);
+	}
+	for (int32 Index = 0; Index < 3; ++Index) { RequestChangeMatchSetting(ECTMatchSetting::AiPlayers, 1); }
+}
+
+void ACTLobbyPlayerController::RequestChangeTeam()
+{
+	ServerChangeTeam();
+}
+
+void ACTLobbyPlayerController::ServerChangeTeam_Implementation()
+{
+	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)
+	{
+		GameMode->RequestTeamChange(this);
+	}
+}
+
+void ACTLobbyPlayerController::RequestAcceptTeamSwap(APlayerState* RequesterState)
+{
+	ServerAcceptTeamSwap(RequesterState);
+}
+
+void ACTLobbyPlayerController::ServerAcceptTeamSwap_Implementation(APlayerState* RequesterState)
+{
+	if (ACTLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTLobbyGameMode>() : nullptr)
+	{
+		GameMode->AcceptTeamSwap(this, Cast<ACTPlayerState>(RequesterState));
 	}
 }
 

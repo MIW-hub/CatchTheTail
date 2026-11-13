@@ -9,6 +9,19 @@
 
 class ACTPlayerState;
 
+// 로비 팀 변경 요청 (이동하려는 팀이 가득 찼을 때 모든 화면에 뜨는 요청). 서버 시간 기준 만료
+USTRUCT()
+struct FCTTeamSwapRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<ACTPlayerState> Requester = nullptr;
+
+	UPROPERTY()
+	float ExpireServerTime = 0.f;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTPhaseChangedSignature, ECTGamePhase, NewPhase);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTRoundChangedSignature, int32, NewRoundNumber);
 
@@ -84,6 +97,10 @@ public:
 	void SetModeType(ECTGameModeType NewModeType);
 	void SetTeamColors(const TArray<ECTColor>& NewTeamColors);
 	void SetTeamRoundWins(const TArray<int32>& NewTeamRoundWins);
+
+	// 로비 팀 변경 요청 목록 (오래된 순). 남은 시간은 GetServerWorldTimeSeconds() 기준
+	const TArray<FCTTeamSwapRequest>& GetTeamSwapRequests() const { return TeamSwapRequests; }
+	void SetTeamSwapRequests(const TArray<FCTTeamSwapRequest>& NewRequests);
 
 	// 로비: 방 코드, 없으면 빈 문자열
 	UFUNCTION(BlueprintPure, Category = "CT|Lobby")
@@ -216,6 +233,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	TArray<int32> TeamRoundWins;
+
+	UPROPERTY(Replicated)
+	TArray<FCTTeamSwapRequest> TeamSwapRequests;
 
 	// 결과: 승자
 	UPROPERTY(Replicated)

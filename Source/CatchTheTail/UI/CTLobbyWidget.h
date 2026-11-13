@@ -10,6 +10,8 @@
 class UButton;
 class UCTMapEntryWidget;
 class UCTLobbyPlayerEntryWidget;
+class UCTTeamSwapRequestWidget;
+class UVerticalBox;
 class UEditableTextBox;
 class UImage;
 class UPanelWidget;
@@ -73,6 +75,55 @@ protected:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> PlayerEntries;
+
+	// ---- 팀 패널 (보물찾기 모드에서만 보임. 꼬리잡기에서는 위의 일반 목록을 씀) ----
+	// 팀 두 칸을 담은 덩어리 (모드가 팀전일 때만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_TeamLists;
+
+	// 팀 A(0번), 팀 B(1번)의 플레이어 줄 목록
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_TeamA;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> Scroll_TeamB;
+
+	// 팀 머리글의 색 칩(색이 입혀짐)과 팀 이름 (예: "빨강팀")
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TeamAColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TeamBColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TeamAName;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_TeamBName;
+
+	// 팀 변경 버튼 (반대 팀이 가득 차면 글자가 "팀 변경 신청"으로 바뀜)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_ChangeTeam;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ChangeTeamLabel;
+
+	// 팀 변경 요청 패널이 쌓이는 곳
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> Box_SwapRequests;
+
+	// 요청 패널 한 장 (기본 /Game/UI/WBP_CTTeamSwapRequestWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
+	TSubclassOf<UCTTeamSwapRequestWidget> SwapRequestClass;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> TeamAEntries;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>> TeamBEntries;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCTTeamSwapRequestWidget>> SwapRequestWidgets;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Lobby")
 	FText PlayerCountText = NSLOCTEXT("CT", "Lobby_PlayerCount", "{0} / {1}");
@@ -219,6 +270,12 @@ private:
 
 	UFUNCTION()
 	void HandleHistoryClicked();
+
+	UFUNCTION()
+	void HandleChangeTeamClicked();
+
+	// 팀 변경 요청 패널을 서버 요청 목록에 맞춤
+	void RefreshSwapRequests(const class ACTGameState& GameState);
 
 	// 포커스를 게임 화면으로 복귀
 	void ReturnFocusToGame();

@@ -145,6 +145,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool AddLobbyPlayerCountText(UBlueprint* WidgetBlueprint);
 
+	// 로비 플레이어 패널에 보물찾기용 팀 칸 두 개(Panel_TeamLists)와 팀 변경 버튼, 요청 패널이 쌓일 곳(Box_SwapRequests)을 추가. 이미 있으면 그대로 둠. 기존 위젯은 건드리지 않음
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool AddLobbyTeamPanels(UBlueprint* WidgetBlueprint);
+
+	// 팀 변경 요청 패널 한 장 뼈대 (처음 한 번)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildTeamSwapRequestDesign(UBlueprint* WidgetBlueprint);
+
 	// 로비 위젯에 전적 버튼 추가
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool AddLobbyHistoryButton(UBlueprint* WidgetBlueprint);

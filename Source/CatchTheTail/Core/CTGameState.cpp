@@ -28,6 +28,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, ModeType);
 	DOREPLIFETIME(ACTGameState, TeamColors);
 	DOREPLIFETIME(ACTGameState, TeamRoundWins);
+	DOREPLIFETIME(ACTGameState, TeamSwapRequests);
 	DOREPLIFETIME(ACTGameState, Winners);
 	DOREPLIFETIME(ACTGameState, bIsTie);
 }
@@ -125,6 +126,14 @@ void ACTGameState::SetTeamColors(const TArray<ECTColor>& NewTeamColors)
 	if (!HasAuthority()) { return; }
 
 	TeamColors = NewTeamColors;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetTeamSwapRequests(const TArray<FCTTeamSwapRequest>& NewRequests)
+{
+	if (!HasAuthority()) { return; }
+
+	TeamSwapRequests = NewRequests;
 	ForceNetUpdate();
 }
 
@@ -248,6 +257,19 @@ bool ACTGameState::CanStartLobby() const
 
 	// 아직 만들어지지 않은 모드(보물찾기)는 시작할 수 없음
 	if (!MatchSettings.IsModePlayable()) { return false; }
+
+	// 보물찾기: AI가 없으면 양 팀에 각각 한 명 이상 있어야 함 (AI는 시작할 때 인원이 적은 팀부터 채움)
+	if (MatchSettings.GetMode() == ECTGameModeType::TreasureHunt && GetLobbyAIPlayerCount() <= 0)
+	{
+		int32 TeamCount[2] = { 0, 0 };
+		for (const APlayerState* PlayerState : PlayerArray)
+		{
+			const ACTPlayerState* CTPlayerState = Cast<ACTPlayerState>(PlayerState);
+			if (!CTPlayerState || CTPlayerState->IsOnlyASpectator() || CTPlayerState->IsABot()) { continue; }
+			if (CTPlayerState->GetTeamId() == 0 || CTPlayerState->GetTeamId() == 1) { ++TeamCount[CTPlayerState->GetTeamId()]; }
+		}
+		if (TeamCount[0] <= 0 || TeamCount[1] <= 0) { return false; }
+	}
 
 	// 혼자서는 시작할 수 없음 (AI를 채워 두 명 이상이면 가능). BP에서 최소 인원을 1로 해도 2 미만은 막음
 	return GetLobbyParticipantCount() >= FMath::Max(LobbyMinPlayers, 2);

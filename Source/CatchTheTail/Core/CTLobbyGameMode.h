@@ -39,6 +39,12 @@ public:
 	// 서버, 방장 경기 설정 변경 (시작 확정 후 불가)
 	bool ChangeMatchSetting(APlayerController* Requester, ECTMatchSetting Setting, int32 Direction);
 
+	// 서버, 팀 변경 요청 (보물찾기). 반대 팀에 자리가 있으면 바로 이동, 가득 찼으면 모두에게 요청 패널이 뜸
+	void RequestTeamChange(APlayerController* Requester);
+
+	// 서버, 요청 패널의 수락 (요청자가 가려는 팀의 사람만). 두 사람의 팀이 서로 바뀜
+	void AcceptTeamSwap(APlayerController* Accepter, ACTPlayerState* RequesterState);
+
 	// 서버, 채팅을 로비 전원에게 전달
 	void BroadcastChat(APlayerController* Sender, const FString& Message);
 
@@ -56,6 +62,22 @@ protected:
 	int32 LobbyTailCount = 1;
 
 private:
+	// 한 팀 최대 사람 수, 요청이 유지되는 시간(초, 다시 신청할 수 있는 간격도 같음)
+	static constexpr int32 TeamCapacity = 4;
+	static constexpr float TeamSwapRequestSeconds = 5.f;
+
+	int32 CountHumansInTeam(int32 TeamId) const;
+	bool IsTeamMode() const;
+
+	// 요청 목록 정리 (만료, 이탈, 준비, 자리 생김 등). 일정 간격으로 호출
+	void UpdateTeamRequests();
+
+	// 로비에서 정해 둘 팀 색 (경기가 시작되어도 그대로 씀)
+	void PrepareTeamColors();
+
+	FTimerHandle TeamRequestTimerHandle;
+	TMap<TWeakObjectPtr<APlayerState>, double> LastTeamRequestTime;
+
 	// 공통 초기화: 방장 표시, 준비 해제, 기록 초기화
 	void InitLobbyPlayer(APlayerController* NewPlayer);
 

@@ -42,6 +42,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
 	void RequestChangeMatchSetting(ECTMatchSetting Setting, int32 Direction);
 
+	// 팀 변경 요청 (보물찾기). 자리가 있으면 바로 이동, 가득 찼으면 요청 패널이 뜸
+	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
+	void RequestChangeTeam();
+
+	// 팀 변경 요청 수락 (요청자가 가려는 팀의 사람)
+	UFUNCTION(BlueprintCallable, Category = "CT|Lobby")
+	void RequestAcceptTeamSwap(APlayerState* RequesterState);
+
+	// 개발용: 로비를 보물찾기 모드 + AI 3명으로 바꿈 (콘솔에서 CTLobbyPreview. 방장만 동작)
+	UFUNCTION(Exec)
+	void CTLobbyPreview();
+
 	// 채팅 전송 요청
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby|Chat")
 	void SendChat(const FString& Message);
@@ -132,6 +144,12 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void ServerChangeMatchSetting(ECTMatchSetting Setting, int32 Direction);
+
+	UFUNCTION(Server, Reliable)
+	void ServerChangeTeam();
+
+	UFUNCTION(Server, Reliable)
+	void ServerAcceptTeamSwap(APlayerState* RequesterState);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSendChat(const FString& Message);

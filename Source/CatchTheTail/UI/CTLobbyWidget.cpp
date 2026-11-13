@@ -8,6 +8,8 @@
 #include "../Player/CTPlayerState.h"
 #include "CTMapEntryWidget.h"
 #include "CTLobbyPlayerEntryWidget.h"
+#include "CTTeamSwapRequestWidget.h"
+#include "Components/VerticalBox.h"
 #include "../Core/CTMapSettings.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
@@ -31,6 +33,12 @@ UCTLobbyWidget::UCTLobbyWidget(const FObjectInitializer& ObjectInitializer)
 		HistoryClass = HistoryFinder.Class;
 	}
 
+	static ConstructorHelpers::FClassFinder<UCTTeamSwapRequestWidget> SwapRequestFinder(TEXT("/Game/UI/WBP_CTTeamSwapRequestWidget"));
+	if (SwapRequestFinder.Succeeded())
+	{
+		SwapRequestClass = SwapRequestFinder.Class;
+	}
+
 	static ConstructorHelpers::FClassFinder<UCTLobbyPlayerEntryWidget> PlayerEntryFinder(TEXT("/Game/UI/WBP_CTLobbyPlayerEntryWidget"));
 	if (PlayerEntryFinder.Succeeded())
 	{
@@ -46,6 +54,45 @@ void UCTLobbyWidget::HandleHistoryClicked()
 	{
 		Popup->AddToViewport(200);
 		Popup->SetKeyboardFocus();
+	}
+}
+
+void UCTLobbyWidget::HandleChangeTeamClicked()
+{
+	ReturnFocusToGame();
+	if (ACTLobbyPlayerController* Controller = GetOwningPlayer<ACTLobbyPlayerController>())
+	{
+		Controller->RequestChangeTeam();
+	}
+}
+
+void UCTLobbyWidget::RefreshSwapRequests(const ACTGameState& GameState)
+{
+	if (!Box_SwapRequests || !SwapRequestClass) { return; }
+
+	TArray<ACTPlayerState*> Requesters;
+	for (const FCTTeamSwapRequest& Request : GameState.GetTeamSwapRequests())
+	{
+		if (Request.Requester) { Requesters.Add(Request.Requester); }
+	}
+
+	bool bSame = Requesters.Num() == SwapRequestWidgets.Num();
+	for (int32 Index = 0; bSame && Index < Requesters.Num(); ++Index)
+	{
+		bSame = SwapRequestWidgets[Index] && SwapRequestWidgets[Index]->GetRequester() == Requesters[Index];
+	}
+	if (bSame) { return; }
+
+	// 요청이 생기거나 사라지면 오래된 순서로 다시 쌓음
+	Box_SwapRequests->ClearChildren();
+	SwapRequestWidgets.Reset();
+	for (ACTPlayerState* Requester : Requesters)
+	{
+		UCTTeamSwapRequestWidget* Panel = CreateWidget<UCTTeamSwapRequestWidget>(this, SwapRequestClass);
+		if (!Panel) { continue; }
+		Panel->SetRequester(Requester);
+		Box_SwapRequests->AddChild(Panel);
+		SwapRequestWidgets.Add(Panel);
 	}
 }
 
@@ -66,6 +113,7 @@ void UCTLobbyWidget::NativeConstruct()
 	if (Text_CopyResult)       { Text_CopyResult->SetVisibility(ESlateVisibility::Collapsed); }
 	if (Button_Leave) { Button_Leave->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleLeaveClicked); }
 	if (Button_History) { Button_History->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleHistoryClicked); }
+	if (Button_ChangeTeam) { Button_ChangeTeam->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleChangeTeamClicked); }
 
 	// 맵 선택
 	if (Button_SelectMap)       { Button_SelectMap->OnClicked.AddUniqueDynamic(this, &UCTLobbyWidget::HandleSelectMapClicked); }
@@ -246,7 +294,8 @@ void UCTLobbyWidget::RefreshLobby()
 
 	// 플레이어 목록 (사람은 접속 순서, 그 뒤에 게임에서 채워질 AI. AI는 항상 준비 상태)
 	{
-		struct FRow { FString Name; ECTLobbyPlayerKind Kind; bool bIsMe; };
+		struct FRow { FString Name; ECTLobbyPlayerKind Kind; bool bIsMe; int32 Team; };
+		int32 HumanTeamCount[2] = { 0, 0 };
 		TArray<FRow> Rows;
 		for (const APlayerState* PlayerState : CTGameState->PlayerArray)
 		{
@@ -256,15 +305,89 @@ void UCTLobbyWidget::RefreshLobby()
 
 			const ECTLobbyPlayerKind Kind = CTPlayerState->IsHost() ? ECTLobbyPlayerKind::Host
 				: (CTPlayerState->IsReady() ? ECTLobbyPlayerKind::Ready : ECTLobbyPlayerKind::Waiting);
-			Rows.Add({ CTPlayerState->GetPlayerName(), Kind, CTPlayerState == MyState });
+			const int32 Team = CTPlayerState->GetTeamId() == 1 ? 1 : 0;
+			++HumanTeamCount[Team];
+			Rows.Add({ CTPlayerState->GetPlayerName(), Kind, CTPlayerState == MyState, Team });
 		}
+		int32 TeamCounts[2] = { HumanTeamCount[0], HumanTeamCount[1] };
 		const int32 AICount = CTGameState->GetLobbyAIPlayerCount();
 		for (int32 Index = 0; Index < AICount; ++Index)
 		{
-			Rows.Add({ FString::Printf(TEXT("AI %d"), Index + 1), ECTLobbyPlayerKind::AI, false });
+			// AI는 시작할 때 사람이 적은 팀부터 채워짐 (보물찾기에서 들어갈 팀을 미리 보여 줌)
+			const int32 AITeam = (TeamCounts[1] < TeamCounts[0]) ? 1 : 0;
+			++TeamCounts[AITeam];
+			Rows.Add({ FString::Printf(TEXT("AI %d"), Index + 1), ECTLobbyPlayerKind::AI, false, AITeam });
 		}
 
-		if (Scroll_LobbyPlayers && PlayerEntryClass)
+		// 팀전 모드(보물찾기): 참가 목록이 두 팀 칸으로 나뉨
+		const bool bTeamMode = CTGameState->GetMatchSettings().GetMode() == ECTGameModeType::TreasureHunt;
+		const bool bTeamPanels = bTeamMode && Scroll_TeamA && Scroll_TeamB && PlayerEntryClass;
+		if (Panel_TeamLists) { Panel_TeamLists->SetVisibility(bTeamPanels ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
+		if (Scroll_LobbyPlayers) { Scroll_LobbyPlayers->SetVisibility(bTeamPanels ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
+		if (bTeamPanels)
+		{
+			auto FillTeam = [&](UScrollBox* Scroll, TArray<TObjectPtr<UCTLobbyPlayerEntryWidget>>& Entries, int32 Team)
+			{
+				TArray<const FRow*> TeamRows;
+				for (const FRow& Row : Rows) { if (Row.Team == Team) { TeamRows.Add(&Row); } }
+				if (Entries.Num() != TeamRows.Num())
+				{
+					Scroll->ClearChildren();
+					Entries.Reset();
+					for (int32 Index = 0; Index < TeamRows.Num(); ++Index)
+					{
+						UCTLobbyPlayerEntryWidget* Entry = CreateWidget<UCTLobbyPlayerEntryWidget>(this, PlayerEntryClass);
+						if (!Entry) { continue; }
+						Scroll->AddChild(Entry);
+						Entries.Add(Entry);
+					}
+				}
+				for (int32 Index = 0; Index < Entries.Num() && Index < TeamRows.Num(); ++Index)
+				{
+					if (Entries[Index]) { Entries[Index]->SetEntry(TeamRows[Index]->Name, TeamRows[Index]->Kind, TeamRows[Index]->bIsMe); }
+				}
+			};
+			FillTeam(Scroll_TeamA, TeamAEntries, 0);
+			FillTeam(Scroll_TeamB, TeamBEntries, 1);
+
+			// 머리글: 팀 색 칩과 이름 (색은 로비에서 미리 정해져 경기까지 유지됨)
+			auto SetHeader = [&](UImage* Chip, UTextBlock* Name, int32 Team)
+			{
+				const ECTColor Color = CTGameState->GetTeamColor(Team);
+				if (Chip) { Chip->SetColorAndOpacity(Color == ECTColor::None ? FLinearColor::White : ACTPlayerState::GetLinearColorOf(Color)); }
+				if (Name)
+				{
+					Name->SetText(FText::Format(NSLOCTEXT("CT", "Lobby_TeamName", "{0}팀"),
+						Color == ECTColor::None ? FText::AsNumber(Team + 1) : ACTPlayerState::GetColorDisplayName(Color)));
+				}
+			};
+			SetHeader(Image_TeamAColor, Text_TeamAName, 0);
+			SetHeader(Image_TeamBColor, Text_TeamBName, 1);
+			if (Text_PlayerList) { Text_PlayerList->SetVisibility(ESlateVisibility::Collapsed); }
+		}
+
+		// 팀 변경 버튼과 요청 패널
+		if (Button_ChangeTeam)
+		{
+			const int32 MyTeam = (MyState && MyState->GetTeamId() == 1) ? 1 : 0;
+			bool bHasMyRequest = false;
+			for (const FCTTeamSwapRequest& Request : CTGameState->GetTeamSwapRequests())
+			{
+				if (Request.Requester == MyState) { bHasMyRequest = true; }
+			}
+			Button_ChangeTeam->SetVisibility(bTeamPanels ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+			Button_ChangeTeam->SetIsEnabled(MyState && !MyState->IsReady() && !bStarting && !bHasMyRequest);
+			if (Text_ChangeTeamLabel)
+			{
+				// 반대 팀이 가득 찼으면 바로 이동할 수 없고 신청이 됨
+				Text_ChangeTeamLabel->SetText(HumanTeamCount[1 - MyTeam] >= 4
+					? NSLOCTEXT("CT", "Lobby_ChangeTeamRequest", "팀 변경 신청")
+					: NSLOCTEXT("CT", "Lobby_ChangeTeam", "팀 변경"));
+			}
+		}
+		RefreshSwapRequests(*CTGameState);
+
+		if (!bTeamPanels && Scroll_LobbyPlayers && PlayerEntryClass)
 		{
 			// 줄 수가 달라질 때만 위젯을 새로 만들고, 아니면 내용만 갱신 (깜빡임 방지)
 			if (PlayerEntries.Num() != Rows.Num())
@@ -285,7 +408,7 @@ void UCTLobbyWidget::RefreshLobby()
 			}
 			if (Text_PlayerList) { Text_PlayerList->SetVisibility(ESlateVisibility::Collapsed); }
 		}
-		else if (Text_PlayerList)
+		else if (!bTeamPanels && Text_PlayerList)
 		{
 			// 줄 위젯이 없을 때의 예전 글자 목록
 			FString List;

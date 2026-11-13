@@ -5,6 +5,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/EngineBaseTypes.h"
 #include "CTMatchSettings.h"
+#include "../Type/CTTypes.h"
 #include "CTGameInstance.generated.h"
 
 class UNetDriver;
@@ -119,6 +120,10 @@ public:
 	// 로비를 거쳐 설정이 정해졌는가
 	bool HasStoredMatchSettings() const { return bHasStoredMatchSettings; }
 
+	// 로비에서 미리 정한 팀 색 (보물찾기). 비어 있으면 아직 정하지 않음
+	const TArray<ECTColor>& GetStoredTeamColors() const { return StoredTeamColors; }
+	void SetStoredTeamColors(const TArray<ECTColor>& NewColors) { StoredTeamColors = NewColors; }
+
 	const FString& GetStoredRoomCode() const { return StoredRoomCode; }
 	void SetStoredRoomCode(const FString& NewRoomCode) { StoredRoomCode = NewRoomCode; }
 
@@ -169,6 +174,8 @@ private:
 	FString PlayerName;
 
 	FString StoredRoomCode;
+
+	TArray<ECTColor> StoredTeamColors;
 	int32 StoredMapIndex = INDEX_NONE;
 
 	FCTMatchSettings StoredMatchSettings;

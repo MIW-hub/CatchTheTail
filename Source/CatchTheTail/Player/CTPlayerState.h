@@ -21,6 +21,9 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	// 맵 이동(Seamless Travel) 때 로비에서 정한 팀 번호를 새 PlayerState 로 옮김
+	virtual void CopyProperties(APlayerState* NewPlayerState) override;
+
 	// 읽기
 	UFUNCTION(BlueprintPure, Category = "CT|PlayerState")
 	ECTColor GetAssignedColor() const { return AssignedColor; }

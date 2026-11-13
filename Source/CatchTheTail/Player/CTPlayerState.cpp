@@ -99,6 +99,16 @@ void ACTPlayerState::AddTailCount(int32 Delta)
 	SetTailCount(TailCount + Delta);
 }
 
+void ACTPlayerState::CopyProperties(APlayerState* NewPlayerState)
+{
+	Super::CopyProperties(NewPlayerState);
+
+	if (ACTPlayerState* NewState = Cast<ACTPlayerState>(NewPlayerState))
+	{
+		NewState->TeamId = TeamId;
+	}
+}
+
 void ACTPlayerState::SetTeamId(int32 NewTeamId)
 {
 	if (!HasAuthority()) { return; }

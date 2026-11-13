@@ -1,6 +1,7 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTRule_TreasureHunt.h"
 #include "CTGameMode.h"
+#include "CTGameInstance.h"
 #include "CTGameState.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTCharacter.h"
@@ -51,10 +52,20 @@ void UCTRule_TreasureHunt::OnMatchStart()
 	AssignUnassigned(true);
 
 	// 팀 색: 서로 다른 색 두 개를 무작위로. 같은 팀은 모두 같은 색
-	TArray<int32> ColorIndices;
-	for (int32 Index = 0; Index < CTColorCount; ++Index) { ColorIndices.Add(Index); }
-	for (int32 Index = ColorIndices.Num() - 1; Index > 0; --Index) { ColorIndices.Swap(Index, FMath::RandRange(0, Index)); }
-	const TArray<ECTColor> TeamColors = { static_cast<ECTColor>(ColorIndices[0]), static_cast<ECTColor>(ColorIndices[1]) };
+	// (로비에서 미리 정해 둔 색이 있으면 그대로 씀)
+	TArray<ECTColor> TeamColors;
+	if (const UCTGameInstance* GameInstance = Mode->GetGameInstance<UCTGameInstance>())
+	{
+		const TArray<ECTColor>& Stored = GameInstance->GetStoredTeamColors();
+		if (Stored.Num() == 2 && Stored[0] != Stored[1]) { TeamColors = Stored; }
+	}
+	if (TeamColors.Num() != 2)
+	{
+		TArray<int32> ColorIndices;
+		for (int32 Index = 0; Index < CTColorCount; ++Index) { ColorIndices.Add(Index); }
+		for (int32 Index = ColorIndices.Num() - 1; Index > 0; --Index) { ColorIndices.Swap(Index, FMath::RandRange(0, Index)); }
+		TeamColors = { static_cast<ECTColor>(ColorIndices[0]), static_cast<ECTColor>(ColorIndices[1]) };
+	}
 	GameState->SetTeamColors(TeamColors);
 	GameState->SetTeamRoundWins({ 0, 0 });
 

@@ -1,6 +1,7 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTUIBuildTools.h"
 #include "CTMatchSettings.h"
+#include "../UI/CTCircularProgress.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -3190,6 +3191,163 @@ bool UCTUIBuildTools::AddLobbyPlayerCountText(UBlueprint* WidgetBlueprint)
 	return CloseTree(WidgetBlueprint) >= 0;
 #else
 	return false;
+#endif
+}
+
+// 로비 팀 칸 / 팀 변경 버튼 / 요청 패널 자리 (기존 트리에 덧붙임)
+bool UCTUIBuildTools::AddLobbyTeamPanels(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	// 주의: OpenTree 는 기존 위젯을 모두 지우므로 쓰지 않음
+	Tree = WidgetBlueprint ? GetBlueprintTree(WidgetBlueprint) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyWidget");
+
+	if (Tree->FindWidget(TEXT("Panel_TeamLists"))) { Tree = nullptr; return true; }
+	UCanvasPanel* PlayersCanvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_CompactPlayers")));
+	UCanvasPanel* LobbyCanvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_Lobby")));
+	UTextBlock* TitleLabel = Cast<UTextBlock>(Tree->FindWidget(TEXT("Label_LobbyPlayers")));
+	if (!PlayersCanvas || !LobbyCanvas || !TitleLabel) { Tree = nullptr; return false; }
+
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+
+	// 팀 칸 두 개: 머리글(색 칩 + 이름) 아래에 플레이어 줄 목록
+	UVerticalBox* Lists = Make<UVerticalBox>(TEXT("Panel_TeamLists"));
+	Lists->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	auto AddTeam = [&](const TCHAR* Suffix, const TCHAR* DefaultName)
+	{
+		const FString ChipName = FString::Printf(TEXT("Image_Team%sColor"), Suffix);
+		const FString NameName = FString::Printf(TEXT("Text_Team%sName"), Suffix);
+		const FString ScrollName = FString::Printf(TEXT("Scroll_Team%s"), Suffix);
+		const FString RowName = FString::Printf(TEXT("Row_Team%sHeader"), Suffix);
+		const FString SizeName = FString::Printf(TEXT("Size_Team%sColor"), Suffix);
+
+		UImage* Chip = Make<UImage>(*ChipName);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(14.f, 14.f, 14.f, 14.f), FSlateColor(DarkPurple), 3.f);
+		Chip->SetBrush(Brush);
+		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		UHorizontalBox* Header = Make<UHorizontalBox>(*RowName);
+		Header->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		AddH(Header, Sized(*SizeName, Chip, 28.f, 28.f), 10.f, false);
+		AddH(Header, MakeText(*NameName, DefaultName, TEXT("Bold"), 24, Magenta, ETextJustify::Left), 0.f, true);
+		AddV(Lists, Header, 6.f);
+
+		UScrollBox* Scroll = Make<UScrollBox>(*ScrollName);
+		Scroll->SetVisibility(ESlateVisibility::Visible);
+		AddV(Lists, Scroll, 10.f, true);
+	};
+	AddTeam(TEXT("A"), TEXT("A팀"));
+	AddTeam(TEXT("B"), TEXT("B팀"));
+
+	UCanvasPanelSlot* ListsSlot = Cast<UCanvasPanelSlot>(PlayersCanvas->AddChild(Lists));
+	ListsSlot->SetAnchors(FAnchors(0.f, 0.f));
+	ListsSlot->SetAlignment(FVector2D(0.f, 0.f));
+	ListsSlot->SetPosition(FVector2D(20.f, 88.f));
+	ListsSlot->SetSize(FVector2D(640.f, 476.f));
+	ListsSlot->SetZOrder(4);
+
+	// 팀 변경 버튼 (제목 줄 아래)
+	UButton* Button = Make<UButton>(TEXT("Button_ChangeTeam"));
+	FButtonStyle Style = Button->GetStyle();
+	const FSlateBrush ButtonBrush = StyleTextureBrush(TEXT("UI_Btn_Pink_M"), FMargin(0.1f, 0.3f, 0.1f, 0.35f), ESlateBrushDrawType::Box);
+	Style.Normal = ButtonBrush;
+	Style.Hovered = ButtonBrush;
+	Style.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	Style.Pressed = ButtonBrush;
+	Style.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Style.Disabled = ButtonBrush;
+	Style.Disabled.TintColor = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 0.8f));
+	Button->SetStyle(Style);
+	Button->SetVisibility(ESlateVisibility::Collapsed);
+	UTextBlock* ButtonLabel = MakeText(TEXT("Text_ChangeTeamLabel"), TEXT("팀 변경"), TEXT("Bold"), 22, FLinearColor::White, ETextJustify::Center);
+	Button->SetContent(ButtonLabel);
+	UCanvasPanelSlot* ButtonSlot = Cast<UCanvasPanelSlot>(PlayersCanvas->AddChild(Button));
+	ButtonSlot->SetAnchors(FAnchors(0.f, 0.f));
+	ButtonSlot->SetAlignment(FVector2D(0.f, 0.f));
+	ButtonSlot->SetPosition(FVector2D(20.f, 42.f));
+	ButtonSlot->SetSize(FVector2D(240.f, 42.f));
+	ButtonSlot->SetZOrder(5);
+
+	// 팀 변경 요청 패널이 쌓일 곳 (플레이어 패널과 채팅 사이 빈 공간)
+	UVerticalBox* Requests = Make<UVerticalBox>(TEXT("Box_SwapRequests"));
+	Requests->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UCanvasPanelSlot* RequestsSlot = Cast<UCanvasPanelSlot>(LobbyCanvas->AddChild(Requests));
+	RequestsSlot->SetAnchors(FAnchors(0.32f, 0.12f, 0.67f, 0.58f));
+	RequestsSlot->SetOffsets(FMargin(0.f));
+	RequestsSlot->SetZOrder(6);
+
+	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
+#endif
+}
+
+// 팀 변경 요청 패널 한 장 뼈대 (처음 한 번). 모양은 WBP 에서 직접 바꿈
+int32 UCTUIBuildTools::BuildTeamSwapRequestDesign(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTTeamSwapRequestWidget"))) { return -1; }
+
+	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+	const FLinearColor PinkFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC));
+
+	// 패널 사이 간격은 바깥 여백으로
+	UBorder* Root = Make<UBorder>(TEXT("Border_SwapRoot"));
+	Root->SetBrushColor(FLinearColor::Transparent);
+	Root->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = Root;
+
+	UOverlay* Overlay = Make<UOverlay>(TEXT("Overlay_Swap"));
+	Overlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Root->SetContent(Overlay);
+
+	UImage* Back = Make<UImage>(TEXT("Image_SwapBack"));
+	Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
+	Back->SetColorAndOpacity(PinkFill);
+	Back->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UOverlaySlot* BackSlot = Overlay->AddChildToOverlay(Back);
+	BackSlot->SetHorizontalAlignment(HAlign_Fill);
+	BackSlot->SetVerticalAlignment(VAlign_Fill);
+
+	UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_Swap"));
+	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UOverlaySlot* RowSlot = Overlay->AddChildToOverlay(Row);
+	RowSlot->SetHorizontalAlignment(HAlign_Fill);
+	RowSlot->SetVerticalAlignment(VAlign_Center);
+	RowSlot->SetPadding(FMargin(28.f, 12.f, 24.f, 12.f));
+
+	// 요청한 사람 이름 / 팀 변경 신청 버튼 / 5초 원형 진행 표시 (이 세 가지만)
+	UTextBlock* Name = MakeText(TEXT("Text_RequesterName"), TEXT("플레이어"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Left);
+	Name->SetAutoWrapText(false);
+	AddH(Row, Name, 16.f, true);
+
+	UButton* Accept = Make<UButton>(TEXT("Button_Accept"));
+	FButtonStyle Style = Accept->GetStyle();
+	const FSlateBrush ButtonBrush = StyleTextureBrush(TEXT("UI_Btn_Pink_M"), FMargin(0.1f, 0.3f, 0.1f, 0.35f), ESlateBrushDrawType::Box);
+	Style.Normal = ButtonBrush;
+	Style.Hovered = ButtonBrush;
+	Style.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	Style.Pressed = ButtonBrush;
+	Style.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Style.Disabled = ButtonBrush;
+	Style.Disabled.TintColor = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 0.8f));
+	Accept->SetStyle(Style);
+	Accept->SetContent(MakeText(TEXT("Text_AcceptLabel"), TEXT("팀 변경 신청"), TEXT("Bold"), 22, FLinearColor::White, ETextJustify::Center));
+	AddH(Row, Sized(TEXT("Size_Accept"), Accept, 190.f, 56.f), 16.f, false);
+
+	UCTCircularProgress* Progress = Make<UCTCircularProgress>(TEXT("Progress_Circle"));
+	AddH(Row, Sized(TEXT("Size_Progress"), Progress, 56.f, 56.f), 0.f, false);
+
+	return CloseTree(WidgetBlueprint);
+#else
+	return 0;
 #endif
 }
 
