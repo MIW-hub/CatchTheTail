@@ -1,0 +1,6 @@
+﻿LogTemp: [CT] AI 플레이어 3명 추가 (사람 1명, 요청 3명)
+LogTemp: [CT] 라운드 1 시작
+LogTemp: [CT] 게임 시작: 전체 45초, 라운드 18초
+LogTemp: [CT] 라운드 2 시작
+LogTemp: [CT] 라운드 3 시작
+LogTemp: [CT] 게임 종료: 승자 N명, 동점=?
