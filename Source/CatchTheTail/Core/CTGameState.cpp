@@ -219,6 +219,9 @@ bool ACTGameState::CanStartLobby() const
 		if (!CTPlayerState->IsHost() && !CTPlayerState->IsReady()) { return false; }
 	}
 
+	// 아직 만들어지지 않은 모드(보물찾기)는 시작할 수 없음
+	if (!MatchSettings.IsModePlayable()) { return false; }
+
 	// 혼자서는 시작할 수 없음 (AI를 채워 두 명 이상이면 가능). BP에서 최소 인원을 1로 해도 2 미만은 막음
 	return GetLobbyParticipantCount() >= FMath::Max(LobbyMinPlayers, 2);
 }

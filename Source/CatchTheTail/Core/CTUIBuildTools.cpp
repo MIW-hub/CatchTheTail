@@ -955,7 +955,11 @@ int32 UCTUIBuildTools::AddMatchSettingRow(UBlueprint* WidgetBlueprint, int32 Set
 
 	AddH(Row, MakeArrow(TEXT("Next"), TEXT(">")), 0.f, false);
 
-	AddV(Panel, Sized(*FString::Printf(TEXT("Size_Row_Setting_%s"), *Key), Row, 0.f, 56.f), 18.f);
+	USizeBox* RowBox = Sized(*FString::Printf(TEXT("Size_Row_Setting_%s"), *Key), Row, 0.f, 56.f);
+	AddV(Panel, RowBox, 18.f);
+
+	// 게임 모드 줄은 목록 맨 위에 둠 (다른 줄은 아래로 덧붙임)
+	if (Setting == ECTMatchSetting::Mode) { Panel->ShiftChild(0, RowBox); }
 
 	return CloseTree(WidgetBlueprint);
 #else
