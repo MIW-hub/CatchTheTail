@@ -435,6 +435,7 @@ bool UCTRule_TreasureHunt::HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* V
 	// 약 2초 멈춤. 멈춘 동안에도 무적이 아님
 	VictimCharacter->SetBoothLocked(true);
 	VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 잡기: %s -> %s (2초 멈춤)"), *Grabber->GetPlayerName(), *Victim->GetPlayerName());
 
 	FTimerHandle Handle;
 	Mode->GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(VictimCharacter, [VictimCharacter]()

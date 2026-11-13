@@ -739,7 +739,22 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 		if (HoldStartTime <= 0.0) { HoldStartTime = Now; }
 
 		ACTCharacter* Target = nullptr;
-		float TargetDistance = 2500.f;
+		float BestScore = TNumericLimits<float>::Max();
+
+		// 같은 팀이 던지는 길목에 있으면 던지지 않음 (아군 피해 방지)
+		auto FriendlyInLine = [&](const FVector& To)
+		{
+			for (APlayerState* State : GameState->PlayerArray)
+			{
+				const ACTPlayerState* Mate = Cast<ACTPlayerState>(State);
+				if (!Mate || Mate == MyState || Mate->GetTeamId() != MyState->GetTeamId()) { continue; }
+				const AActor* MatePawn = Mate->GetPawn();
+				if (!MatePawn) { continue; }
+				const FVector Closest = FMath::ClosestPointOnSegment(MatePawn->GetActorLocation(), Me.GetActorLocation(), To);
+				if (FVector::Dist2D(Closest, MatePawn->GetActorLocation()) < 150.f) { return true; }
+			}
+			return false;
+		};
 		for (APlayerState* State : GameState->PlayerArray)
 		{
 			const ACTPlayerState* Other = Cast<ACTPlayerState>(State);
@@ -748,7 +763,12 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 			ACTCharacter* OtherCharacter = Cast<ACTCharacter>(Other->GetPawn());
 			if (!OtherCharacter) { continue; }
 			const float Distance = FVector::Dist2D(Me.GetActorLocation(), OtherCharacter->GetActorLocation());
-			if (Distance < TargetDistance && (Now - HoldStartTime > 3.0 || SeesLocation(Me, OtherCharacter->GetActorLocation(), OtherCharacter))) { Target = OtherCharacter; TargetDistance = Distance; }
+			if (Distance < 2500.f && (Now - HoldStartTime > 3.0 || SeesLocation(Me, OtherCharacter->GetActorLocation(), OtherCharacter)) && !FriendlyInLine(OtherCharacter->GetActorLocation()))
+			{
+				// 꼬리가 긴 상대를 먼저 노림 (상대 에너지는 몰라서 꼬리 길이로 짐작. 사람과 같은 정보)
+				const float Score = Distance - 120.f * Other->GetTailCount();
+				if (Score < BestScore) { Target = OtherCharacter; BestScore = Score; }
+			}
 		}
 
 		if (Target && Now - HoldStartTime > 0.7)
@@ -768,6 +788,26 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 	else
 	{
 		HoldStartTime = 0.0;
+
+		// 손이 닿는 거리에 상대 팀이 있으면 잡아서 2초 멈추게 함 (쿨타임은 서버가 검사)
+		if (MyState && GameState && Now >= NextThrowTime && !Me.IsBoothLocked())
+		{
+			for (APlayerState* State : GameState->PlayerArray)
+			{
+				const ACTPlayerState* Other = Cast<ACTPlayerState>(State);
+				if (!Other || Other == MyState || Other->GetTeamId() == MyState->GetTeamId() || Other->IsForfeited() || Other->IsOnlyASpectator()) { continue; }
+				ACTCharacter* OtherCharacter = Cast<ACTCharacter>(Other->GetPawn());
+				if (!OtherCharacter || OtherCharacter->IsBoothLocked()) { continue; }
+				if (FVector::Dist2D(Me.GetActorLocation(), OtherCharacter->GetActorLocation()) > Me.GetGrabDistance() * 1.05f) { continue; }
+
+				NextThrowTime = Now + 1.5;
+				Halt();
+				SetAIRun(Me, false);
+				FaceLocation(Me, OtherCharacter->GetActorLocation());
+				Me.AIGrab();
+				return;
+			}
+		}
 	}
 
 	const FVector MyLocation = Me.GetActorLocation();
