@@ -37,6 +37,7 @@
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "Net/VoiceConfig.h"
+#include "CTVoipTalker.h"
 #include "Sound/SoundAttenuation.h"
 #include "../Core/CTSettingsSubsystem.h"
 #include "GameFramework/PlayerController.h"
@@ -783,6 +784,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 	UpdateBushVisibility();
 	UpdateBushXRay();
 	UpdateMovementSounds(DeltaSeconds);
+	if (!IsLocallyControlled()) { UpdateVoiceTalkerMode(); }
 	UpdateArmStretch(DeltaSeconds);
 
 	// 로컬 전용
@@ -1016,11 +1018,64 @@ void ACTCharacter::UpdateVoiceTransmit()
 	const UCTSettingsSubsystem* Settings = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTSettingsSubsystem>() : nullptr;
 	const bool bMicEnabled = !Settings || Settings->IsMicEnabled();
 	const bool bAlwaysOn = Settings && Settings->IsMicAlwaysOn();
-	const bool bWantTransmit = bMicEnabled && (bAlwaysOn || bVoiceKeyHeld);
+
+	// 보물찾기: 팀 음성 키를 누르는 동안(또는 상시 말하기를 켠 채 근접 키를 안 누를 때) 팀 음성으로 보냄. 근접 키(V)는 가까운 모두에게 들림
+	const ACTGameState* VoiceGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+	const bool bTreasureMode = VoiceGameState && VoiceGameState->GetModeType() == ECTGameModeType::TreasureHunt;
+	bTeamVoiceHeld = bTreasureMode && Settings && PlayerController->IsInputKeyDown(Settings->GetCodeKey(CTCodeKeys::TeamVoice));
+
+	const bool bWantTransmit = bMicEnabled && (bAlwaysOn || bVoiceKeyHeld || bTeamVoiceHeld);
+	const bool bWantTeam = bTreasureMode && bWantTransmit && (bTeamVoiceHeld || (bAlwaysOn && !bVoiceKeyHeld));
+	if (bWantTeam != bSentTeamVoice)
+	{
+		bSentTeamVoice = bWantTeam;
+		ServerSetTeamVoice(bWantTeam);
+	}
 
 	if (bWantTransmit == bVoiceTransmitting) { return; }
 	PlayerController->ToggleSpeaking(bWantTransmit);
 	bVoiceTransmitting = bWantTransmit;
+}
+
+void ACTCharacter::ServerSetTeamVoice_Implementation(bool bNewTeamVoice)
+{
+	if (ACTPlayerState* VoiceState = GetPlayerState<ACTPlayerState>())
+	{
+		VoiceState->SetTeamVoice(bNewTeamVoice);
+	}
+}
+
+void ACTCharacter::UpdateVoiceTalkerMode()
+{
+	if (!VoiceTalker || !GetWorld()) { return; }
+
+	const ACTPlayerState* Speaker = GetPlayerState<ACTPlayerState>();
+	const APlayerController* LocalController = GetWorld()->GetFirstPlayerController();
+	const ACTPlayerState* Listener = LocalController ? LocalController->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!Speaker || !Listener) { return; }
+
+	// 0 = 근접 음성(거리에 따라 작아짐), 1 = 팀 음성을 팀원으로서 들음(거리와 상관없이 똑바로), 2 = 상대 팀의 팀 음성(무음)
+	int32 State = 0;
+	if (Speaker->IsTeamVoice())
+	{
+		State = (Speaker->GetTeamId() >= 0 && Speaker->GetTeamId() == Listener->GetTeamId()) ? 1 : 2;
+	}
+	if (State == TalkerVoiceState) { return; }
+	TalkerVoiceState = State;
+
+	if (State == 0)
+	{
+		VoiceTalker->Settings.ComponentToAttachTo = GetRootComponent();
+		VoiceTalker->Settings.AttenuationSettings = VoiceAttenuation;
+	}
+	else if (State == 1)
+	{
+		// 붙일 곳과 감쇠를 비우면 위치와 상관없이 똑바로(2D) 재생됨. 다음에 말을 시작할 때부터 적용
+		VoiceTalker->Settings.ComponentToAttachTo = nullptr;
+		VoiceTalker->Settings.AttenuationSettings = nullptr;
+	}
+	VoiceTalker->SetMuted(State == 2);
+	UE_LOG(LogTemp, Log, TEXT("[CT-Voice] %s 의 목소리 처리: %s"), *Speaker->GetPlayerName(), State == 0 ? TEXT("근접") : (State == 1 ? TEXT("팀 음성(들림)") : TEXT("상대 팀 음성(무음)")));
 }
 
 void ACTCharacter::EnsureVoiceTalker()
@@ -1030,8 +1085,11 @@ void ACTCharacter::EnsureVoiceTalker()
 	APlayerState* VoicePlayerState = GetPlayerState();
 	if (!VoicePlayerState || VoicePlayerState->IsABot()) { return; } // AI는 목소리가 없음
 
-	UVOIPTalker* Talker = UVOIPTalker::CreateTalkerForPlayer(VoicePlayerState);
+	// 기본 VOIPTalker 에 무음 기능을 더한 것을 씀 (CreateTalkerForPlayer 와 같은 방식으로 등록)
+	UCTVoipTalker* Talker = NewObject<UCTVoipTalker>();
 	if (!Talker) { return; }
+	Talker->RegisterWithPlayerState(VoicePlayerState);
+	VoiceTalker = Talker;
 	bVoiceTalkerCreated = true;
 
 	// 캐릭터 위치에서 들리고, 거리가 멀면 작아지다가 안 들림
@@ -1279,6 +1337,13 @@ void ACTCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// 말하는 중에 사라지면 전송 중지
 	if (IsLocallyControlled()) { OnVoiceReleased(); }
+
+	// 사라지는 목소리 처리기를 엔진 목록에서 뺌 (지워진 것을 가리키지 않게)
+	if (VoiceTalker)
+	{
+		UVOIPStatics::ResetPlayerVoiceTalker(GetPlayerState());
+		VoiceTalker = nullptr;
+	}
 
 	// 이모트 창을 연 채로 사라지면 입력 막힘이 남지 않게 닫음
 	if (EmoteMenu) { CloseEmoteMenu(); }

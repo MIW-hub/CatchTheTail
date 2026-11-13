@@ -77,6 +77,7 @@ namespace
 		if (Id == CTCodeKeys::EmoteMenu) { return EKeys::R; }
 		if (Id == CTCodeKeys::Phone) { return EKeys::F; }
 		if (Id == CTCodeKeys::GrabAlt) { return EKeys::G; }
+		if (Id == CTCodeKeys::TeamVoice) { return EKeys::T; }
 		return EKeys::Invalid;
 	}
 
@@ -99,6 +100,7 @@ namespace
 		if (Id == TEXT("Voice")) { return Loc3(TEXT("누르고 있는 동안 말해요. 가까이 있는 사람에게 들려요."), TEXT("Hold to talk. Nearby players can hear you."), TEXT("押している間話せます。近くの人に聞こえます。")); }
 		if (Id == CTCodeKeys::EmoteMenu) { return Loc3(TEXT("이모트 창을 열고 닫아요. 숫자 키에 등록할 수 있어요."), TEXT("Open or close the emote menu. Assign emotes to the number keys."), TEXT("エモートウィンドウを開閉します。数字キーに登録できます。")); }
 		if (Id == CTCodeKeys::Phone) { return Loc3(TEXT("전화부스를 써요. 유령일 때는 다른 자리로 한 번 옮겨요."), TEXT("Use the phone booth. As a ghost, move to another spot once."), TEXT("電話ボックスを使います。ゴーストのときは一度だけ別の場所へ移動します。")); }
+		if (Id == CTCodeKeys::TeamVoice) { return Loc3(TEXT("보물찾기에서 누르고 있는 동안 팀원에게만, 아무리 멀어도 들려요."), TEXT("In Treasure Hunt, hold to talk to your team only, at any distance."), TEXT("トレジャーハントで押している間、チームメイトにだけどんなに遠くても聞こえます。")); }
 		if (Id == CTCodeKeys::GrabAlt) { return Loc3(TEXT("잡기 보조 키예요. 꼬리 대결 중에는 연타해요."), TEXT("Second key for Grab. Mash it during a tail struggle."), TEXT("つかむの補助キーです。しっぽの勝負中は連打します。")); }
 		return FText::GetEmpty();
 	}
@@ -107,6 +109,7 @@ namespace
 	{
 		if (Id == CTCodeKeys::EmoteMenu) { return Loc3(TEXT("이모트 창"), TEXT("Emote Menu"), TEXT("エモート")); }
 		if (Id == CTCodeKeys::Phone) { return Loc3(TEXT("전화 / 유령 이동"), TEXT("Phone / Ghost Move"), TEXT("電話 / ゴースト移動")); }
+		if (Id == CTCodeKeys::TeamVoice) { return Loc3(TEXT("팀 음성"), TEXT("Team Voice"), TEXT("チームボイス")); }
 		if (Id == CTCodeKeys::GrabAlt) { return Loc3(TEXT("잡기 (보조)"), TEXT("Grab (Alt)"), TEXT("つかむ (補助)")); }
 		return FText::GetEmpty();
 	}
@@ -493,7 +496,7 @@ bool UCTSettingsSubsystem::IsKeyUsedByOther(FName ActionId, FKey Key) const
 	if (IsEmoteNumberKey(Key)) { return true; }
 
 	// 코드에서 받는 키(이모트 창, 전화, 잡기 보조)와도 겹치면 안 됨
-	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt })
+	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt, CTCodeKeys::TeamVoice })
 	{
 		if (CodeId != ActionId && GetCodeKey(CodeId) == Key) { return true; }
 	}
@@ -569,7 +572,7 @@ TArray<FCTControlRow> UCTSettingsSubsystem::GetControlRows() const
 	}
 
 	// 코드에서 받는 키: 이모트 창, 전화, 잡기 보조 (바꿀 수 있음)
-	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt })
+	for (const FName CodeId : { CTCodeKeys::EmoteMenu, CTCodeKeys::Phone, CTCodeKeys::GrabAlt, CTCodeKeys::TeamVoice })
 	{
 		FCTControlRow Row;
 		Row.Id = CodeId;

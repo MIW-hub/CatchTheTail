@@ -87,6 +87,10 @@ public:
 	void SetResultEnergy(int32 NewResultEnergy);
 	void SetTeamEnergy(int32 NewTeamEnergy);
 
+	// 팀 음성으로 말하는 중인가 (보물찾기). 모두에게 복제되어 듣는 쪽이 목소리 처리를 정함
+	bool IsTeamVoice() const { return bTeamVoice; }
+	void SetTeamVoice(bool bNewTeamVoice);
+
 	// 서버 전용: 이번 유령 상태에서 F키 이동을 이미 썼는가 (유령이 될 때마다 초기화)
 	bool HasUsedGhostRelocate() const { return bGhostRelocateUsed; }
 	void MarkGhostRelocateUsed() { bGhostRelocateUsed = true; }
@@ -129,6 +133,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	int32 TeamEnergy = 0;
+
+	UPROPERTY(Replicated)
+	bool bTeamVoice = false;
 
 	UPROPERTY(ReplicatedUsing = OnRep_IsGhost, BlueprintReadOnly, Category = "CT|PlayerState")
 	bool bIsGhost = false;

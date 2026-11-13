@@ -45,6 +45,7 @@ namespace CTCodeKeys
 {
 	inline const FName EmoteMenu(TEXT("EmoteMenu"));  // 이모트 창 열기/닫기 (기본 R)
 	inline const FName Phone(TEXT("Phone"));          // 전화부스, 유령 이동 (기본 F)
+	inline const FName TeamVoice(TEXT("TeamVoice"));  // 팀 음성 (보물찾기, 기본 T). 누르는 동안 팀원에게만, 거리와 상관없이 들림
 	inline const FName GrabAlt(TEXT("GrabAlt"));      // 잡기 보조 / 꼬리 대결 연타 (기본 G)
 }
 

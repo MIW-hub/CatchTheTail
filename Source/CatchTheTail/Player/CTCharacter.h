@@ -745,6 +745,20 @@ protected:
 	// 키 입력과 설정(마이크 사용, 상시 말하기)에 맞춰 전송 상태를 맞춤 (로컬)
 	void UpdateVoiceTransmit();
 
+	// 팀 음성 상태를 서버에 알림 (서버가 PlayerState 에 기록해 모두에게 복제)
+	UFUNCTION(Server, Reliable)
+	void ServerSetTeamVoice(bool bNewTeamVoice);
+
+	// 듣는 쪽: 이 캐릭터의 목소리를 팀 음성 / 근접 음성에 맞게 처리 (팀 음성이면 팀원에게는 거리와 상관없이 크게, 상대에게는 무음)
+	void UpdateVoiceTalkerMode();
+
+	bool bTeamVoiceHeld = false;
+	bool bSentTeamVoice = false;
+	int32 TalkerVoiceState = -1;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UCTVoipTalker> VoiceTalker;
+
 	// 거리 감쇠
 	UPROPERTY(Transient)
 	TObjectPtr<class USoundAttenuation> VoiceAttenuation;

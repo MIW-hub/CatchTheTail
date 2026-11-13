@@ -45,6 +45,7 @@ void ACTPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(ACTPlayerState, Energy, COND_OwnerOnly);
 	DOREPLIFETIME(ACTPlayerState, ResultEnergy);
 	DOREPLIFETIME_CONDITION(ACTPlayerState, TeamEnergy, COND_OwnerOnly);
+	DOREPLIFETIME(ACTPlayerState, bTeamVoice);
 	DOREPLIFETIME(ACTPlayerState, bIsGhost);
 	DOREPLIFETIME(ACTPlayerState, bForfeited);
 	DOREPLIFETIME(ACTPlayerState, bReady);
@@ -147,6 +148,14 @@ void ACTPlayerState::SetTeamEnergy(int32 NewTeamEnergy)
 	if (TeamEnergy == NewTeamEnergy) { return; }
 
 	TeamEnergy = NewTeamEnergy;
+	ForceNetUpdate();
+}
+
+void ACTPlayerState::SetTeamVoice(bool bNewTeamVoice)
+{
+	if (!HasAuthority() || bTeamVoice == bNewTeamVoice) { return; }
+
+	bTeamVoice = bNewTeamVoice;
 	ForceNetUpdate();
 }
 
