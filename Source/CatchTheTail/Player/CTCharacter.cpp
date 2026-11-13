@@ -792,6 +792,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 	{
 		UpdateCameraDistance(DeltaSeconds);
 		UpdateVoiceTransmit();
+		UpdateThrowPreview();
 
 		// 설정에서 바꿀 수 있는 키 (이모트 창, 잡기 보조)
 		const APlayerController* LocalController = Cast<APlayerController>(GetController());
@@ -1493,6 +1494,72 @@ bool ACTCharacter::TryPickupThrowable()
 void ACTCharacter::ClearHeldThrowable(ACTThrowable* Throwable)
 {
 	if (HasAuthority() && HeldThrowable == Throwable) { HeldThrowable = nullptr; }
+}
+
+void ACTCharacter::UpdateThrowPreview()
+{
+	const bool bShow = IsHoldingThrowable() && ThrowPreviewDotCount > 0 && !bBoothLocked;
+	if (!bShow && ThrowPreviewDots.IsEmpty()) { return; }
+
+	// 점은 처음 필요할 때 한 번만 만들어 두고 켜고 끔
+	if (bShow && ThrowPreviewDots.IsEmpty())
+	{
+		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+		for (int32 Index = 0; Index < ThrowPreviewDotCount; ++Index)
+		{
+			UStaticMeshComponent* Dot = NewObject<UStaticMeshComponent>(this);
+			Dot->SetStaticMesh(Sphere);
+			Dot->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Dot->SetCastShadow(false);
+			Dot->SetOnlyOwnerSee(true);
+			Dot->SetCanEverAffectNavigation(false);
+			Dot->SetUsingAbsoluteLocation(true);
+			Dot->SetUsingAbsoluteScale(true);
+			Dot->SetWorldScale3D(FVector(ThrowPreviewDotScale));
+			Dot->SetVisibility(false);
+			Dot->RegisterComponent();
+			ThrowPreviewDots.Add(Dot);
+		}
+	}
+
+	if (!bShow)
+	{
+		for (UStaticMeshComponent* Dot : ThrowPreviewDots) { if (Dot) { Dot->SetVisibility(false); } }
+		return;
+	}
+
+	// 서버가 던지는 것과 같은 방향과 힘으로 가상의 공을 날려 봄
+	FVector Direction = GetActorForwardVector().GetSafeNormal2D();
+	Direction = Direction.RotateAngleAxis(-ThrowUpAngleDegrees, GetActorRightVector());
+	FVector Velocity = Direction * ThrowSpeed;
+	FVector Position = GetActorLocation() + FVector(0.f, 0.f, 135.f);
+	const float Gravity = GetWorld()->GetGravityZ();
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ThrowPreview), false, this);
+	if (HeldThrowable) { Params.AddIgnoredActor(HeldThrowable); }
+
+	bool bBlocked = false;
+	for (int32 Index = 0; Index < ThrowPreviewDots.Num(); ++Index)
+	{
+		UStaticMeshComponent* Dot = ThrowPreviewDots[Index];
+		if (!Dot) { continue; }
+
+		const FVector Next = Position + Velocity * ThrowPreviewStepSeconds + FVector(0.f, 0.f, 0.5f * Gravity * FMath::Square(ThrowPreviewStepSeconds));
+		FHitResult Hit;
+		if (!bBlocked && GetWorld()->LineTraceSingleByChannel(Hit, Position, Next, ECC_Visibility, Params))
+		{
+			bBlocked = true;
+			Dot->SetWorldLocation(Hit.ImpactPoint);
+			Dot->SetVisibility(true);
+			continue;
+		}
+		if (bBlocked) { Dot->SetVisibility(false); continue; }
+
+		Velocity.Z += Gravity * ThrowPreviewStepSeconds;
+		Position = Next;
+		Dot->SetWorldLocation(Position);
+		Dot->SetVisibility(true);
+	}
 }
 
 void ACTCharacter::ServerThrow_Implementation()

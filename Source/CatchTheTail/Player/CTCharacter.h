@@ -729,6 +729,22 @@ protected:
 	UPROPERTY(Replicated)
 	TObjectPtr<ACTThrowable> HeldThrowable;
 
+	// 오브젝트를 들고 있는 동안 던질 궤적을 점으로 보여 줌 (던지는 본인 화면에만 보임)
+	void UpdateThrowPreview();
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<class UStaticMeshComponent>> ThrowPreviewDots;
+
+	// 궤적 점 개수, 점 사이 시간(초), 점 크기(엔진 기본 구 100cm 기준 배율)
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw", meta = (ClampMin = "0"))
+	int32 ThrowPreviewDotCount = 14;
+
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw", meta = (ClampMin = "0.01"))
+	float ThrowPreviewStepSeconds = 0.09f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw", meta = (ClampMin = "0.01"))
+	float ThrowPreviewDotScale = 0.07f;
+
 	// 마우스 왼쪽 클릭: 꼬리 줄다리기 중에만 게이지 연타로 인정
 	void OnGrappleMouseClick();
 	void OnPushPressed();
