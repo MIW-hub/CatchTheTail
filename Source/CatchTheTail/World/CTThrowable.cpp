@@ -171,12 +171,13 @@ void ACTThrowable::Release()
 	ForceNetUpdate();
 }
 
-void ACTThrowable::Throw(const FVector& Velocity)
+void ACTThrowable::Throw(const FVector& Velocity, const FVector& ReleaseLocation)
 {
 	if (!HasAuthority() || !HeldBy) { return; }
 
 	ACTCharacter* ThrowingCharacter = HeldBy;
 	Release();
+	SetActorLocation(ReleaseLocation, false, nullptr, ETeleportType::TeleportPhysics);
 
 	// 던진 사람 몸에 바로 맞지 않게 잠깐 무시
 	if (UPrimitiveComponent* ThrowerRoot = Cast<UPrimitiveComponent>(ThrowingCharacter->GetRootComponent()))
@@ -205,7 +206,8 @@ void ACTThrowable::HandleHit(UPrimitiveComponent* HitComponent, AActor* OtherAct
 	if (!HasAuthority() || !bDangerous) { return; }
 
 	ACTCharacter* Victim = Cast<ACTCharacter>(OtherActor);
-	if (!Victim || HitVictims.Contains(Victim)) { return; }
+	// 던진 본인은 튕겨 돌아온 공에 맞아도 피해 없음 (아군은 피해가 있음)
+	if (!Victim || Victim == Thrower.Get() || HitVictims.Contains(Victim)) { return; }
 	HitVictims.Add(Victim);
 
 	if (ACTGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTGameMode>() : nullptr)

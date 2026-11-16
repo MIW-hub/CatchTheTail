@@ -724,13 +724,24 @@ protected:
 	float ThrowSpeed = 1500.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throw", meta = (ClampMin = "0", ClampMax = "60"))
-	float ThrowUpAngleDegrees = 12.f;
+	float ThrowUpAngleDegrees = 8.f;
+
+	// 던질 때 공을 놓는 위치 (캐릭터 중심 기준: 앞으로 cm, 위로 cm). 머리 위가 아니라 가슴 높이 앞
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw")
+	FVector ThrowReleaseOffset = FVector(60.f, 0.f, 10.f);
 
 	UPROPERTY(Replicated)
 	TObjectPtr<ACTThrowable> HeldThrowable;
 
 	// 오브젝트를 들고 있는 동안 던질 궤적을 점으로 보여 줌 (던지는 본인 화면에만 보임)
 	void UpdateThrowPreview();
+
+#if !UE_BUILD_SHIPPING
+	// 개발용 시험(ct.ThrowSyncTest): 클라이언트 화면에서 상대가 든 오브젝트와 날아가는 오브젝트가 보이는지 로그로 남김
+	void UpdateThrowSyncTestLog();
+	bool bTestSawHeld = false;
+	bool bTestSawFlying = false;
+#endif
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<class UStaticMeshComponent>> ThrowPreviewDots;

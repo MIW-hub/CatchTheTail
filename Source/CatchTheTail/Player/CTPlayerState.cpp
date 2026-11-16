@@ -1,5 +1,6 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTPlayerState.h"
+#include "HAL/IConsoleManager.h"
 #include "../Core/CTGameState.h"
 #include "../Core/CTAudioSubsystem.h"
 #include "CTCharacter.h"
@@ -219,6 +220,12 @@ void ACTPlayerState::OnRep_Lobby()
 
 void ACTPlayerState::OnRep_Energy()
 {
+#if !UE_BUILD_SHIPPING
+	if (const IConsoleVariable* TestVar = IConsoleManager::Get().FindConsoleVariable(TEXT("ct.ThrowSyncTest")))
+	{
+		if (TestVar->GetInt() > 0) { UE_LOG(LogTemp, Log, TEXT("[CT-Test] 클라: 에너지 값 %d"), Energy); }
+	}
+#endif
 	NotifyChanged();
 }
 

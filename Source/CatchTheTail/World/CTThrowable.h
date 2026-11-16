@@ -34,7 +34,8 @@ public:
 
 	// 서버: 캐릭터가 머리 위로 듦 / 던짐 / 내려놓음
 	void AttachToHolder(ACTCharacter* NewHolder);
-	void Throw(const FVector& Velocity);
+	// ReleaseLocation: 손에서 놓는 월드 위치 (머리 위가 아니라 몸 앞 가슴 높이에서 던지게 함)
+	void Throw(const FVector& Velocity, const FVector& ReleaseLocation);
 	void Release();
 
 protected:

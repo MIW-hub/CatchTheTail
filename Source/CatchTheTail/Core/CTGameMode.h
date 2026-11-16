@@ -180,6 +180,14 @@ private:
 	// 시작 전 카운트다운. 끝나면 StartGame
 	void BeginStartCountdown();
 
+#if !UE_BUILD_SHIPPING
+	// 개발용 자동 시험 (ct.ThrowSyncTest, Tools/CTThrowSyncTest.ps1): 방장이 오브젝트를 집어 클라이언트를 향해 던짐
+	void DevThrowSyncTest();
+	FTimerHandle DevTestTimerHandle;
+	int32 DevTestStep = 0;
+	double DevTestStepTime = 0.0;
+#endif
+
 	// 경기 시작 때 설정한 수만큼 AI 플레이어를 만들어 시작 지점에 세움 (한 번만). 사람과 합쳐 최대 인원, 색 수를 넘지 않음
 	void SpawnAIPlayers();
 	bool bAIPlayersSpawned = false;

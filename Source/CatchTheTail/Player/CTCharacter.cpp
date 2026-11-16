@@ -19,6 +19,8 @@
 #include "../Tongue/CTTongueComponent.h"
 #include "../Animation/CTAnimNotifyState_GrabWindow.h"
 #include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#include "../World/CTThrowable.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
@@ -793,6 +795,13 @@ void ACTCharacter::Tick(float DeltaSeconds)
 		UpdateCameraDistance(DeltaSeconds);
 		UpdateVoiceTransmit();
 		UpdateThrowPreview();
+#if !UE_BUILD_SHIPPING
+		if (!HasAuthority())
+		{
+			const IConsoleVariable* TestVar = IConsoleManager::Get().FindConsoleVariable(TEXT("ct.ThrowSyncTest"));
+			if (TestVar && TestVar->GetInt() > 0) { UpdateThrowSyncTestLog(); }
+		}
+#endif
 
 		// 설정에서 바꿀 수 있는 키 (이모트 창, 잡기 보조)
 		const APlayerController* LocalController = Cast<APlayerController>(GetController());
@@ -1496,6 +1505,38 @@ void ACTCharacter::ClearHeldThrowable(ACTThrowable* Throwable)
 	if (HasAuthority() && HeldThrowable == Throwable) { HeldThrowable = nullptr; }
 }
 
+#if !UE_BUILD_SHIPPING
+void ACTCharacter::UpdateThrowSyncTestLog()
+{
+	if (!GetWorld()) { return; }
+
+	if (!bTestSawHeld)
+	{
+		for (TActorIterator<ACTCharacter> It(GetWorld()); It; ++It)
+		{
+			if (*It != this && It->HeldThrowable)
+			{
+				bTestSawHeld = true;
+				UE_LOG(LogTemp, Log, TEXT("[CT-Test] 클라: 상대가 오브젝트를 든 것이 보임 (%s)"), *It->HeldThrowable->GetName());
+				break;
+			}
+		}
+	}
+	if (!bTestSawFlying)
+	{
+		for (TActorIterator<ACTThrowable> It(GetWorld()); It; ++It)
+		{
+			if (It->GetVelocity().Size() > 300.f)
+			{
+				bTestSawFlying = true;
+				UE_LOG(LogTemp, Log, TEXT("[CT-Test] 클라: 날아가는 오브젝트가 보임 (속도 %.0f)"), It->GetVelocity().Size());
+				break;
+			}
+		}
+	}
+}
+#endif
+
 void ACTCharacter::UpdateThrowPreview()
 {
 	const bool bShow = IsHoldingThrowable() && ThrowPreviewDotCount > 0 && !bBoothLocked;
@@ -1532,7 +1573,7 @@ void ACTCharacter::UpdateThrowPreview()
 	FVector Direction = GetActorForwardVector().GetSafeNormal2D();
 	Direction = Direction.RotateAngleAxis(-ThrowUpAngleDegrees, GetActorRightVector());
 	FVector Velocity = Direction * ThrowSpeed;
-	FVector Position = GetActorLocation() + FVector(0.f, 0.f, 135.f);
+	FVector Position = GetActorLocation() + GetActorForwardVector().GetSafeNormal2D() * ThrowReleaseOffset.X + FVector(0.f, 0.f, ThrowReleaseOffset.Z);
 	const float Gravity = GetWorld()->GetGravityZ();
 
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ThrowPreview), false, this);
@@ -1575,7 +1616,7 @@ void ACTCharacter::ServerThrow_Implementation()
 
 	ACTThrowable* Thrown = HeldThrowable;
 	HeldThrowable = nullptr;
-	Thrown->Throw(Direction * ThrowSpeed);
+	Thrown->Throw(Direction * ThrowSpeed, GetActorLocation() + GetActorForwardVector().GetSafeNormal2D() * ThrowReleaseOffset.X + FVector(0.f, 0.f, ThrowReleaseOffset.Z));
 	ForceNetUpdate();
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 오브젝트 던짐: %s"), *GetPlayerState()->GetPlayerName());
 

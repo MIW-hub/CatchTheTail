@@ -20,6 +20,13 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerStart.h"
 #include "TimerManager.h"
+#include "HAL/IConsoleManager.h"
+#include "../World/CTThrowable.h"
+
+#if !UE_BUILD_SHIPPING
+// 개발용: 1이면 보물찾기 경기에서 던지기 시험 시나리오를 자동으로 실행하고 [CT-Test] 로그를 남김
+static TAutoConsoleVariable<int32> CVarThrowSyncTest(TEXT("ct.ThrowSyncTest"), 0, TEXT("던지기 동기화 자동 시험 (개발용)"), ECVF_Default);
+#endif
 
 
 ACTGameMode::ACTGameMode()
@@ -179,7 +186,11 @@ void ACTGameMode::BeginStartCountdown()
 	ACTGameState* CTGameState = GetGameState<ACTGameState>();
 	if (!CTGameState) { return; }
 
-	const float Delay = FMath::Max(GameStartCountdownSeconds, 0.1f);
+	float Delay = FMath::Max(GameStartCountdownSeconds, 0.1f);
+#if !UE_BUILD_SHIPPING
+	// 개발용 시험: 두 번째 클라이언트가 접속할 때까지 시작을 늦춤 (접속할 때마다 다시 시작됨)
+	if (CVarThrowSyncTest.GetValueOnGameThread() > 0) { Delay = FMath::Max(Delay, 30.f); }
+#endif
 
 	// 시작 시각 먼저, 단계 나중. 클라 남은 시간 정확
 	CTGameState->SetStartCountdown(CTGameState->GetServerWorldTimeSeconds() + Delay);
@@ -227,12 +238,132 @@ void ACTGameMode::StartGame()
 
 	OnGameStarted();
 	StartNewRound();
+#if !UE_BUILD_SHIPPING
+	if (CVarThrowSyncTest.GetValueOnGameThread() > 0)
+	{
+		DevTestStep = 0;
+		GetWorldTimerManager().SetTimer(DevTestTimerHandle, this, &ACTGameMode::DevThrowSyncTest, 0.5f, true);
+	}
+#endif
 	RefreshAllChaseBuffs();
 
 	GetWorldTimerManager().SetTimer(FlowTimerHandle, this, &ACTGameMode::TickGameFlow, 0.2f, true);
 
 	UE_LOG(LogTemp, Log, TEXT("[CT] 게임 시작: 전체 %.0f초, 라운드 %.0f초"), MatchDurationSeconds, RoundDurationSeconds);
 }
+
+#if !UE_BUILD_SHIPPING
+void ACTGameMode::DevThrowSyncTest()
+{
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+	const double Now = World->GetTimeSeconds();
+
+	// 사람 둘의 캐릭터 찾기
+	ACTCharacter* HostCharacter = nullptr;
+	ACTCharacter* ClientCharacter = nullptr;
+	ACTPlayerState* ClientState = nullptr;
+	for (ACTPlayerState* Player : CollectPlayers())
+	{
+		if (Player->IsABot()) { continue; }
+		ACTCharacter* Character = Cast<ACTCharacter>(Player->GetPawn());
+		if (!Character) { continue; }
+		if (Player->IsHost()) { HostCharacter = Character; } else { ClientCharacter = Character; ClientState = Player; }
+	}
+
+	auto NextStep = [&](int32 Step) { DevTestStep = Step; DevTestStepTime = Now; };
+
+	switch (DevTestStep)
+	{
+	case 0: // 경기가 시작되고 두 사람이 모두 있으면 8초 뒤 시작
+		if (!HostCharacter || !ClientCharacter) { return; }
+		if (DevTestStepTime <= 0.0) { DevTestStepTime = Now; }
+		if (Now - DevTestStepTime < 8.0) { return; }
+		{
+			ACTThrowable* Nearest = nullptr;
+			float NearestDistance = TNumericLimits<float>::Max();
+			for (TActorIterator<ACTThrowable> It(World); It; ++It)
+			{
+				if (!It->CanBePickedUp()) { continue; }
+				const float Distance = FVector::Dist2D(It->GetActorLocation(), HostCharacter->GetActorLocation());
+				if (Distance < NearestDistance) { Nearest = *It; NearestDistance = Distance; }
+			}
+			if (!Nearest) { UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 오브젝트가 없음")); NextStep(99); return; }
+
+			// 클라이언트에게 에너지 10을 주고, 오브젝트를 방장 바로 앞 1.5m에 가져다 놓음 (맵 모양과 상관없이 같은 조건으로 시험)
+			ClientState->SetEnergy(10);
+			const FVector Forward = HostCharacter->GetActorForwardVector().GetSafeNormal2D();
+			Nearest->SetActorLocation(HostCharacter->GetActorLocation() + Forward * 150.f + FVector(0.f, 0.f, 20.f), false, nullptr, ETeleportType::TeleportPhysics);
+			UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 오브젝트를 방장 앞에 놓음, 클라 에너지 10"));
+			NextStep(1);
+		}
+		break;
+	case 1: // 집기
+		if (Now - DevTestStepTime < 1.0) { return; }
+		if (HostCharacter) { HostCharacter->AIGrab(); }
+		NextStep(2);
+		break;
+	case 2: // 들었는지 확인
+		if (Now - DevTestStepTime < 1.5) { return; }
+		if (!HostCharacter || !HostCharacter->IsHoldingThrowable())
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 방장이 오브젝트를 못 들었음 (실패)"));
+			NextStep(99);
+			return;
+		}
+		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 방장이 오브젝트를 들었음"));
+		NextStep(3);
+		break;
+	case 3: // 방장 주변에서 시야가 트이고 겹치지 않는 자리를 찾아 클라이언트를 세움
+		if (Now - DevTestStepTime < 0.5) { return; }
+		{
+			const FVector HostLocation = HostCharacter->GetActorLocation();
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(CTDevThrowTest), false);
+			Params.AddIgnoredActor(HostCharacter);
+			Params.AddIgnoredActor(ClientCharacter);
+			bool bPlaced = false;
+			for (const float Distance : { 500.f, 400.f, 300.f })
+			{
+				for (int32 Index = 0; Index < 8 && !bPlaced; ++Index)
+				{
+					const FVector Direction = FVector(1.f, 0.f, 0.f).RotateAngleAxis(Index * 45.f, FVector::UpVector);
+					const FVector Point = HostLocation + Direction * Distance;
+					FHitResult Hit;
+					if (World->LineTraceSingleByChannel(Hit, HostLocation, Point, ECC_Visibility, Params)) { continue; } // 가로막힘
+					if (World->OverlapBlockingTestByChannel(Point, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(40.f, 90.f), Params)) { continue; }
+					if (!World->LineTraceSingleByChannel(Hit, Point, Point - FVector(0.f, 0.f, 200.f), ECC_Visibility, Params)) { continue; } // 바닥 없음
+					ClientCharacter->GetCharacterMovement()->StopMovementImmediately();
+					ClientCharacter->TeleportTo(Point, FRotator::ZeroRotator);
+					UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 클라이언트를 방장 %d도 방향 %.0fcm에 세움"), Index * 45, Distance);
+					bPlaced = true;
+				}
+				if (bPlaced) { break; }
+			}
+			if (!bPlaced) { UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 클라이언트를 세울 자리가 없음 (실패)")); NextStep(99); return; }
+		}
+		NextStep(4);
+		break;
+	case 4: // 클라이언트를 바라보고 던지기
+		if (Now - DevTestStepTime < 1.0) { return; }
+		if (HostCharacter && ClientCharacter)
+		{
+			const FVector ToClient = (ClientCharacter->GetActorLocation() - HostCharacter->GetActorLocation()).GetSafeNormal2D();
+			HostCharacter->SetActorRotation(ToClient.Rotation());
+			HostCharacter->AIThrow();
+		}
+		NextStep(5);
+		break;
+	case 5: // 결과 확인
+		if (Now - DevTestStepTime < 4.0) { return; }
+		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 서버: 시험 끝, 클라 에너지 %d"), ClientState ? ClientState->GetEnergy() : -1);
+		NextStep(99);
+		break;
+	default:
+		GetWorldTimerManager().ClearTimer(DevTestTimerHandle);
+		break;
+	}
+}
+#endif
 
 void ACTGameMode::SpawnAIPlayers()
 {
