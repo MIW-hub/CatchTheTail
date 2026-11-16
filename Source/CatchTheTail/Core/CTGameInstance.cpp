@@ -181,7 +181,7 @@ void UCTGameInstance::QuickJoin()
 	UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>();
 	if (!bOnlineSessionAvailable || !Session || !Session->IsAvailable())
 	{
-		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다."));
+		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "온라인에 연결한 뒤 사용할 수 있습니다."));
 		return;
 	}
 	Session->QuickJoin();
@@ -192,7 +192,7 @@ void UCTGameInstance::JoinByRoomCode(const FString& RoomCode)
 	UCTSessionSubsystem* Session = GetSubsystem<UCTSessionSubsystem>();
 	if (!bOnlineSessionAvailable || !Session || !Session->IsAvailable())
 	{
-		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다."));
+		ShowMenuMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "온라인에 연결한 뒤 사용할 수 있습니다."));
 		return;
 	}
 	Session->JoinByRoomCode(RoomCode);

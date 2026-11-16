@@ -3,77 +3,76 @@
 #include "CTGameInstance.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
-#include "OnlineSessionSettings.h"
-#include "OnlineSubsystem.h"
-#include "OnlineSubsystemNames.h"
-#include "Online/OnlineSessionNames.h"
+#include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
+#include "IEOSSDKManager.h"
+#include "Online/Auth.h"
+#include "Online/Lobbies.h"
+#include "Online/OnlineAsyncOpHandle.h"
+#include "Online/OnlineError.h"
+#include "Online/OnlineIdEOSGS.h"
+#include "Online/OnlineResult.h"
+#include "Online/OnlineServices.h"
+#include "Online/OnlineServicesRegistry.h"
+#include "eos_connect.h"
+#include "eos_sdk.h"
+
+using namespace UE::Online;
+
+#if !UE_BUILD_SHIPPING
+static TAutoConsoleVariable<int32> CVarFreshDevice(TEXT("ct.EosFreshDeviceId"), 0, TEXT("1이면 시작할 때 기기 ID를 지우고 새로 만듦. 한 컴퓨터에서 두 사람 역할을 시험할 때 (개발용)"), ECVF_Default);
+// 개발용 자동 시험 (Tools/CTEosFlowTest.ps1): 로그인이 끝나면 바로 방을 열거나, 방 코드로 들어감
+static TAutoConsoleVariable<int32> CVarAutoHost(TEXT("ct.AutoHostAfterLogin"), 0, TEXT("1이면 EOS 로그인 뒤 바로 방 만들기 (개발용)"), ECVF_Default);
+static TAutoConsoleVariable<FString> CVarAutoJoin(TEXT("ct.AutoJoinCode"), TEXT(""), TEXT("비어 있지 않으면 EOS 로그인 뒤 이 방 코드로 입장 (개발용)"), ECVF_Default);
+#endif
 
 namespace
 {
-	// 세션의 방 코드 설정 이름
-	const FName RoomCodeKey(TEXT("CTROOMCODE"));
-
-	// 우리 게임 방 표시. 테스트용 AppId 480(Spacewar)은 다른 개발자 방이 섞여 있어서 이 값으로 거름
-	const FName GameTagKey(TEXT("CTGAMETAG"));
-	const FString GameTagValue(TEXT("HeyChicken"));
+	// 방 코드를 담는 방 속성 이름 (DefaultEngine.ini 의 [OnlineServices.Lobbies] 에 검색 가능 속성으로 등록되어 있음)
+	const TCHAR* RoomCodeAttribute = TEXT("RoomCode");
+	// 방은 기본 구조의 자식 구조로 만들어야 함
+	const TCHAR* LobbySchema = TEXT("HeyChickenLobby");
+	const FName LobbyLocalName(TEXT("GameSession"));
 
 	constexpr int32 MaxRoomPlayers = 8;
-	constexpr int32 MaxSearchResults = 50;
-
-	IOnlineSubsystem* FindSubsystem()
-	{
-		// 스팀 없으면 LAN
-		IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
-		return Subsystem ? Subsystem : IOnlineSubsystem::Get(NULL_SUBSYSTEM);
-	}
+	constexpr uint32 MaxSearchResults = 50;
 
 	FString NormalizeCode(const FString& Code)
 	{
 		return Code.TrimStartAndEnd().ToUpper();
 	}
 
-	bool ReadRoomCode(const FOnlineSessionSearchResult& Result, FString& OutCode)
+	// EOS 비동기 호출 도중 서브시스템이 사라져도 안전하게 쓰려고 약한 참조를 씀
+	using FWeakSession = TWeakObjectPtr<UCTSessionSubsystem>;
+}
+
+void UCTSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+	// 게임을 켜면 바로 EOS에 로그인해 두어서, 방을 만들 때 게임 서버(P2P)가 EOS 주소로 열리게 함
+	if (!IsRunningDedicatedServer() && !IsRunningCommandlet())
 	{
-		const FOnlineSessionSetting* Setting = Result.Session.SessionSettings.Settings.Find(RoomCodeKey);
-		if (!Setting || Setting->Data.GetType() != EOnlineKeyValuePairDataType::String) { return false; }
-		Setting->Data.GetValue(OutCode);
-		return true;
+		StartLogin();
 	}
 }
 
 void UCTSessionSubsystem::Deinitialize()
 {
-	if (IOnlineSessionPtr Sessions = GetSessionInterface())
-	{
-		Sessions->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
-		Sessions->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle);
-		Sessions->ClearOnJoinSessionCompleteDelegate_Handle(JoinHandle);
-		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroyHandle);
-	}
+	AfterLogin.Reset();
+	Services.Reset();
+	Platform.Reset();
 	Super::Deinitialize();
-}
-
-IOnlineSessionPtr UCTSessionSubsystem::GetSessionInterface() const
-{
-	IOnlineSubsystem* Subsystem = FindSubsystem();
-	return Subsystem ? Subsystem->GetSessionInterface() : nullptr;
 }
 
 bool UCTSessionSubsystem::IsAvailable() const
 {
-	return GetSessionInterface().IsValid();
+	return bLoggedIn || bLoggingIn;
 }
 
 FString UCTSessionSubsystem::GetServiceName() const
 {
-	IOnlineSubsystem* Subsystem = FindSubsystem();
-	return Subsystem ? Subsystem->GetSubsystemName().ToString() : FString();
-}
-
-bool UCTSessionSubsystem::IsLan() const
-{
-	IOnlineSubsystem* Subsystem = FindSubsystem();
-	return !Subsystem || Subsystem->GetSubsystemName() == NULL_SUBSYSTEM;
+	return TEXT("EOS");
 }
 
 void UCTSessionSubsystem::ShowMessage(const FText& Message) const
@@ -87,71 +86,232 @@ void UCTSessionSubsystem::ShowMessage(const FText& Message) const
 void UCTSessionSubsystem::EndBusy()
 {
 	bBusy = false;
-	PendingMode = EJoinMode::None;
-	PendingRoomCode.Reset();
+}
+
+// 로그인
+
+void UCTSessionSubsystem::RunAfterLogin(TFunction<void()> Action)
+{
+	if (bLoggedIn)
+	{
+		Action();
+		return;
+	}
+
+	AfterLogin.Add(MoveTemp(Action));
+	if (!bLoggingIn) { StartLogin(); }
+}
+
+void UCTSessionSubsystem::FinishLogin(bool bSuccess)
+{
+	bLoggingIn = false;
+	bLoggedIn = bSuccess;
+	bLoginFailed = !bSuccess;
+	UE_LOG(LogTemp, Log, TEXT("[CT] 온라인(EOS) 로그인 %s"), bSuccess ? TEXT("성공") : TEXT("실패"));
+
+#if !UE_BUILD_SHIPPING
+	if (bSuccess)
+	{
+		if (UCTGameInstance* GameInstance = Cast<UCTGameInstance>(GetGameInstance()))
+		{
+			if (CVarAutoHost.GetValueOnGameThread() > 0) { GameInstance->HostGame(); }
+			else if (!CVarAutoJoin.GetValueOnGameThread().IsEmpty()) { JoinByRoomCode(CVarAutoJoin.GetValueOnGameThread()); }
+		}
+	}
+#endif
+
+	TArray<TFunction<void()>> Pending = MoveTemp(AfterLogin);
+	AfterLogin.Reset();
+	for (TFunction<void()>& Action : Pending)
+	{
+		if (bSuccess) { Action(); }
+	}
+	if (!bSuccess && !Pending.IsEmpty())
+	{
+		EndBusy();
+		bCreating = false;
+		ShowMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "온라인에 연결한 뒤 사용할 수 있습니다."));
+	}
+}
+
+void UCTSessionSubsystem::StartLogin()
+{
+	if (bLoggingIn || bLoggedIn) { return; }
+	bLoggingIn = true;
+	bLoginFailed = false;
+
+	Services = GetServices(EOnlineServices::Epic);
+	IEOSSDKManager* Manager = IEOSSDKManager::Get();
+	TArray<IEOSPlatformHandlePtr> Platforms = Manager ? Manager->GetActivePlatforms() : TArray<IEOSPlatformHandlePtr>();
+	if (!Services || Platforms.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CT] EOS 시작 실패: 서비스나 플랫폼이 없음 (접속 정보 설정을 확인하세요)"));
+		FinishLogin(false);
+		return;
+	}
+	Platform = Platforms[0];
+
+#if !UE_BUILD_SHIPPING
+	if (CVarFreshDevice.GetValueOnGameThread() > 0)
+	{
+		// 같은 컴퓨터의 시험 인스턴스끼리 서로 다른 사람이 되도록 기기 ID를 지우고 다시 만듦
+		EOS_Connect_DeleteDeviceIdOptions DeleteOptions = {};
+		DeleteOptions.ApiVersion = EOS_CONNECT_DELETEDEVICEID_API_LATEST;
+		FWeakSession* WeakSelf = new FWeakSession(this);
+		EOS_Connect_DeleteDeviceId(EOS_Platform_GetConnectInterface(*Platform), &DeleteOptions, WeakSelf, [](const EOS_Connect_DeleteDeviceIdCallbackInfo* Data)
+		{
+			FWeakSession* Weak = static_cast<FWeakSession*>(Data->ClientData);
+			if (UCTSessionSubsystem* Self = Weak->Get()) { Self->ContinueLogin(); }
+			delete Weak;
+		});
+		return;
+	}
+#endif
+
+	ContinueLogin();
+}
+
+void UCTSessionSubsystem::ContinueLogin()
+{
+	// 1) 이 컴퓨터의 기기 ID 만들기 (이미 있으면 DuplicateNotAllowed 로 오며 정상)
+	struct FLoginContext { FWeakSession Self; };
+	FLoginContext* Context = new FLoginContext{ FWeakSession(this) };
+
+	EOS_HConnect Connect = EOS_Platform_GetConnectInterface(*Platform);
+	EOS_Connect_CreateDeviceIdOptions CreateOptions = {};
+	CreateOptions.ApiVersion = EOS_CONNECT_CREATEDEVICEID_API_LATEST;
+	CreateOptions.DeviceModel = "PC";
+	EOS_Connect_CreateDeviceId(Connect, &CreateOptions, Context, [](const EOS_Connect_CreateDeviceIdCallbackInfo* Data)
+	{
+		FLoginContext* Ctx = static_cast<FLoginContext*>(Data->ClientData);
+		UCTSessionSubsystem* Self = Ctx->Self.Get();
+		const bool bOk = Data->ResultCode == EOS_EResult::EOS_Success || Data->ResultCode == EOS_EResult::EOS_DuplicateNotAllowed;
+		if (!Self || !bOk)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[CT] EOS 기기 ID 준비 실패: %s"), UTF8_TO_TCHAR(EOS_EResult_ToString(Data->ResultCode)));
+			if (Self) { Self->FinishLogin(false); }
+			delete Ctx;
+			return;
+		}
+
+		// 2) 기기 ID로 EOS 연결 로그인
+		EOS_HConnect ConnectHandle = EOS_Platform_GetConnectInterface(*Self->Platform);
+		EOS_Connect_Credentials Credentials = {};
+		Credentials.ApiVersion = EOS_CONNECT_CREDENTIALS_API_LATEST;
+		Credentials.Token = nullptr;
+		Credentials.Type = EOS_EExternalCredentialType::EOS_ECT_DEVICEID_ACCESS_TOKEN;
+		EOS_Connect_UserLoginInfo LoginInfo = {};
+		LoginInfo.ApiVersion = EOS_CONNECT_USERLOGININFO_API_LATEST;
+		LoginInfo.DisplayName = "Player";
+		EOS_Connect_LoginOptions LoginOptions = {};
+		LoginOptions.ApiVersion = EOS_CONNECT_LOGIN_API_LATEST;
+		LoginOptions.Credentials = &Credentials;
+		LoginOptions.UserLoginInfo = &LoginInfo;
+		EOS_Connect_Login(ConnectHandle, &LoginOptions, Ctx, [](const EOS_Connect_LoginCallbackInfo* LoginData)
+		{
+			FLoginContext* LoginCtx = static_cast<FLoginContext*>(LoginData->ClientData);
+			UCTSessionSubsystem* LoginSelf = LoginCtx->Self.Get();
+			if (!LoginSelf || LoginData->ResultCode != EOS_EResult::EOS_Success)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[CT] EOS 연결 로그인 실패: %s"), UTF8_TO_TCHAR(EOS_EResult_ToString(LoginData->ResultCode)));
+				if (LoginSelf) { LoginSelf->FinishLogin(false); }
+				delete LoginCtx;
+				return;
+			}
+			delete LoginCtx;
+
+			// 3) 온라인 서비스(방 만들기와 찾기)용 로그인
+			FWeakSession Weak(LoginSelf);
+			FAuthLogin::Params Params;
+			Params.PlatformUserId = FPlatformMisc::GetPlatformUserForUserIndex(0);
+			Params.CredentialsType = LoginCredentialsType::ExternalAuth;
+			Params.CredentialsToken.Set<FExternalAuthToken>(FExternalAuthToken{ ExternalLoginType::DeviceIdAccessToken, FString() });
+			LoginSelf->Services->GetAuthInterface()->Login(MoveTemp(Params)).OnComplete([Weak](const TOnlineResult<FAuthLogin>& Result)
+			{
+				UCTSessionSubsystem* ServiceSelf = Weak.Get();
+				if (!ServiceSelf) { return; }
+				if (Result.IsOk())
+				{
+					ServiceSelf->LocalAccount = Result.GetOkValue().AccountInfo->AccountId;
+					ServiceSelf->FinishLogin(true);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[CT] EOS 서비스 로그인 실패: %s"), *Result.GetErrorValue().GetLogString());
+					ServiceSelf->FinishLogin(false);
+				}
+			});
+		});
+	});
 }
 
 // 방 열기 / 닫기
 
 void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 {
-	IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (!Sessions.IsValid() || RoomCode.IsEmpty()) { return; }
+	if (RoomCode.IsEmpty()) { return; }
 
 	// 로비 복귀 후에도 같은 방 유지
-	if (Sessions->GetNamedSession(NAME_GameSession)) { return; }
+	if (bHasLobby || bCreating) { return; }
+	bCreating = true;
 
-	const bool bLan = IsLan();
-
-	FOnlineSessionSettings Settings;
-	Settings.NumPublicConnections = MaxRoomPlayers;
-	Settings.NumPrivateConnections = 0;
-	Settings.bShouldAdvertise = true;
-	Settings.bAllowJoinInProgress = true;
-	Settings.bAllowJoinViaPresence = true;
-	Settings.bAllowInvites = true;
-	Settings.bIsLANMatch = bLan;
-	Settings.bUsesPresence = !bLan;
-	Settings.bUseLobbiesIfAvailable = !bLan;
-	Settings.bIsDedicated = false;
-	Settings.Set(RoomCodeKey, NormalizeCode(RoomCode), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-	Settings.Set(GameTagKey, GameTagValue, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-
-	CreateHandle = Sessions->AddOnCreateSessionCompleteDelegate_Handle(FOnCreateSessionCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleCreateSessionComplete));
-	if (!Sessions->CreateSession(0, NAME_GameSession, Settings))
+	const FString Code = NormalizeCode(RoomCode);
+	RunAfterLogin([this, Code]()
 	{
-		Sessions->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
-		UE_LOG(LogTemp, Warning, TEXT("[CT] 방 열기 실패 (%s)"), *GetServiceName());
-	}
-}
+		ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
+		if (!Lobbies)
+		{
+			bCreating = false;
+			UE_LOG(LogTemp, Warning, TEXT("[CT] 방 열기 실패 (EOS 방 서비스 없음)"));
+			return;
+		}
 
-void UCTSessionSubsystem::HandleCreateSessionComplete(FName SessionName, bool bWasSuccessful)
-{
-	if (IOnlineSessionPtr Sessions = GetSessionInterface())
-	{
-		Sessions->ClearOnCreateSessionCompleteDelegate_Handle(CreateHandle);
-	}
-	UE_LOG(LogTemp, Log, TEXT("[CT] 방 열기 %s (%s)"), bWasSuccessful ? TEXT("성공") : TEXT("실패"), *GetServiceName());
+		FCreateLobby::Params Params;
+		Params.LocalAccountId = LocalAccount;
+		Params.LocalName = LobbyLocalName;
+		Params.SchemaId = FSchemaId(LobbySchema);
+		Params.MaxMembers = MaxRoomPlayers;
+		Params.JoinPolicy = ELobbyJoinPolicy::PublicAdvertised;
+		Params.Attributes.Add(FSchemaAttributeId(RoomCodeAttribute), FSchemaVariant(Code));
+
+		FWeakSession Weak(this);
+		Lobbies->CreateLobby(MoveTemp(Params)).OnComplete([Weak](const TOnlineResult<FCreateLobby>& Result)
+		{
+			UCTSessionSubsystem* Self = Weak.Get();
+			if (!Self) { return; }
+			Self->bCreating = false;
+			if (Result.IsOk())
+			{
+				Self->CurrentLobby = Result.GetOkValue().Lobby->LobbyId;
+				Self->bHasLobby = true;
+				UE_LOG(LogTemp, Log, TEXT("[CT] 방 열기 성공 (EOS)"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[CT] 방 열기 실패 (EOS): %s"), *Result.GetErrorValue().GetLogString());
+			}
+		});
+	});
 }
 
 void UCTSessionSubsystem::CloseRoom()
 {
-	IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (!Sessions.IsValid() || !Sessions->GetNamedSession(NAME_GameSession)) { return; }
+	if (!bHasLobby || !Services) { return; }
 
-	DestroyHandle = Sessions->AddOnDestroySessionCompleteDelegate_Handle(FOnDestroySessionCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleDestroySessionComplete));
-	if (!Sessions->DestroySession(NAME_GameSession))
-	{
-		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroyHandle);
-	}
-}
+	ILobbiesPtr Lobbies = Services->GetLobbiesInterface();
+	if (!Lobbies) { return; }
 
-void UCTSessionSubsystem::HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful)
-{
-	if (IOnlineSessionPtr Sessions = GetSessionInterface())
+	FLeaveLobby::Params Params;
+	Params.LocalAccountId = LocalAccount;
+	Params.LobbyId = CurrentLobby;
+	bHasLobby = false;
+	Lobbies->LeaveLobby(MoveTemp(Params)).OnComplete([](const TOnlineResult<FLeaveLobby>& Result)
 	{
-		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroyHandle);
-	}
+		if (!Result.IsOk())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[CT] 방 나가기 실패 (EOS): %s"), *Result.GetErrorValue().GetLogString());
+		}
+	});
 }
 
 // 찾기 / 입장
@@ -174,137 +334,102 @@ void UCTSessionSubsystem::QuickJoin()
 
 void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 {
-	IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (!Sessions.IsValid())
-	{
-		ShowMessage(NSLOCTEXT("CT", "Menu_OnlineUnavailable", "스팀 연결 후 사용할 수 있습니다."));
-		return;
-	}
 	if (bBusy) { return; }
-
-	// 남은 이전 방 정리 후 재시도
-	if (Sessions->GetNamedSession(NAME_GameSession))
-	{
-		bBusy = true;
-		TWeakObjectPtr<UCTSessionSubsystem> WeakThis(this);
-		Sessions->DestroySession(NAME_GameSession, FOnDestroySessionCompleteDelegate::CreateLambda([WeakThis, Mode, RoomCode](FName, bool)
-		{
-			if (UCTSessionSubsystem* Self = WeakThis.Get())
-			{
-				Self->bBusy = false;
-				Self->StartSearch(Mode, RoomCode);
-			}
-		}));
-		return;
-	}
-
 	bBusy = true;
-	PendingMode = Mode;
-	PendingRoomCode = RoomCode;
 	ShowMessage(NSLOCTEXT("CT", "Menu_Searching", "방을 찾는 중입니다..."));
 
-	const bool bLan = IsLan();
-	Search = MakeShared<FOnlineSessionSearch>();
-	Search->MaxSearchResults = MaxSearchResults;
-	Search->bIsLanQuery = bLan;
-	if (!bLan)
-	{
-		Search->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
-	}
-	// 스팀 서버에서 우리 게임 방만 걸러 받음 (안 걸면 AppId 480의 다른 방 50개가 먼저 차서 우리 방이 안 보임)
-	Search->QuerySettings.Set(GameTagKey, GameTagValue, EOnlineComparisonOp::Equals);
-	if (Mode == EJoinMode::Code)
-	{
-		Search->QuerySettings.Set(RoomCodeKey, RoomCode, EOnlineComparisonOp::Equals);
-	}
+	// 이전에 남은 방이 있으면 먼저 나감
+	CloseRoom();
 
-	FindHandle = Sessions->AddOnFindSessionsCompleteDelegate_Handle(FOnFindSessionsCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleFindSessionsComplete));
-	if (!Sessions->FindSessions(0, Search.ToSharedRef()))
+	RunAfterLogin([this, Mode, RoomCode]()
 	{
-		Sessions->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle);
-		EndBusy();
-		ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
-	}
-}
-
-void UCTSessionSubsystem::HandleFindSessionsComplete(bool bWasSuccessful)
-{
-	IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (!Sessions.IsValid() || !Search.IsValid())
-	{
-		EndBusy();
-		return;
-	}
-	Sessions->ClearOnFindSessionsCompleteDelegate_Handle(FindHandle);
-
-	// 입장 가능한 방만 (코드 있으면 코드 일치)
-	TArray<const FOnlineSessionSearchResult*> Candidates;
-	if (bWasSuccessful)
-	{
-		for (const FOnlineSessionSearchResult& Result : Search->SearchResults)
+		ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
+		if (!Lobbies)
 		{
-			if (!Result.IsValid() || Result.Session.NumOpenPublicConnections <= 0) { continue; }
-
-			FString Code;
-			if (!ReadRoomCode(Result, Code)) { continue; }
-			if (PendingMode == EJoinMode::Code && NormalizeCode(Code) != PendingRoomCode) { continue; }
-
-			Candidates.Add(&Result);
+			EndBusy();
+			ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
+			return;
 		}
-	}
 
-	if (Candidates.IsEmpty())
-	{
-		const FText Message = PendingMode == EJoinMode::Code
-			? NSLOCTEXT("CT", "Menu_RoomNotFound", "해당 방 코드를 찾을 수 없습니다.")
-			: NSLOCTEXT("CT", "Menu_NoOpenRoom", "참가할 수 있는 방이 없습니다.");
-		EndBusy();
-		ShowMessage(Message);
-		return;
-	}
+		FFindLobbies::Params Find;
+		Find.LocalAccountId = LocalAccount;
+		Find.MaxResults = MaxSearchResults;
+		if (Mode == EJoinMode::Code)
+		{
+			Find.Filters.Add(FFindLobbySearchFilter{ FSchemaAttributeId(RoomCodeAttribute), ESchemaAttributeComparisonOp::Equals, FSchemaVariant(RoomCode) });
+		}
 
-	const FOnlineSessionSearchResult& Chosen = *Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+		FWeakSession Weak(this);
+		Lobbies->FindLobbies(MoveTemp(Find)).OnComplete([Weak, Mode](const TOnlineResult<FFindLobbies>& Result)
+		{
+			UCTSessionSubsystem* Self = Weak.Get();
+			if (!Self) { return; }
 
-	JoinHandle = Sessions->AddOnJoinSessionCompleteDelegate_Handle(FOnJoinSessionCompleteDelegate::CreateUObject(this, &UCTSessionSubsystem::HandleJoinSessionComplete));
-	if (!Sessions->JoinSession(0, NAME_GameSession, Chosen))
-	{
-		Sessions->ClearOnJoinSessionCompleteDelegate_Handle(JoinHandle);
-		EndBusy();
-		ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
-	}
-}
+			// 입장 가능한 방만 (자리가 있고 내가 연 방이 아닌 것)
+			TArray<TSharedRef<const FLobby>> Candidates;
+			if (Result.IsOk())
+			{
+				for (const TSharedRef<const FLobby>& Lobby : Result.GetOkValue().Lobbies)
+				{
+					if (Lobby->Members.Num() >= Lobby->MaxMembers) { continue; }
+					if (Lobby->OwnerAccountId == Self->LocalAccount) { continue; }
+					Candidates.Add(Lobby);
+				}
+			}
 
-void UCTSessionSubsystem::HandleJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
-{
-	IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (Sessions.IsValid())
-	{
-		Sessions->ClearOnJoinSessionCompleteDelegate_Handle(JoinHandle);
-	}
-	EndBusy();
+			if (Candidates.IsEmpty())
+			{
+				Self->EndBusy();
+				Self->ShowMessage(Mode == EJoinMode::Code
+					? NSLOCTEXT("CT", "Menu_RoomNotFound", "해당 방 코드를 찾을 수 없습니다.")
+					: NSLOCTEXT("CT", "Menu_NoOpenRoom", "참가할 수 있는 방이 없습니다."));
+				return;
+			}
 
-	if (Result != EOnJoinSessionCompleteResult::Success || !Sessions.IsValid())
-	{
-		const FText Message = Result == EOnJoinSessionCompleteResult::SessionIsFull
-			? NSLOCTEXT("CT", "Menu_RoomFull", "방이 가득 찼습니다.")
-			: NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다.");
-		ShowMessage(Message);
-		return;
-	}
+			const TSharedRef<const FLobby> Chosen = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
 
-	FString ConnectString;
-	UGameInstance* GameInstance = GetGameInstance();
-	APlayerController* Controller = GameInstance ? GameInstance->GetFirstLocalPlayerController() : nullptr;
-	if (!Controller || !Sessions->GetResolvedConnectString(SessionName, ConnectString))
-	{
-		Sessions->DestroySession(SessionName);
-		ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
-		return;
-	}
+			FJoinLobby::Params Join;
+			Join.LocalAccountId = Self->LocalAccount;
+			Join.LocalName = LobbyLocalName;
+			Join.LobbyId = Chosen->LobbyId;
+			Self->Services->GetLobbiesInterface()->JoinLobby(MoveTemp(Join)).OnComplete([Weak](const TOnlineResult<FJoinLobby>& JoinResult)
+			{
+				UCTSessionSubsystem* JoinSelf = Weak.Get();
+				if (!JoinSelf) { return; }
+				JoinSelf->EndBusy();
 
-	// 이름은 접속 옵션으로 전달
-	const UCTGameInstance* CTGameInstance = Cast<UCTGameInstance>(GameInstance);
-	const FString NameOption = CTGameInstance ? CTGameInstance->MakeNameOption() : FString();
-	UE_LOG(LogTemp, Log, TEXT("[CT] 방 입장: %s"), *ConnectString);
-	Controller->ClientTravel(ConnectString + NameOption, TRAVEL_Absolute);
+				if (!JoinResult.IsOk())
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[CT] 방 입장 실패 (EOS): %s"), *JoinResult.GetErrorValue().GetLogString());
+					JoinSelf->ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
+					return;
+				}
+
+				const TSharedPtr<const FLobby>& Lobby = JoinResult.GetOkValue().Lobby;
+				JoinSelf->CurrentLobby = Lobby->LobbyId;
+				JoinSelf->bHasLobby = true;
+
+				// 방장의 EOS 주소로 게임에 접속 (EOS 세션이 쓰는 주소 모양: [EOS:사용자ID]:포트)
+				char Buffer[EOS_PRODUCTUSERID_MAX_LENGTH + 1] = {};
+				int32_t Length = sizeof(Buffer);
+				EOS_ProductUserId_ToString(GetProductUserIdChecked(Lobby->OwnerAccountId), Buffer, &Length);
+				const FString Address = FString::Printf(TEXT("[EOS:%s]:0"), UTF8_TO_TCHAR(Buffer));
+
+				UGameInstance* GameInstance = JoinSelf->GetGameInstance();
+				APlayerController* Controller = GameInstance ? GameInstance->GetFirstLocalPlayerController() : nullptr;
+				if (!Controller)
+				{
+					JoinSelf->CloseRoom();
+					JoinSelf->ShowMessage(NSLOCTEXT("CT", "Menu_JoinFailed", "방에 입장하지 못했습니다."));
+					return;
+				}
+
+				// 이름은 접속 옵션으로 전달
+				const UCTGameInstance* CTGameInstance = Cast<UCTGameInstance>(GameInstance);
+				const FString NameOption = CTGameInstance ? CTGameInstance->MakeNameOption() : FString();
+				UE_LOG(LogTemp, Log, TEXT("[CT] 방 입장: %s"), *Address);
+				Controller->ClientTravel(Address + NameOption, TRAVEL_Absolute);
+			});
+		});
+	});
 }

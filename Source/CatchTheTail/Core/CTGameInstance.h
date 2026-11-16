@@ -29,6 +29,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void HostGame();
 
+	// 개발용(자동 시험): 콘솔에서 CTHost 로 방 만들기, CTJoin <코드> 로 방 코드 입장
+	UFUNCTION(Exec)
+	void CTHost() { HostGame(); }
+
+	UFUNCTION(Exec)
+	void CTJoin(const FString& RoomCode) { JoinByRoomCode(RoomCode); }
+
 	// 메인 메뉴로, Message는 메뉴 표시
 	UFUNCTION(BlueprintCallable, Category = "CT|Menu")
 	void LeaveToMainMenu(FText Message);

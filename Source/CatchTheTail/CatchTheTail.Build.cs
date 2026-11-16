@@ -23,6 +23,9 @@ public class CatchTheTail : ModuleRules
 		// Uncomment if you are using online features
 		PrivateDependencyModuleNames.AddRange(new string[] { "OnlineSubsystem", "OnlineSubsystemUtils" });
 
+		// 개발용 EOS 시험(Core/CTEosTest.cpp): 에픽 계정 없이 기기 ID로 EOS 로그인 확인
+		PrivateDependencyModuleNames.AddRange(new string[] { "EOSShared", "EOSSDK", "OnlineServicesInterface", "OnlineServicesCommon", "CoreOnline", "OnlineServicesEOSGS", "SocketSubsystemEOS" });
+
 		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }

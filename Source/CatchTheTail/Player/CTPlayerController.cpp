@@ -24,6 +24,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Camera/CameraShakeBase.h"
 #include "TimerManager.h"
+#include "EngineUtils.h"
 
 ACTPlayerController::ACTPlayerController()
 {
@@ -215,6 +216,49 @@ void ACTPlayerController::ApplyModeUI()
 
 	if (!TreasureHudWidget->IsInViewport()) { TreasureHudWidget->AddToViewport(0); }
 	if (HUDWidget) { HUDWidget->SetVisibility(ESlateVisibility::Collapsed); }
+}
+
+void ACTPlayerController::CTStoreShots(int32 Count)
+{
+#if !UE_BUILD_SHIPPING
+	StoreShotsLeft = Count;
+	StoreShotIndex = 0;
+	// AI 가 들어오고 경기가 시작된 뒤(약 15초)부터 3초 간격
+	GetWorldTimerManager().SetTimer(StoreShotTimer, this, &ACTPlayerController::StoreShotStep, 3.f, true, 15.f);
+#endif
+}
+
+void ACTPlayerController::StoreShotStep()
+{
+#if !UE_BUILD_SHIPPING
+	if (StoreShotsLeft <= 0)
+	{
+		GetWorldTimerManager().ClearTimer(StoreShotTimer);
+		return;
+	}
+
+	ACTCharacter* Me = Cast<ACTCharacter>(GetPawn());
+	TArray<ACTCharacter*> Others;
+	for (TActorIterator<ACTCharacter> It(GetWorld()); It; ++It)
+	{
+		if (*It != Me) { Others.Add(*It); }
+	}
+	if (!Me || Others.IsEmpty()) { return; }
+
+	// 다른 캐릭터 한 명을 골라 그 뒤쪽 가까이에서 그 캐릭터를 보게 함
+	ACTCharacter* Target = Others[StoreShotIndex % Others.Num()];
+	const FVector Forward = Target->GetActorForwardVector().GetSafeNormal2D();
+	Me->SetActorLocation(Target->GetActorLocation() - Forward * 420.f + FVector(0.f, 0.f, 20.f), false, nullptr, ETeleportType::TeleportPhysics);
+	SetControlRotation(FRotator(-8.f, Forward.Rotation().Yaw, 0.f));
+
+	const int32 Index = StoreShotIndex++;
+	--StoreShotsLeft;
+	FTimerHandle ShotHandle;
+	GetWorldTimerManager().SetTimer(ShotHandle, FTimerDelegate::CreateWeakLambda(this, [this, Index]()
+	{
+		ConsoleCommand(FString::Printf(TEXT("HighResShot 1920x1080 filename=StoreShot_%d"), Index));
+	}), 1.4f, false);
+#endif
 }
 
 void ACTPlayerController::CTPreviewTreasureHud()

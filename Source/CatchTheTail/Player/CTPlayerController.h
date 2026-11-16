@@ -178,6 +178,17 @@ private:
 	void CTPreviewTreasureHud();
 
 	bool bTreasureHudPreview = false;
+
+public:
+	// 개발용(상점 이미지 촬영): 콘솔에서 CTStoreShots 8 을 치면 일정 간격으로 다른 캐릭터 뒤로 옮겨 가며 HighResShot(UI 없는 장면) 을 찍음
+	UFUNCTION(Exec)
+	void CTStoreShots(int32 Count);
+
+private:
+	void StoreShotStep();
+	FTimerHandle StoreShotTimer;
+	int32 StoreShotsLeft = 0;
+	int32 StoreShotIndex = 0;
 	ESlateVisibility SavedHudVisibility = ESlateVisibility::SelfHitTestInvisible;
 
 	// 게임 모드에 맞는 HUD 로 전환 (꼬리잡기는 기본 HUD 그대로, 보물찾기는 전용 HUD)

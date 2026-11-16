@@ -62,6 +62,7 @@ void ACTLobbyGameMode::InitGameState()
 			if (GameInstance) { GameInstance->SetStoredRoomCode(RoomCode); }
 		}
 		CTGameState->SetRoomCode(RoomCode);
+		UE_LOG(LogTemp, Log, TEXT("[CT] 방 코드: %s"), *RoomCode);
 
 		// 코드로 찾을 수 있게 온라인 방 개설
 		if (UCTSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UCTSessionSubsystem>() : nullptr)

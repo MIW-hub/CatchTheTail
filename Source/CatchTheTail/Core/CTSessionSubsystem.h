@@ -3,21 +3,23 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "Interfaces/OnlineSessionInterface.h"
+#include "Online/CoreOnline.h"
 #include "CTSessionSubsystem.generated.h"
 
-class FOnlineSessionSearch;
+class IEOSPlatformHandle;
+namespace UE::Online { class IOnlineServices; }
 
-// 온라인 방(세션) 관리
+// 온라인 방 관리 (EOS: 에픽 계정 없이 기기 ID로 로그인하고, 방(로비)에 방 코드를 달아 두면 코드로 찾아 들어옴. 접속은 EOS P2P)
 UCLASS()
 class CATCHTHETAIL_API UCTSessionSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 
 public:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// 세션 사용 가능 여부
+	// 온라인 사용 가능 여부 (EOS 로그인이 끝났거나 진행 중)
 	bool IsAvailable() const;
 
 	// 온라인 서비스 이름. 없으면 빈 문자열
@@ -26,7 +28,7 @@ public:
 	// 방장: 방 코드 방 열기. 이미 열려 있으면 무시
 	void CreateRoom(const FString& RoomCode);
 
-	// 열린 방 닫고 세션 정리
+	// 열린 방(또는 들어간 방) 나가기
 	void CloseRoom();
 
 	// 방 코드로 찾아 입장
@@ -41,24 +43,28 @@ public:
 private:
 	enum class EJoinMode : uint8 { None, Code, Quick };
 
-	IOnlineSessionPtr GetSessionInterface() const;
-	bool IsLan() const;
+	// EOS 로그인: 기기 ID 만들기(이미 있으면 그대로) -> EOS 연결 로그인 -> 온라인 서비스 로그인
+	void StartLogin();
+	void ContinueLogin();
+	void FinishLogin(bool bSuccess);
+	void RunAfterLogin(TFunction<void()> Action);
+
 	void StartSearch(EJoinMode Mode, const FString& RoomCode);
 	void ShowMessage(const FText& Message) const;
 	void EndBusy();
 
-	void HandleCreateSessionComplete(FName SessionName, bool bWasSuccessful);
-	void HandleFindSessionsComplete(bool bWasSuccessful);
-	void HandleJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
-	void HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful);
+	TSharedPtr<UE::Online::IOnlineServices> Services;
+	TSharedPtr<IEOSPlatformHandle, ESPMode::ThreadSafe> Platform;
 
-	TSharedPtr<FOnlineSessionSearch> Search;
-	EJoinMode PendingMode = EJoinMode::None;
-	FString PendingRoomCode;
+	UE::Online::FAccountId LocalAccount;
+	UE::Online::FLobbyId CurrentLobby;
+	bool bHasLobby = false;
+
+	bool bLoggedIn = false;
+	bool bLoggingIn = false;
+	bool bLoginFailed = false;
+	TArray<TFunction<void()>> AfterLogin;
+
 	bool bBusy = false;
-
-	FDelegateHandle CreateHandle;
-	FDelegateHandle FindHandle;
-	FDelegateHandle JoinHandle;
-	FDelegateHandle DestroyHandle;
+	bool bCreating = false;
 };
