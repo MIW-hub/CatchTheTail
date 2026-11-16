@@ -88,6 +88,9 @@ struct CATCHTHETAIL_API FCTMatchSettings
 	// 지금 실제로 시작할 수 있는 모드인가. 보물찾기는 개발 중이라 막혀 있고, 개발용 콘솔 변수 ct.EnableTreasureHunt 1 로만 열림
 	bool IsModePlayable() const;
 
+	// 로비에서 게임 모드 선택 줄을 보여 주는가. 지금은 꼬리잡기만 내놓아 숨김 (개발용 콘솔 변수 ct.ShowGameModeSelect 1 로 켬)
+	static bool IsModeSelectVisible();
+
 	// 항목의 선택지 (오름차순)
 	static const TArray<int32>& GetOptions(ECTMatchSetting Setting);
 

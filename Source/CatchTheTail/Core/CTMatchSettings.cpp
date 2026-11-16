@@ -6,7 +6,19 @@ namespace
 {
 	// 보물찾기를 로비에서 시작할 수 있게 함. 개발 빌드(Development)는 기본 1이라 바로 시험할 수 있고, 출시 빌드(Shipping)는 이 값과 상관없이 항상 막힘 (IsModePlayable).
 	// 개발 빌드에서 끄려면 -ExecCmds="ct.EnableTreasureHunt 0"
+	// 개발용: 1이면 로비 경기 설정에 게임 모드 선택 줄이 보임 (기본 0 = 숨김, 항상 꼬리잡기)
+	TAutoConsoleVariable<int32> CVarShowGameModeSelect(TEXT("ct.ShowGameModeSelect"), 0, TEXT("1이면 로비에서 게임 모드 선택 줄을 보임 (개발용)"), ECVF_Default);
+
 	TAutoConsoleVariable<int32> CVarEnableTreasureHunt(TEXT("ct.EnableTreasureHunt"), 1, TEXT("1이면 로비에서 보물찾기 모드를 시작할 수 있음 (개발 중)"), ECVF_Default);
+}
+
+bool FCTMatchSettings::IsModeSelectVisible()
+{
+#if UE_BUILD_SHIPPING
+	return false;
+#else
+	return CVarShowGameModeSelect.GetValueOnAnyThread() != 0;
+#endif
 }
 
 bool FCTMatchSettings::IsModePlayable() const
@@ -60,7 +72,10 @@ const TArray<int32>& FCTMatchSettings::GetOptions(ECTMatchSetting Setting)
 	static const TArray<int32> PhoneUsesOptions = { 0, 15, 30, 45, 60 };
 	static const TArray<int32> BushOptions = { 0, 1 };
 	static const TArray<int32> AiPlayersOptions = { 0, 1, 2, 3, 4, 5, 6, 7 };
-	static const TArray<int32> ModeOptions = { 0, 1 };
+	// 모드 선택을 숨긴 동안은 꼬리잡기만 가능 (저장된 다른 모드 값도 Sanitize 에서 0 으로 돌아옴)
+	static const TArray<int32> ModeOptionsAll = { 0, 1 };
+	static const TArray<int32> ModeOptionsTailChaseOnly = { 0 };
+	const TArray<int32>& ModeOptions = IsModeSelectVisible() ? ModeOptionsAll : ModeOptionsTailChaseOnly;
 	static const TArray<int32> None;
 
 	switch (Setting)

@@ -14,7 +14,7 @@ if (Get-Process UnrealEditor* -ErrorAction SilentlyContinue) { Write-Error "ÏóêÎ
 $exe = "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe"
 $proj = "`"$root\CatchTheTail.uproject`""
 $common = "-NOSTEAM -game -windowed -ResX=640 -ResY=360 -nosound -nosplash -nop4 -log"
-$hostCmds = "ct.TeamCapacity 1,ct.TeamSwapTest 1,CTLobbyPreview"
+$hostCmds = "ct.ShowGameModeSelect 1,ct.TeamCapacity 1,ct.TeamSwapTest 1,CTLobbyPreview"
 
 $h = Start-Process $exe -ArgumentList "$proj /Game/Levels/L_Lobby?listen $common -WinX=0 -WinY=0 -ExecCmds=`"$hostCmds`" -ABSLOG=`"$hostLog`"" -PassThru
 Start-Sleep -Seconds 12

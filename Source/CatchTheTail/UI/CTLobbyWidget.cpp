@@ -121,6 +121,12 @@ void UCTLobbyWidget::NativeConstruct()
 	BindMatchSettingWidgets();
 	SetMapSelectOpen(false);
 
+	// 게임 모드 선택 줄은 지금 숨김 (꼬리잡기만 제공). 세로 상자 안이라 아래 줄들이 위로 올라옴
+	if (!FCTMatchSettings::IsModeSelectVisible())
+	{
+		if (UWidget* ModeRow = GetWidgetFromName(TEXT("Row_Setting_Mode"))) { ModeRow->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+
 	// 채팅
 	if (EditableTextBox_Chat)
 	{
