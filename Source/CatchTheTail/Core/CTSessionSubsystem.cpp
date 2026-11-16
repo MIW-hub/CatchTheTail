@@ -4,6 +4,9 @@
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
+#include "OnlineSubsystem.h"
 #include "HAL/PlatformMisc.h"
 #include "IEOSSDKManager.h"
 #include "Online/Auth.h"
@@ -90,6 +93,25 @@ void UCTSessionSubsystem::EndBusy()
 
 // 로그인
 
+void UCTSessionSubsystem::EnsureVoiceSession()
+{
+	IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
+	IOnlineSessionPtr Sessions = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	if (!Sessions.IsValid() || Sessions->GetNamedSession(NAME_GameSession)) { return; }
+
+	FOnlineSessionSettings Settings;
+	Settings.NumPublicConnections = 16;
+	Settings.NumPrivateConnections = 0;
+	Settings.bShouldAdvertise = false;      // 아무에게도 알리지 않음 (찾기는 EOS 방이 함)
+	Settings.bAllowJoinViaPresence = false;
+	Settings.bAllowInvites = false;
+	Settings.bIsLANMatch = true;
+	Settings.bUsesPresence = false;
+	Settings.bIsDedicated = false;
+	const bool bStarted = Sessions->CreateSession(0, NAME_GameSession, Settings);
+	UE_LOG(LogTemp, Log, TEXT("[CT-Voice] 음성용 게임 세션 %s (%s)"), bStarted ? TEXT("열림") : TEXT("열기 실패"), *OnlineSubsystem->GetSubsystemName().ToString());
+}
+
 void UCTSessionSubsystem::RunAfterLogin(TFunction<void()> Action)
 {
 	if (bLoggedIn)
@@ -119,6 +141,10 @@ void UCTSessionSubsystem::FinishLogin(bool bSuccess)
 		}
 	}
 #endif
+
+	// 음성: 엔진의 음성 기능은 플레이어가 "게임 세션"에 등록되어야 목소리를 주고받음.
+	// 방 만들기와 접속은 EOS가 하므로, 음성용으로 기본 온라인 서비스(Null)에 광고하지 않는 세션을 하나 열어 둠
+	if (bSuccess) { EnsureVoiceSession(); }
 
 	TArray<TFunction<void()>> Pending = MoveTemp(AfterLogin);
 	AfterLogin.Reset();

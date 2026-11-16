@@ -46,6 +46,7 @@ private:
 	// EOS 로그인: 기기 ID 만들기(이미 있으면 그대로) -> EOS 연결 로그인 -> 온라인 서비스 로그인
 	void StartLogin();
 	void ContinueLogin();
+	void EnsureVoiceSession();
 	void FinishLogin(bool bSuccess);
 	void RunAfterLogin(TFunction<void()> Action);
 
