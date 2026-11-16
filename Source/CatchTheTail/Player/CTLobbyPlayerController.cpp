@@ -19,6 +19,8 @@
 namespace
 {
 	// 개발용 자동 시험 (Tools/CTTeamSwapTest.ps1): 1이면 방장은 몇 초 뒤 팀 변경을 요청하고, 다른 사람은 뜬 요청을 수락함
+	// 개발용 자동 시험 (Tools/CTEosStartTest.ps1): 1이면 참가자는 자동으로 준비하고, 방장은 AI 한 명을 더한 뒤 조건이 되면 게임을 시작함
+	TAutoConsoleVariable<int32> CVarAutoLobbyStart(TEXT("ct.AutoLobbyStart"), 0, TEXT("로비 자동 준비/시작 (개발용)"), ECVF_Default);
 	TAutoConsoleVariable<int32> CVarTeamSwapTest(TEXT("ct.TeamSwapTest"), 0, TEXT("로비 팀 변경 요청/수락 자동 시험 (개발용)"), ECVF_Default);
 }
 #endif
@@ -158,6 +160,36 @@ void ACTLobbyPlayerController::PlayerTick(float DeltaTime)
 		UpdateLoadingScreen();
 
 #if !UE_BUILD_SHIPPING
+		if (CVarAutoLobbyStart.GetValueOnGameThread() > 0)
+		{
+			const ACTGameState* AutoState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+			const ACTPlayerState* AutoMe = GetPlayerState<ACTPlayerState>();
+			if (AutoState && AutoMe)
+			{
+				AutoElapsed += DeltaTime;
+				if (AutoMe->IsHost())
+				{
+					// 방장: 두 사람이 모이면 AI 한 명을 더하고, 시작 조건이 되면 게임 시작을 요청
+					if (AutoState->PlayerArray.Num() >= 2 && AutoElapsed > 6.f)
+					{
+						if (!bAutoAddedAI) { bAutoAddedAI = true; RequestChangeMatchSetting(ECTMatchSetting::AiPlayers, 1); }
+						else if (!bAutoStarted && AutoState->CanStartLobby())
+						{
+							bAutoStarted = true;
+							UE_LOG(LogTemp, Log, TEXT("[CT-Test] 방장 게임 시작 요청"));
+							RequestStartGame();
+						}
+					}
+				}
+				else if (!bAutoReady && AutoElapsed > 4.f)
+				{
+					bAutoReady = true;
+					UE_LOG(LogTemp, Log, TEXT("[CT-Test] 참가자 준비"));
+					RequestSetReady(true);
+				}
+			}
+		}
+
 		if (CVarTeamSwapTest.GetValueOnGameThread() > 0)
 		{
 			const ACTGameState* TestState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;

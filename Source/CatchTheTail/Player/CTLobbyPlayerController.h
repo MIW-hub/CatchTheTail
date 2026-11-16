@@ -173,6 +173,10 @@ private:
 
 	// 개발용 자동 시험 상태 (ct.TeamSwapTest)
 	float TestElapsed = 0.f;
+	float AutoElapsed = 0.f;
+	bool bAutoAddedAI = false;
+	bool bAutoStarted = false;
+	bool bAutoReady = false;
 	bool bTestRequested = false;
 	bool bTestAccepted = false;
 
