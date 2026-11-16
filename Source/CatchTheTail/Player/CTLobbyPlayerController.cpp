@@ -15,6 +15,14 @@
 #include "InputCoreTypes.h"
 #include "UObject/ConstructorHelpers.h"
 
+#if !UE_BUILD_SHIPPING
+namespace
+{
+	// 개발용 자동 시험 (Tools/CTTeamSwapTest.ps1): 1이면 방장은 몇 초 뒤 팀 변경을 요청하고, 다른 사람은 뜬 요청을 수락함
+	TAutoConsoleVariable<int32> CVarTeamSwapTest(TEXT("ct.TeamSwapTest"), 0, TEXT("로비 팀 변경 요청/수락 자동 시험 (개발용)"), ECVF_Default);
+}
+#endif
+
 ACTLobbyPlayerController::ACTLobbyPlayerController()
 {
 	// 폰 받아도 로비 카메라 유지
@@ -148,6 +156,41 @@ void ACTLobbyPlayerController::PlayerTick(float DeltaTime)
 	{
 		UpdateLobbyCamera(DeltaTime, /*bSnap=*/false);
 		UpdateLoadingScreen();
+
+#if !UE_BUILD_SHIPPING
+		if (CVarTeamSwapTest.GetValueOnGameThread() > 0)
+		{
+			const ACTGameState* TestState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+			const ACTPlayerState* Me = GetPlayerState<ACTPlayerState>();
+			if (TestState && Me)
+			{
+				TestElapsed += DeltaTime;
+				if (Me->IsHost())
+				{
+					// 방장: 두 사람이 모인 뒤(약 15초) 한 번 팀 변경을 요청
+					if (!bTestRequested && TestElapsed > 15.f && TestState->PlayerArray.Num() >= 2)
+					{
+						bTestRequested = true;
+						UE_LOG(LogTemp, Log, TEXT("[CT-Test] 방장 팀 변경 요청 (현재 팀 %d)"), Me->GetTeamId());
+						RequestChangeTeam();
+					}
+				}
+				else if (!bTestAccepted)
+				{
+					for (const FCTTeamSwapRequest& Request : TestState->GetTeamSwapRequests())
+					{
+						if (Request.Requester && Request.Requester->GetTeamId() == 1 - Me->GetTeamId())
+						{
+							bTestAccepted = true;
+							UE_LOG(LogTemp, Log, TEXT("[CT-Test] 클라이언트 팀 변경 수락 (현재 팀 %d)"), Me->GetTeamId());
+							RequestAcceptTeamSwap(Request.Requester);
+							break;
+						}
+					}
+				}
+			}
+		}
+#endif
 	}
 }
 

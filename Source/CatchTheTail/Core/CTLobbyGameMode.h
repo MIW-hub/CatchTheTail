@@ -63,7 +63,8 @@ protected:
 
 private:
 	// 한 팀 최대 사람 수, 요청이 유지되는 시간(초, 다시 신청할 수 있는 간격도 같음)
-	static constexpr int32 TeamCapacity = 4;
+	static constexpr int32 DefaultTeamCapacity = 4;
+	static int32 GetTeamCapacity();
 	static constexpr float TeamSwapRequestSeconds = 5.f;
 
 	int32 CountHumansInTeam(int32 TeamId) const;

@@ -171,6 +171,11 @@ private:
 
 	bool bLobbyCameraSnapped = false;
 
+	// 개발용 자동 시험 상태 (ct.TeamSwapTest)
+	float TestElapsed = 0.f;
+	bool bTestRequested = false;
+	bool bTestAccepted = false;
+
 	// 시작 버튼을 누른 시각 (월드 시간)
 	double StartRequestedTime = -1000.0;
 

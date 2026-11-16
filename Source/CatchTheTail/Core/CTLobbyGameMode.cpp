@@ -24,6 +24,11 @@ ACTLobbyGameMode::ACTLobbyGameMode()
 
 namespace
 {
+#if !UE_BUILD_SHIPPING
+	// 개발용: 한 팀 정원을 줄여 적은 인원으로 팀 변경 요청을 시험함 (기본 4)
+	TAutoConsoleVariable<int32> CVarTeamCapacity(TEXT("ct.TeamCapacity"), 4, TEXT("로비 한 팀 최대 사람 수 (개발용)"), ECVF_Default);
+#endif
+
 	// 0/O, 1/I/L 뺀 6글자 방 코드
 	FString MakeRoomCode()
 	{
@@ -92,6 +97,15 @@ void ACTLobbyGameMode::InitGameState()
 	GetWorldTimerManager().SetTimer(TeamRequestTimerHandle, this, &ACTLobbyGameMode::UpdateTeamRequests, 0.2f, true);
 }
 
+int32 ACTLobbyGameMode::GetTeamCapacity()
+{
+#if !UE_BUILD_SHIPPING
+	return FMath::Clamp(CVarTeamCapacity.GetValueOnAnyThread(), 1, DefaultTeamCapacity);
+#else
+	return DefaultTeamCapacity;
+#endif
+}
+
 void ACTLobbyGameMode::PrepareTeamColors()
 {
 	ACTGameState* CTGameState = GetGameState<ACTGameState>();
@@ -145,7 +159,7 @@ void ACTLobbyGameMode::RequestTeamChange(APlayerController* Requester)
 	const int32 TargetTeam = 1 - MyTeam;
 
 	// 자리가 있으면 바로 이동
-	if (CountHumansInTeam(TargetTeam) < TeamCapacity)
+	if (CountHumansInTeam(TargetTeam) < GetTeamCapacity())
 	{
 		RequesterState->SetTeamId(TargetTeam);
 		return;
@@ -219,7 +233,7 @@ void ACTLobbyGameMode::UpdateTeamRequests()
 
 		// 그 사이 자리가 생겼으면 요청자가 바로 이동
 		const int32 TargetTeam = 1 - Requester->GetTeamId();
-		if (CountHumansInTeam(TargetTeam) < TeamCapacity)
+		if (CountHumansInTeam(TargetTeam) < GetTeamCapacity())
 		{
 			Requester->SetTeamId(TargetTeam);
 			continue;
