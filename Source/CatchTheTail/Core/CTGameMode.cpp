@@ -25,6 +25,7 @@
 
 #if !UE_BUILD_SHIPPING
 // 개발용: 1이면 보물찾기 경기에서 던지기 시험 시나리오를 자동으로 실행하고 [CT-Test] 로그를 남김
+static TAutoConsoleVariable<float> CVarTestMatchSeconds(TEXT("ct.TestMatchSeconds"), 0.f, TEXT("0보다 크면 경기 길이를 이 초로 줄임 (개발용 시험)"), ECVF_Default);
 static TAutoConsoleVariable<int32> CVarThrowSyncTest(TEXT("ct.ThrowSyncTest"), 0, TEXT("던지기 동기화 자동 시험 (개발용)"), ECVF_Default);
 #endif
 
@@ -62,6 +63,14 @@ void ACTGameMode::InitGameState()
 	const FCTMatchSettings& Settings = GameInstance->GetStoredMatchSettings();
 	GameDurationSeconds = Settings.GameMinutes * 60.f;
 	RoundDurationSeconds = static_cast<float>(Settings.RoundSeconds);
+#if !UE_BUILD_SHIPPING
+	// 개발용 시험: 경기 길이를 짧게 줄여 한 판을 끝까지 돌려 봄 (Tools/CTEosMatchTest.ps1)
+	if (CVarTestMatchSeconds.GetValueOnGameThread() > 0.f)
+	{
+		GameDurationSeconds = CVarTestMatchSeconds.GetValueOnGameThread();
+		RoundDurationSeconds = FMath::Max(10.f, GameDurationSeconds / 3.f);
+	}
+#endif
 	InitialTailCount = Settings.InitialTails;
 	PhoneCooldownSeconds = static_cast<float>(Settings.PhoneUses);
 
