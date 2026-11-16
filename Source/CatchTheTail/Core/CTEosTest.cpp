@@ -23,7 +23,7 @@
 #include "eos_sdk.h"
 #include "eos_connect.h"
 
-namespace
+namespace CTEosTestImpl
 {
 	using namespace UE::Online;
 

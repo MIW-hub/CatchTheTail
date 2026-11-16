@@ -20,7 +20,6 @@
 #include "eos_connect.h"
 #include "eos_sdk.h"
 
-using namespace UE::Online;
 
 #if !UE_BUILD_SHIPPING
 static TAutoConsoleVariable<int32> CVarFreshDevice(TEXT("ct.EosFreshDeviceId"), 0, TEXT("1이면 시작할 때 기기 ID를 지우고 새로 만듦. 한 컴퓨터에서 두 사람 역할을 시험할 때 (개발용)"), ECVF_Default);
@@ -166,7 +165,7 @@ void UCTSessionSubsystem::StartLogin()
 	bLoggingIn = true;
 	bLoginFailed = false;
 
-	Services = GetServices(EOnlineServices::Epic);
+	Services = UE::Online::GetServices(UE::Online::EOnlineServices::Epic);
 	IEOSSDKManager* Manager = IEOSSDKManager::Get();
 	TArray<IEOSPlatformHandlePtr> Platforms = Manager ? Manager->GetActivePlatforms() : TArray<IEOSPlatformHandlePtr>();
 	if (!Services || Platforms.IsEmpty())
@@ -248,11 +247,11 @@ void UCTSessionSubsystem::ContinueLogin()
 
 			// 3) 온라인 서비스(방 만들기와 찾기)용 로그인
 			FWeakSession Weak(LoginSelf);
-			FAuthLogin::Params Params;
+			UE::Online::FAuthLogin::Params Params;
 			Params.PlatformUserId = FPlatformMisc::GetPlatformUserForUserIndex(0);
-			Params.CredentialsType = LoginCredentialsType::ExternalAuth;
-			Params.CredentialsToken.Set<FExternalAuthToken>(FExternalAuthToken{ ExternalLoginType::DeviceIdAccessToken, FString() });
-			LoginSelf->Services->GetAuthInterface()->Login(MoveTemp(Params)).OnComplete([Weak](const TOnlineResult<FAuthLogin>& Result)
+			Params.CredentialsType = UE::Online::LoginCredentialsType::ExternalAuth;
+			Params.CredentialsToken.Set<UE::Online::FExternalAuthToken>(UE::Online::FExternalAuthToken{ UE::Online::ExternalLoginType::DeviceIdAccessToken, FString() });
+			LoginSelf->Services->GetAuthInterface()->Login(MoveTemp(Params)).OnComplete([Weak](const UE::Online::TOnlineResult<UE::Online::FAuthLogin>& Result)
 			{
 				UCTSessionSubsystem* ServiceSelf = Weak.Get();
 				if (!ServiceSelf) { return; }
@@ -284,7 +283,7 @@ void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 	const FString Code = NormalizeCode(RoomCode);
 	RunAfterLogin([this, Code]()
 	{
-		ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
+		UE::Online::ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
 		if (!Lobbies)
 		{
 			bCreating = false;
@@ -292,16 +291,16 @@ void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 			return;
 		}
 
-		FCreateLobby::Params Params;
+		UE::Online::FCreateLobby::Params Params;
 		Params.LocalAccountId = LocalAccount;
 		Params.LocalName = LobbyLocalName;
-		Params.SchemaId = FSchemaId(LobbySchema);
+		Params.SchemaId = UE::Online::FSchemaId(LobbySchema);
 		Params.MaxMembers = MaxRoomPlayers;
-		Params.JoinPolicy = ELobbyJoinPolicy::PublicAdvertised;
-		Params.Attributes.Add(FSchemaAttributeId(RoomCodeAttribute), FSchemaVariant(Code));
+		Params.JoinPolicy = UE::Online::ELobbyJoinPolicy::PublicAdvertised;
+		Params.Attributes.Add(UE::Online::FSchemaAttributeId(RoomCodeAttribute), UE::Online::FSchemaVariant(Code));
 
 		FWeakSession Weak(this);
-		Lobbies->CreateLobby(MoveTemp(Params)).OnComplete([Weak](const TOnlineResult<FCreateLobby>& Result)
+		Lobbies->CreateLobby(MoveTemp(Params)).OnComplete([Weak](const UE::Online::TOnlineResult<UE::Online::FCreateLobby>& Result)
 		{
 			UCTSessionSubsystem* Self = Weak.Get();
 			if (!Self) { return; }
@@ -324,14 +323,14 @@ void UCTSessionSubsystem::CloseRoom()
 {
 	if (!bHasLobby || !Services) { return; }
 
-	ILobbiesPtr Lobbies = Services->GetLobbiesInterface();
+	UE::Online::ILobbiesPtr Lobbies = Services->GetLobbiesInterface();
 	if (!Lobbies) { return; }
 
-	FLeaveLobby::Params Params;
+	UE::Online::FLeaveLobby::Params Params;
 	Params.LocalAccountId = LocalAccount;
 	Params.LobbyId = CurrentLobby;
 	bHasLobby = false;
-	Lobbies->LeaveLobby(MoveTemp(Params)).OnComplete([](const TOnlineResult<FLeaveLobby>& Result)
+	Lobbies->LeaveLobby(MoveTemp(Params)).OnComplete([](const UE::Online::TOnlineResult<UE::Online::FLeaveLobby>& Result)
 	{
 		if (!Result.IsOk())
 		{
@@ -369,7 +368,7 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 
 	RunAfterLogin([this, Mode, RoomCode]()
 	{
-		ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
+		UE::Online::ILobbiesPtr Lobbies = Services ? Services->GetLobbiesInterface() : nullptr;
 		if (!Lobbies)
 		{
 			EndBusy();
@@ -377,25 +376,25 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 			return;
 		}
 
-		FFindLobbies::Params Find;
+		UE::Online::FFindLobbies::Params Find;
 		Find.LocalAccountId = LocalAccount;
 		Find.MaxResults = MaxSearchResults;
 		if (Mode == EJoinMode::Code)
 		{
-			Find.Filters.Add(FFindLobbySearchFilter{ FSchemaAttributeId(RoomCodeAttribute), ESchemaAttributeComparisonOp::Equals, FSchemaVariant(RoomCode) });
+			Find.Filters.Add(UE::Online::FFindLobbySearchFilter{ UE::Online::FSchemaAttributeId(RoomCodeAttribute), UE::Online::ESchemaAttributeComparisonOp::Equals, UE::Online::FSchemaVariant(RoomCode) });
 		}
 
 		FWeakSession Weak(this);
-		Lobbies->FindLobbies(MoveTemp(Find)).OnComplete([Weak, Mode](const TOnlineResult<FFindLobbies>& Result)
+		Lobbies->FindLobbies(MoveTemp(Find)).OnComplete([Weak, Mode](const UE::Online::TOnlineResult<UE::Online::FFindLobbies>& Result)
 		{
 			UCTSessionSubsystem* Self = Weak.Get();
 			if (!Self) { return; }
 
 			// 입장 가능한 방만 (자리가 있고 내가 연 방이 아닌 것)
-			TArray<TSharedRef<const FLobby>> Candidates;
+			TArray<TSharedRef<const UE::Online::FLobby>> Candidates;
 			if (Result.IsOk())
 			{
-				for (const TSharedRef<const FLobby>& Lobby : Result.GetOkValue().Lobbies)
+				for (const TSharedRef<const UE::Online::FLobby>& Lobby : Result.GetOkValue().Lobbies)
 				{
 					if (Lobby->Members.Num() >= Lobby->MaxMembers) { continue; }
 					if (Lobby->OwnerAccountId == Self->LocalAccount) { continue; }
@@ -412,13 +411,13 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 				return;
 			}
 
-			const TSharedRef<const FLobby> Chosen = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+			const TSharedRef<const UE::Online::FLobby> Chosen = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
 
-			FJoinLobby::Params Join;
+			UE::Online::FJoinLobby::Params Join;
 			Join.LocalAccountId = Self->LocalAccount;
 			Join.LocalName = LobbyLocalName;
 			Join.LobbyId = Chosen->LobbyId;
-			Self->Services->GetLobbiesInterface()->JoinLobby(MoveTemp(Join)).OnComplete([Weak](const TOnlineResult<FJoinLobby>& JoinResult)
+			Self->Services->GetLobbiesInterface()->JoinLobby(MoveTemp(Join)).OnComplete([Weak](const UE::Online::TOnlineResult<UE::Online::FJoinLobby>& JoinResult)
 			{
 				UCTSessionSubsystem* JoinSelf = Weak.Get();
 				if (!JoinSelf) { return; }
@@ -431,14 +430,14 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 					return;
 				}
 
-				const TSharedPtr<const FLobby>& Lobby = JoinResult.GetOkValue().Lobby;
+				const TSharedPtr<const UE::Online::FLobby>& Lobby = JoinResult.GetOkValue().Lobby;
 				JoinSelf->CurrentLobby = Lobby->LobbyId;
 				JoinSelf->bHasLobby = true;
 
 				// 방장의 EOS 주소로 게임에 접속 (EOS 세션이 쓰는 주소 모양: [EOS:사용자ID]:포트)
 				char Buffer[EOS_PRODUCTUSERID_MAX_LENGTH + 1] = {};
 				int32_t Length = sizeof(Buffer);
-				EOS_ProductUserId_ToString(GetProductUserIdChecked(Lobby->OwnerAccountId), Buffer, &Length);
+				EOS_ProductUserId_ToString(UE::Online::GetProductUserIdChecked(Lobby->OwnerAccountId), Buffer, &Length);
 				const FString Address = FString::Printf(TEXT("[EOS:%s]:0"), UTF8_TO_TCHAR(Buffer));
 
 				UGameInstance* GameInstance = JoinSelf->GetGameInstance();
