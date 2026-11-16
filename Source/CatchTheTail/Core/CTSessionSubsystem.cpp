@@ -3,7 +3,9 @@
 #include "CTGameInstance.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "TimerManager.h"
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
 #include "OnlineSubsystem.h"
@@ -24,6 +26,7 @@
 #if !UE_BUILD_SHIPPING
 static TAutoConsoleVariable<int32> CVarFreshDevice(TEXT("ct.EosFreshDeviceId"), 0, TEXT("1이면 시작할 때 기기 ID를 지우고 새로 만듦. 한 컴퓨터에서 두 사람 역할을 시험할 때 (개발용)"), ECVF_Default);
 // 개발용 자동 시험 (Tools/CTEosFlowTest.ps1): 로그인이 끝나면 바로 방을 열거나, 방 코드로 들어감
+static TAutoConsoleVariable<float> CVarAutoLeaveSeconds(TEXT("ct.AutoLeaveSeconds"), 0.f, TEXT("0보다 크면 방을 연 지 이 초 뒤에 방장이 메인 메뉴로 나감 (개발용 시험)"), ECVF_Default);
 static TAutoConsoleVariable<int32> CVarAutoHost(TEXT("ct.AutoHostAfterLogin"), 0, TEXT("1이면 EOS 로그인 뒤 바로 방 만들기 (개발용)"), ECVF_Default);
 static TAutoConsoleVariable<FString> CVarAutoJoin(TEXT("ct.AutoJoinCode"), TEXT(""), TEXT("비어 있지 않으면 EOS 로그인 뒤 이 방 코드로 입장 (개발용)"), ECVF_Default);
 #endif
@@ -310,6 +313,17 @@ void UCTSessionSubsystem::CreateRoom(const FString& RoomCode)
 				Self->CurrentLobby = Result.GetOkValue().Lobby->LobbyId;
 				Self->bHasLobby = true;
 				UE_LOG(LogTemp, Log, TEXT("[CT] 방 열기 성공 (EOS)"));
+#if !UE_BUILD_SHIPPING
+				if (CVarAutoLeaveSeconds.GetValueOnGameThread() > 0.f && Self->GetWorld())
+				{
+					FTimerHandle LeaveHandle;
+					Self->GetWorld()->GetTimerManager().SetTimer(LeaveHandle, FTimerDelegate::CreateWeakLambda(Self, [Self]()
+					{
+						UE_LOG(LogTemp, Log, TEXT("[CT-Test] 방장이 방을 나감"));
+						if (UCTGameInstance* GameInstance = Cast<UCTGameInstance>(Self->GetGameInstance())) { GameInstance->LeaveToMainMenu(FText::GetEmpty()); }
+					}), CVarAutoLeaveSeconds.GetValueOnGameThread(), false);
+				}
+#endif
 			}
 			else
 			{
@@ -402,6 +416,7 @@ void UCTSessionSubsystem::StartSearch(EJoinMode Mode, const FString& RoomCode)
 				}
 			}
 
+			UE_LOG(LogTemp, Log, TEXT("[CT] 방 검색 결과: 입장 가능한 방 %d개"), Candidates.Num());
 			if (Candidates.IsEmpty())
 			{
 				Self->EndBusy();
