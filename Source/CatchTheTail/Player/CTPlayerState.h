@@ -172,6 +172,7 @@ private:
 
 	// 소리 판단용 이전 꼬리 수
 	int32 LastTailCountForSound = 0;
+	int32 LastEnergyForSound = 0;
 	bool bLastGhostForSound = false;
 
 	// 이 PlayerState가 이 컴퓨터에서 조종하는 플레이어인가

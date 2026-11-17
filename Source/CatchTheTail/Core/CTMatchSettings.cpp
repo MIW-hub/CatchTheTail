@@ -4,31 +4,24 @@
 
 namespace
 {
-	// 보물찾기를 로비에서 시작할 수 있게 함. 개발 빌드(Development)는 기본 1이라 바로 시험할 수 있고, 출시 빌드(Shipping)는 이 값과 상관없이 항상 막힘 (IsModePlayable).
-	// 개발 빌드에서 끄려면 -ExecCmds="ct.EnableTreasureHunt 0"
-	// 개발용: 1이면 로비 경기 설정에 게임 모드 선택 줄이 보임 (기본 0 = 숨김, 항상 꼬리잡기)
-	TAutoConsoleVariable<int32> CVarShowGameModeSelect(TEXT("ct.ShowGameModeSelect"), 0, TEXT("1이면 로비에서 게임 모드 선택 줄을 보임 (개발용)"), ECVF_Default);
+	// 보물찾기를 로비에서 시작할 수 있게 함. 기본 1 (출시 빌드 포함).
+	// 끄려면 -ExecCmds="ct.EnableTreasureHunt 0"
+	// 개발용: 1이면 로비 경기 설정에 게임 모드 선택 줄이 보임 (기본 1 = 보임, 0이면 숨기고 항상 꼬리잡기)
+	TAutoConsoleVariable<int32> CVarShowGameModeSelect(TEXT("ct.ShowGameModeSelect"), 1, TEXT("1이면 로비에서 게임 모드 선택 줄을 보임 (개발용)"), ECVF_Default);
 
 	TAutoConsoleVariable<int32> CVarEnableTreasureHunt(TEXT("ct.EnableTreasureHunt"), 1, TEXT("1이면 로비에서 보물찾기 모드를 시작할 수 있음 (개발 중)"), ECVF_Default);
 }
 
 bool FCTMatchSettings::IsModeSelectVisible()
 {
-#if UE_BUILD_SHIPPING
-	return false;
-#else
+	// 출시 빌드에서도 켜짐 (끄려면 ct.ShowGameModeSelect 0)
 	return CVarShowGameModeSelect.GetValueOnAnyThread() != 0;
-#endif
 }
 
 bool FCTMatchSettings::IsModePlayable() const
 {
 	if (GetMode() == ECTGameModeType::TailChase) { return true; }
-#if UE_BUILD_SHIPPING
-	return false;
-#else
 	return CVarEnableTreasureHunt.GetValueOnAnyThread() != 0;
-#endif
 }
 
 int32 FCTMatchSettings::Get(ECTMatchSetting Setting) const

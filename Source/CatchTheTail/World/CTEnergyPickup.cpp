@@ -9,6 +9,8 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -38,15 +40,45 @@ ACTEnergyPickup::ACTEnergyPickup()
 	if (SphereFinder.Succeeded()) { Visual->SetStaticMesh(SphereFinder.Object); }
 }
 
-ACTEnergyPickup* ACTEnergyPickup::Spawn(UWorld* World, const FVector& Location, int32 InAmount)
+ACTEnergyPickup* ACTEnergyPickup::Spawn(UWorld* World, const FVector& Location, int32 InAmount, float InFallDelay)
 {
 	if (!World) { return nullptr; }
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	ACTEnergyPickup* Pickup = World->SpawnActor<ACTEnergyPickup>(ACTEnergyPickup::StaticClass(), Location, FRotator::ZeroRotator, Params);
-	if (Pickup) { Pickup->Amount = FMath::Max(InAmount, 1); }
+	// 복제되기 전에 값을 넣어야 해서 BeginPlay 이전에 설정
+	ACTEnergyPickup* Pickup = World->SpawnActorDeferred<ACTEnergyPickup>(ACTEnergyPickup::StaticClass(), FTransform(Location), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Pickup) { return nullptr; }
+	Pickup->Amount = FMath::Max(InAmount, 1);
+	Pickup->FallDelay = InFallDelay;
+	Pickup->FallSeconds = Pickup->DropSeconds;
+	Pickup->LaunchOffset = FVector(0.f, 0.f, Pickup->DropHeight);
+	Pickup->FinishSpawning(FTransform(Location));
 	return Pickup;
+}
+
+ACTEnergyPickup* ACTEnergyPickup::SpawnBurst(UWorld* World, const FVector& From, const FVector& Location, int32 InAmount)
+{
+	if (!World) { return nullptr; }
+
+	ACTEnergyPickup* Pickup = World->SpawnActorDeferred<ACTEnergyPickup>(ACTEnergyPickup::StaticClass(), FTransform(Location), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Pickup) { return nullptr; }
+	Pickup->Amount = FMath::Max(InAmount, 1);
+	Pickup->FallDelay = 0.f;
+	Pickup->FallSeconds = FMath::FRandRange(0.55f, 0.8f);
+	Pickup->LaunchOffset = From - Location;
+	Pickup->ArcHeight = FMath::FRandRange(120.f, 260.f);
+	Pickup->FinishSpawning(FTransform(Location));
+	return Pickup;
+}
+
+void ACTEnergyPickup::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(ACTEnergyPickup, FallDelay, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ACTEnergyPickup, LaunchOffset, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ACTEnergyPickup, ArcHeight, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ACTEnergyPickup, FallSeconds, COND_InitialOnly);
 }
 
 void ACTEnergyPickup::BeginPlay()
@@ -63,17 +95,40 @@ void ACTEnergyPickup::BeginPlay()
 		Visual->SetMaterial(0, Material);
 	}
 
+	SpawnTime = GetWorld()->GetTimeSeconds();
+	bLanded = FallDelay < 0.f;
+
 	if (HasAuthority())
 	{
 		Trigger->OnComponentBeginOverlap.AddDynamic(this, &ACTEnergyPickup::HandleBeginOverlap);
 
-		// 놓이는 순간 이미 겹쳐 있는 캐릭터가 있으면 바로 먹게 함
-		TArray<AActor*> Overlapping;
-		Trigger->GetOverlappingActors(Overlapping, ACTCharacter::StaticClass());
-		for (AActor* Actor : Overlapping)
+		if (bLanded)
 		{
-			if (ACTCharacter* Character = Cast<ACTCharacter>(Actor)) { HandleBeginOverlap(Trigger, Character, nullptr, 0, false, FHitResult()); }
+			EnableTrigger();
 		}
+		else
+		{
+			// 내려앉는 순간까지 먹을 수 없게 닫아 둠
+			Trigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			FTimerHandle Handle;
+			GetWorldTimerManager().SetTimer(Handle, this, &ACTEnergyPickup::EnableTrigger, FallDelay + FallSeconds, false);
+		}
+	}
+
+	if (!bLanded) { Visual->SetVisibility(false); }
+}
+
+void ACTEnergyPickup::EnableTrigger()
+{
+	bLanded = true;
+	Trigger->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+
+	// 내려앉는 순간 이미 겹쳐 있는 캐릭터가 있으면 바로 먹게 함
+	TArray<AActor*> Overlapping;
+	Trigger->GetOverlappingActors(Overlapping, ACTCharacter::StaticClass());
+	for (AActor* Actor : Overlapping)
+	{
+		if (ACTCharacter* Character = Cast<ACTCharacter>(Actor)) { HandleBeginOverlap(Trigger, Character, nullptr, 0, false, FHitResult()); }
 	}
 }
 
@@ -84,6 +139,24 @@ void ACTEnergyPickup::Tick(float DeltaSeconds)
 	// 보기 좋게 천천히 돎 (화면이 있는 쪽만)
 	if (GetNetMode() != NM_DedicatedServer)
 	{
+		// 하늘에서 떨어지는 동안: 기다리는 중에는 숨기고, 중력처럼 점점 빨라지며 내려옴 (보이는 모습만, 판정 위치는 그대로)
+		if (FallDelay >= 0.f)
+		{
+			const float Elapsed = GetWorld()->GetTimeSeconds() - SpawnTime - FallDelay;
+			const float Alpha = FMath::Clamp(Elapsed / FMath::Max(FallSeconds, 0.1f), 0.f, 1.f);
+			Visual->SetVisibility(Elapsed >= 0.f);
+			FVector Offset;
+			if (ArcHeight > 0.f)
+			{
+				// 터지듯 튀어 나감: 옆으로는 똑바로, 위로는 솟았다가 내려옴
+				Offset = FVector(LaunchOffset.X * (1.f - Alpha), LaunchOffset.Y * (1.f - Alpha), LaunchOffset.Z * (1.f - Alpha) + ArcHeight * 4.f * Alpha * (1.f - Alpha));
+			}
+			else
+			{
+				Offset = FVector(0.f, 0.f, LaunchOffset.Z * (1.f - Alpha * Alpha));
+			}
+			Visual->SetRelativeLocation(Offset);
+		}
 		Visual->AddLocalRotation(FRotator(0.f, SpinDegreesPerSecond * DeltaSeconds, 0.f));
 	}
 }

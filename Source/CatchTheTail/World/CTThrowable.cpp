@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTThrowable.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "../Core/CTGameMode.h"
 #include "../Player/CTCharacter.h"
 #include "Components/SphereComponent.h"
@@ -34,7 +35,7 @@ ACTThrowable::ACTThrowable()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereFinder(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	if (SphereFinder.Succeeded()) { Mesh->SetStaticMesh(SphereFinder.Object); }
 
-	Body->SetCollisionProfileName(TEXT("PhysicsActor"));
+	ApplyFreeCollision();
 	Body->SetSimulatePhysics(true);
 	Body->SetNotifyRigidBodyCollision(true); // 맞은 것을 알기 위해 필요
 	Body->SetCanEverAffectNavigation(false);
@@ -43,6 +44,15 @@ ACTThrowable::ACTThrowable()
 	Body->SetAngularDamping(0.4f);
 	Mesh->SetCastShadow(false);
 	Mesh->SetCanEverAffectNavigation(false);
+}
+
+void ACTThrowable::ApplyFreeCollision()
+{
+	Body->SetCollisionProfileName(TEXT("PhysicsActor"));
+	// 캐릭터와는 부딪혀 튕기지 않고 겹쳐 지나감 (밀거나 밀리지 않음). 던졌을 때 맞음은 겹침으로 판정
+	Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	Body->SetGenerateOverlapEvents(true);
+	Body->SetNotifyRigidBodyCollision(true);
 }
 
 void ACTThrowable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -90,6 +100,7 @@ void ACTThrowable::BeginPlay()
 	if (HasAuthority())
 	{
 		Body->OnComponentHit.AddDynamic(this, &ACTThrowable::HandleHit);
+		Body->OnComponentBeginOverlap.AddDynamic(this, &ACTThrowable::HandleOverlap);
 	}
 }
 
@@ -131,16 +142,30 @@ void ACTThrowable::ApplyHeldState()
 		// 물리와 충돌을 끄고 캐릭터 머리 위에 붙임
 		Body->SetSimulatePhysics(false);
 		Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Body->SetGenerateOverlapEvents(false);
+		// 블루프린트 모양(Mesh)에 충돌이 켜져 있어도 들고 있는 동안은 아무것도 막지도 맞지도 않게 함
+		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Mesh->SetGenerateOverlapEvents(false);
 		if (HasAuthority())
 		{
-			AttachToComponent(HeldBy->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-			SetActorRelativeLocation(HeldOffset);
+			// 손 소켓에 붙임 (메시나 소켓이 없으면 예전처럼 몸 위에)
+			USkeletalMeshComponent* HolderMesh = HeldBy->GetMesh();
+			if (HolderMesh && HolderMesh->DoesSocketExist(HeldBy->GetHeldSocketName()))
+			{
+				AttachToComponent(HolderMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HeldBy->GetHeldSocketName());
+				SetActorRelativeLocation(HeldHandOffset);
+			}
+			else
+			{
+				AttachToComponent(HeldBy->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+				SetActorRelativeLocation(HeldOffset);
+			}
 		}
 	}
 	else
 	{
 		DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-		Body->SetCollisionProfileName(TEXT("PhysicsActor"));
+		ApplyFreeCollision();
 		Body->SetSimulatePhysics(true);
 	}
 }
@@ -203,10 +228,21 @@ void ACTThrowable::Throw(const FVector& Velocity, const FVector& ReleaseLocation
 
 void ACTThrowable::HandleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
 {
+	// 벽, 바닥, 다른 물체에 닿으면 이 던지기는 끝: 튕겨서 사람에게 닿아도 맞히지 못함
+	if (!HasAuthority() || !bDangerous) { return; }
+	if (Cast<ACTCharacter>(OtherActor)) { return; }
+
+	bDangerous = false;
+	HitVictims.Reset();
+	Thrower.Reset();
+}
+
+void ACTThrowable::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
 	if (!HasAuthority() || !bDangerous) { return; }
 
 	ACTCharacter* Victim = Cast<ACTCharacter>(OtherActor);
-	// 던진 본인은 튕겨 돌아온 공에 맞아도 피해 없음 (아군은 피해가 있음)
+	// 던진 본인은 맞지 않음 (아군은 피해가 있음)
 	if (!Victim || Victim == Thrower.Get() || HitVictims.Contains(Victim)) { return; }
 	HitVictims.Add(Victim);
 

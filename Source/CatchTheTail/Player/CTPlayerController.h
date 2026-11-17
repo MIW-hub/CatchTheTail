@@ -12,6 +12,8 @@ class UInputMappingContext;
 class UCTHUDWidget;
 class UCTResultWidget;
 class UCTTreasureHudWidget;
+class UCTRoundBreakWidget;
+class UCTTreasureResultWidget;
 class UCTPauseMenuWidget;
 class UCTPhonePopupWidget;
 class ACTGameState;
@@ -99,6 +101,21 @@ protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
 	TObjectPtr<UCTTreasureHudWidget> TreasureHudWidget;
 
+	// 보물찾기 라운드 사이 결과 팝업 (기본 /Game/UI/WBP_CTRoundBreakWidget)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTRoundBreakWidget> RoundBreakWidgetClass;
+
+	// 보물찾기 경기 결과 화면 (기본 /Game/UI/WBP_CTTreasureResultWidget). 보물찾기일 때 꼬리잡기 결과 화면 대신 보임
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	TSubclassOf<UCTTreasureResultWidget> TreasureResultWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCTRoundBreakWidget> RoundBreakWidget;
+
+	bool bRoundBreakPreviewStarted = false;
+	void ShowRoundBreakPopup();
+	void HideRoundBreakPopup();
+
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CT|UI")
 	TObjectPtr<UCTResultWidget> ResultWidget;
 
@@ -176,6 +193,14 @@ private:
 	// 디자인 확인용: 콘솔에서 CTPreviewTreasureHud 를 치면 보물찾기 HUD 가 보이고 한 번 더 치면 원래대로 돌아옴 (이 컴퓨터 화면에서만, 게임 규칙에는 영향 없음)
 	UFUNCTION(Exec)
 	void CTPreviewTreasureHud();
+
+	// 디자인 확인용: 콘솔에서 CTPreviewRoundBreak 를 치면 라운드 사이 결과 팝업이 가짜 값으로 8초간 보임 (이 컴퓨터 화면에서만)
+	// 디자인 확인용: N초 뒤에 화면(UI 포함)을 저장함
+	UFUNCTION(Exec)
+	void CTShotAfter(int32 Seconds);
+
+	UFUNCTION(Exec)
+	void CTPreviewRoundBreak(int32 ScreenshotAfterSeconds = 0);
 
 	bool bTreasureHudPreview = false;
 

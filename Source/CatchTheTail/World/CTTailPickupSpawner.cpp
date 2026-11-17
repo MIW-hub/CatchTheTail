@@ -1,6 +1,7 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTTailPickupSpawner.h"
 #include "CTTailPickup.h"
+#include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
@@ -44,6 +45,12 @@ void ACTTailPickupSpawner::Tick(float DeltaSeconds)
 	{
 		const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
 		if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing) { return; }
+	}
+
+	// 꼬리 아이템을 쓰지 않는 모드(보물찾기)에서는 만들지 않음
+	if (ACTGameMode* SpawnMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACTGameMode>() : nullptr)
+	{
+		if (!SpawnMode->ModeUsesTailPickups()) { return; }
 	}
 
 	TimeToNextSpawn -= DeltaSeconds;

@@ -137,6 +137,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildTreasureHudDesign(UBlueprint* WidgetBlueprint);
 
+	// 라운드 사이 결과 팝업 뼈대와 그 안의 플레이어 한 줄 뼈대 (처음 한 번)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildRoundBreakDesign(UBlueprint* WidgetBlueprint);
+
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildRoundBreakRowDesign(UBlueprint* WidgetBlueprint);
+
+	// 보물찾기 경기 결과 화면 뼈대 (처음 한 번)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 BuildTreasureResultDesign(UBlueprint* WidgetBlueprint);
+
 	// 로비 플레이어 한 줄 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildLobbyPlayerEntryDesign(UBlueprint* WidgetBlueprint);

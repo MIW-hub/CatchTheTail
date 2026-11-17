@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "CTGameRule.h"
+#include "CTGameState.h"
 #include "CTRule_TreasureHunt.generated.h"
 
 class ACTEnergyPickup;
@@ -25,16 +26,24 @@ public:
 	virtual bool OnRoundTimeUp(int32 RoundNumber) override;
 	virtual void OnGameEnding() override;
 	virtual void ComputeResult(TArray<ACTPlayerState*>& OutWinners, bool& bOutTie) override;
+	virtual void OnCountdownStart() override;
 	virtual bool HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) override;
+	virtual bool FinalizeGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim) override;
 	virtual bool OnEnergyPicked(ACTCharacter* Picker, int32 Amount) override;
 	virtual void OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity) override;
 	virtual bool UsesTargetColors() const override { return false; }
+	virtual bool UsesTailPickups() const override { return false; }
+	virtual int32 OnHazardHit(ACTCharacter* Victim, const FVector& Direction) override;
+	virtual float GetRoundBreakSeconds() const override { return RoundBreakSeconds; }
+	virtual void FillRoundBreakInfo(FCTRoundBreakInfo& OutInfo, int32 RoundNumber) override;
+	virtual void PrepareNextRound(int32 NextRoundNumber) override;
 
 private:
 	// 경기 구성 (기획서 기준)
 	static constexpr int32 TotalRounds = 3;
 	static constexpr int32 EnergyPerRound = 100;
 	static constexpr int32 EnergyPerTail = 10;
+	static constexpr float RoundBreakSeconds = 7.f; // 라운드 사이 결과 팝업 시간 (6~8초)
 	static constexpr float GrabFreezeSeconds = 2.f;
 	static constexpr float SpawnMinDistance = 800.f; // 8m
 
@@ -49,13 +58,25 @@ private:
 
 	// 라운드 시작 준비
 	void ClearEnergies();
-	void SpawnEnergies();
+	// MaxDropDelay: 하늘에서 떨어뜨릴 때 시작을 늦추는 최대 시간(초). 라운드가 시작되기 전에 모두 내려앉도록 준비 시간에 맞춰 정함
+	// 놓은 개수를 돌려줌
+	int32 SpawnEnergies(float MaxDropDelay);
 	void ClearThrowables();
 	void SpawnThrowables();
 
 	// 맞은 캐릭터 주변 바닥에 에너지를 흩뿌림
 	void DropEnergies(ACTCharacter* Victim, int32 Count);
-	void PlacePlayersRandomly();
+	// bOnlyNew: 이미 놓인 플레이어는 그대로 두고 (그 자리는 피해서) 새로 생긴 플레이어만 놓음
+	void PlacePlayersRandomly(bool bOnlyNew = false);
+
+	// 라운드 준비(에너지, 오브젝트, 플레이어 위치)를 쉬는 시간에 이미 했는가
+	bool bNextRoundPrepared = false;
+	// DropWindowSeconds: 라운드가 시작될 때까지 남은 준비 시간 (이 안에 에너지가 모두 내려앉아야 함)
+	// 깐 에너지 개수를 돌려줌
+	int32 PrepareRound(int32 RoundNumber, float DropWindowSeconds);
+
+	// 카운트다운 중에 미리 놓은 플레이어
+	TSet<TWeakObjectPtr<ACTPlayerState>> PrePlaced;
 
 	// 갈 수 있는 바닥에서 막히지 않은 임의의 위치를 하나 고름. 못 찾으면 false
 	bool PickClearPoint(const FVector& Origin, float Radius, float ClearRadius, float ClearHalfHeight, FVector& OutPoint) const;

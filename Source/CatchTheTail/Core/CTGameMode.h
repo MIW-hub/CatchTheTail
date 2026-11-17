@@ -54,6 +54,12 @@ public:
 	bool FinalizeTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Victim);
 
 	// 서버, 캐릭터가 에너지를 먹음 (보물찾기). 규칙이 처리하면 true
+	// 이 모드가 꼬리 아이템(ACTTailPickup)을 쓰는가. 보물찾기는 아님
+	bool ModeUsesTailPickups();
+
+	// 환경 충돌체에 맞았을 때 모드 규칙이 대신 처리함 (꼬리 아이템을 쓰지 않는 모드). 잃은 개수를 돌려줌
+	int32 HandleHazardHit(ACTCharacter* Victim, const FVector& Direction);
+
 	bool HandleEnergyPickup(ACTCharacter* Picker, int32 Amount);
 
 	// 서버, 던진 오브젝트가 캐릭터에 맞음 (보물찾기)
@@ -194,6 +200,13 @@ private:
 
 	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();
+
+	// 라운드 사이 쉬는 시간: 결과 팝업을 띄우고 그 사이 다음 라운드를 준비한 뒤 새 라운드를 시작
+	void BeginRoundBreak(int32 FinishedRound, float Seconds);
+	void PrepareBreakRound();
+	void EndRoundBreak();
+	FTimerHandle RoundBreakPrepareHandle;
+	FTimerHandle RoundBreakEndHandle;
 
 	// 0.2초마다 라운드/게임 종료 확인
 	void TickGameFlow();

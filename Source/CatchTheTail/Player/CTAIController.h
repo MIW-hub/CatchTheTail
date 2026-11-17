@@ -178,6 +178,11 @@ private:
 	TArray<TWeakObjectPtr<ACTThrowable>> ThrowableList;
 	double NextThrowTime = 0.0;
 	double HoldStartTime = 0.0;
+	// 한 에너지를 오래 쫓아도 못 먹으면(닿을 수 없는 곳) 잠시 목표에서 제외
+	TWeakObjectPtr<ACTEnergyPickup> LastEnergyTarget;
+	double LastEnergyTargetSince = 0.0;
+	TMap<TWeakObjectPtr<ACTEnergyPickup>, double> EnergySkipUntil;
+
 	double NextEnergyRefreshTime = 0.0;
 
 	// 위치가 눈에 보이는가 (거리, 부채꼴, 시선이 안 가림)

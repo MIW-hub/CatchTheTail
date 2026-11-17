@@ -18,7 +18,7 @@ class CATCHTHETAIL_API UCTResultWidget : public UCTUserWidget
 public:
 	// 경기 결과 채우기
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
-	void ShowResult();
+	virtual void ShowResult();
 
 public:
 	UCTResultWidget(const FObjectInitializer& ObjectInitializer);

@@ -22,6 +22,45 @@ struct FCTTeamSwapRequest
 	float ExpireServerTime = 0.f;
 };
 
+// 라운드 사이 결과 팝업에 표시할 개인 점수 한 줄
+USTRUCT()
+struct FCTRoundBreakEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	UPROPERTY()
+	int32 TeamId = 0;
+
+	UPROPERTY()
+	int32 Score = 0;
+};
+
+// 라운드 사이 결과 팝업 내용 (서버가 정리 직전에 만들어 복제). 팀 번호 순서의 배열
+USTRUCT()
+struct FCTRoundBreakInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 RoundNumber = 0;
+
+	// 팀별 이번 라운드 에너지 합계 / 팀별 승점(이번 라운드 반영 전, 후)
+	UPROPERTY()
+	TArray<int32> TeamEnergy;
+
+	UPROPERTY()
+	TArray<int32> WinsBefore;
+
+	UPROPERTY()
+	TArray<int32> WinsAfter;
+
+	UPROPERTY()
+	TArray<FCTRoundBreakEntry> Entries;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTPhaseChangedSignature, ECTGamePhase, NewPhase);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCTRoundChangedSignature, int32, NewRoundNumber);
 
@@ -165,6 +204,15 @@ public:
 	// 기권이 열리는 서버 시각
 	void SetForfeitUnlockTime(double NewServerTime);
 
+	// 서버: 라운드 사이 쉬는 시간 동안 경기 종료·기권 시각을 그만큼 늦춤 (쉬는 시간이 경기 시간을 깎지 않게)
+	void ExtendGameTimes(float Seconds);
+
+	// 서버: 라운드 사이 결과 팝업 내용과 끝나는 서버 시각 (SetPhase(RoundBreak) 보다 먼저 부름)
+	void SetRoundBreak(const FCTRoundBreakInfo& NewInfo, double NewEndServerTime);
+	const FCTRoundBreakInfo& GetRoundBreakInfo() const { return RoundBreakInfo; }
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	float GetRoundBreakRemainingSeconds() const;
+
 	// SetPhase(Finished)보다 먼저 호출
 	void SetGameResult(const TArray<ACTPlayerState*>& NewWinners, bool bNewIsTie);
 
@@ -236,6 +284,12 @@ protected:
 
 	UPROPERTY(Replicated)
 	TArray<FCTTeamSwapRequest> TeamSwapRequests;
+
+	UPROPERTY(Replicated)
+	FCTRoundBreakInfo RoundBreakInfo;
+
+	UPROPERTY(Replicated)
+	double RoundBreakEndServerTime = 0.0;
 
 	// 결과: 승자
 	UPROPERTY(Replicated)

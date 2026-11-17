@@ -10,6 +10,8 @@
 #include "../UI/CTHUDWidget.h"
 #include "../UI/CTResultWidget.h"
 #include "../UI/CTTreasureHudWidget.h"
+#include "../UI/CTRoundBreakWidget.h"
+#include "../UI/CTTreasureResultWidget.h"
 #include "../UI/CTPauseMenuWidget.h"
 #include "../UI/CTPhonePopupWidget.h"
 #include "../World/CTPhoneBooth.h"
@@ -42,6 +44,20 @@ ACTPlayerController::ACTPlayerController()
 	if (TreasureHudFinder.Succeeded())
 	{
 		TreasureHudWidgetClass = TreasureHudFinder.Class;
+	}
+
+	// 보물찾기 결과 화면 (WBP). 없으면 꼬리잡기 결과 화면을 그대로 씀
+	static ConstructorHelpers::FClassFinder<UCTTreasureResultWidget> TreasureResultFinder(TEXT("/Game/UI/WBP_CTTreasureResultWidget"));
+	if (TreasureResultFinder.Succeeded())
+	{
+		TreasureResultWidgetClass = TreasureResultFinder.Class;
+	}
+
+	// 라운드 사이 결과 팝업 (WBP). 없으면 팝업 없이 진행됨
+	static ConstructorHelpers::FClassFinder<UCTRoundBreakWidget> RoundBreakFinder(TEXT("/Game/UI/WBP_CTRoundBreakWidget"));
+	if (RoundBreakFinder.Succeeded())
+	{
+		RoundBreakWidgetClass = RoundBreakFinder.Class;
 	}
 }
 
@@ -286,6 +302,53 @@ void ACTPlayerController::CTPreviewTreasureHud()
 	}
 }
 
+void ACTPlayerController::CTShotAfter(int32 Seconds)
+{
+	FTimerHandle Handle;
+	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("Shot ShowUI")); }), static_cast<float>(FMath::Max(Seconds, 1)), false);
+}
+
+void ACTPlayerController::CTPreviewRoundBreak(int32 ScreenshotAfterSeconds)
+{
+	// 시작 직후에는 화면이 준비되지 않았을 수 있어 잠시 뒤에 보임
+	if (!bRoundBreakPreviewStarted)
+	{
+		bRoundBreakPreviewStarted = true;
+		FTimerHandle Delay;
+		GetWorldTimerManager().SetTimer(Delay, FTimerDelegate::CreateWeakLambda(this, [this, ScreenshotAfterSeconds]() { CTPreviewRoundBreak(ScreenshotAfterSeconds); }), 12.f, false);
+		return;
+	}
+	if (!IsLocalController() || !RoundBreakWidgetClass) { return; }
+	if (!RoundBreakWidget) { RoundBreakWidget = CreateWidget<UCTRoundBreakWidget>(this, RoundBreakWidgetClass); }
+	if (!RoundBreakWidget) { return; }
+
+	FCTRoundBreakInfo Info;
+	Info.RoundNumber = 1;
+	Info.TeamEnergy = { 47, 31 };
+	Info.WinsBefore = { 0, 0 };
+	Info.WinsAfter = { 1, 0 };
+	const TCHAR* Names[] = { TEXT("Chick"), TEXT("Momo"), TEXT("Tori"), TEXT("Pipi"), TEXT("Coco"), TEXT("Lulu"), TEXT("Kiki"), TEXT("Yaya") };
+	const int32 Scores[] = { 21, 14, 8, 4, 12, 9, 6, 4 };
+	for (int32 Index = 0; Index < 8; ++Index)
+	{
+		FCTRoundBreakEntry Entry;
+		Entry.Name = Names[Index];
+		Entry.TeamId = Index / 4;
+		Entry.Score = Scores[Index];
+		Info.Entries.Add(Entry);
+	}
+	RoundBreakWidget->Show(Info, 0);
+	if (!RoundBreakWidget->IsInViewport()) { RoundBreakWidget->AddToViewport(40); }
+
+	FTimerHandle Handle;
+	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this]() { HideRoundBreakPopup(); }), 8.f, false);
+	if (ScreenshotAfterSeconds > 0)
+	{
+		FTimerHandle ShotHandle;
+		GetWorldTimerManager().SetTimer(ShotHandle, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("Shot ShowUI Name=RoundBreakPreview")); }), static_cast<float>(ScreenshotAfterSeconds), false);
+	}
+}
+
 void ACTPlayerController::HandleRoundChanged(int32 NewRoundNumber)
 {
 	if (!IsLocalController() || NewRoundNumber <= 0) { return; }
@@ -336,8 +399,31 @@ void ACTPlayerController::PlayerTick(float DeltaTime)
 	}
 }
 
+void ACTPlayerController::ShowRoundBreakPopup()
+{
+	const ACTGameState* GameState = BoundGameState.Get();
+	if (!IsLocalController() || !RoundBreakWidgetClass || !GameState || !GetWorld() || GetWorld()->bIsTearingDown) { return; }
+
+	if (!RoundBreakWidget) { RoundBreakWidget = CreateWidget<UCTRoundBreakWidget>(this, RoundBreakWidgetClass); }
+	if (!RoundBreakWidget) { return; }
+
+	const ACTPlayerState* MyState = GetPlayerState<ACTPlayerState>();
+	const int32 MyTeam = (MyState && MyState->GetTeamId() >= 0) ? FMath::Clamp(MyState->GetTeamId(), 0, 1) : 0;
+	RoundBreakWidget->Show(GameState->GetRoundBreakInfo(), MyTeam);
+	if (!RoundBreakWidget->IsInViewport()) { RoundBreakWidget->AddToViewport(40); }
+	UE_LOG(LogTemp, Log, TEXT("[CT-Test] 라운드 결과 팝업 표시: 라운드 %d, 줄 %d개"), GameState->GetRoundBreakInfo().RoundNumber, GameState->GetRoundBreakInfo().Entries.Num());
+}
+
+void ACTPlayerController::HideRoundBreakPopup()
+{
+	if (RoundBreakWidget && RoundBreakWidget->IsInViewport()) { RoundBreakWidget->RemoveFromParent(); }
+}
+
 void ACTPlayerController::HandlePhaseChanged(ECTGamePhase NewPhase)
 {
+	if (NewPhase == ECTGamePhase::RoundBreak) { ShowRoundBreakPopup(); }
+	else { HideRoundBreakPopup(); }
+
 	if (NewPhase == ECTGamePhase::Finished)
 	{
 		ShowResultScreen();
@@ -351,7 +437,16 @@ void ACTPlayerController::HandlePhaseChanged(ECTGamePhase NewPhase)
 void ACTPlayerController::ShowResultScreen()
 {
 	// 월드가 정리되는 중에는 위젯을 만들 수 없음
-	if (!ResultWidget || !GetWorld() || GetWorld()->bIsTearingDown) { return; }
+	if (!GetWorld() || GetWorld()->bIsTearingDown) { return; }
+
+	// 보물찾기는 전용 결과 화면 (A팀 / B팀 / 가운데 승리 팀)
+	if (TreasureResultWidgetClass && BoundGameState.IsValid() && BoundGameState->GetModeType() == ECTGameModeType::TreasureHunt && !Cast<UCTTreasureResultWidget>(ResultWidget))
+	{
+		if (ResultWidget && ResultWidget->IsInViewport()) { ResultWidget->RemoveFromParent(); }
+		ResultWidget = CreateWidget<UCTTreasureResultWidget>(this, TreasureResultWidgetClass);
+		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 보물찾기 결과 화면 표시"));
+	}
+	if (!ResultWidget) { return; }
 
 	// 열려 있던 ESC 메뉴와 전화 팝업은 닫고 결과 화면이 이어받음
 	ClosePhonePopup();

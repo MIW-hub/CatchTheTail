@@ -303,6 +303,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Combat")
 	bool IsHoldingThrowable() const { return HeldThrowable != nullptr; }
 
+	// 오브젝트를 들 때 붙일 손 소켓(본) 이름. 메시에 없으면 몸 중심에 붙임
+	FName GetHeldSocketName() const { return HeldSocketName; }
+
 	// 서버 전용: 들고 있던 오브젝트가 사라질 때 손에서 뺌 / AI 가 던짐
 	void ClearHeldThrowable(ACTThrowable* Throwable);
 	void AIThrow();
@@ -312,6 +315,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	// 맵 밖(바닥 아래)으로 떨어지면 시작 지점으로 되돌림 (서버)
+	virtual void FellOutOfWorld(const class UDamageType& DmgType) override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -491,9 +496,22 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation", meta = (ClampMin = "0"))
 	float GhostWalkMinSpeed = 30.f;
 
+	// 오브젝트를 들고 있는 동안 상체만 재생하는 몽타주 (하체는 걷기 애니메이션이 그대로 나옴).
+	// 몽타주의 슬롯은 AnimBP 에서 상체 본부터 섞도록 만든 별도 슬롯(예: UpperBody)이고, 그 슬롯은 DefaultSlot 과 다른 슬롯 그룹이어야 달리기·잡기 몽타주와 서로 끊지 않음.
+	// 처음부터 재생하고, HoldMontageLoopSection 섹션이 있으면 거기서 반복함 (잡기 몽타주의 끝 자세만 반복하고 싶을 때)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> HoldMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	FName HoldMontageLoopSection = TEXT("Loop");
+
 	// 달리기 반복 몽타주, 섹션명=RunMontageLoopSection
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
 	TObjectPtr<UAnimMontage> RunMontage;
+
+	// 던지기 몽타주 (양손으로 던지는 동작만 하고 끝나면 원래 자세로 돌아감). 상체 슬롯(UpperBody)에 만들면 하체는 그대로 걸음. 비면 잡기 몽타주를 씀
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
+	TObjectPtr<UAnimMontage> ThrowMontage;
 
 	// 반복 섹션 이름
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Animation")
@@ -730,6 +748,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw")
 	FVector ThrowReleaseOffset = FVector(60.f, 0.f, 10.f);
 
+	// 오브젝트를 들 때 붙이는 손 본/소켓
+	UPROPERTY(EditDefaultsOnly, Category = "CT|Throw")
+	FName HeldSocketName = TEXT("RightHand");
+
 	UPROPERTY(Replicated)
 	TObjectPtr<ACTThrowable> HeldThrowable;
 
@@ -858,6 +880,7 @@ protected:
 
 	// 달리기 몽타주 반복/정지 (매 프레임)
 	void UpdateRunMontage();
+	void UpdateHoldMontage();
 	void UpdateGhostWalkMontage();
 
 	// 넘어짐 끝나면 일어나기 재생

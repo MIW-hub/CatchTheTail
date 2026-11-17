@@ -32,7 +32,8 @@ enum class ECTGamePhase : uint8
 	Playing           UMETA(DisplayName = "Playing"),
 	Finished          UMETA(DisplayName = "Finished"),
 	Countdown         UMETA(DisplayName = "Countdown"), // 시작 전 카운트다운
-	Lobby             UMETA(DisplayName = "Lobby")     // 대기 로비
+	Lobby             UMETA(DisplayName = "Lobby"),     // 대기 로비
+	RoundBreak        UMETA(DisplayName = "Round Break") // 라운드 사이 쉬는 시간 (결과 팝업, 다음 라운드 준비)
 };
 
 // 달리기 상태
@@ -52,7 +53,8 @@ enum class ECTCharacterAction : uint8
 	Push   UMETA(DisplayName = "Push"),   // 밀기 (오른손)
 	Caught UMETA(DisplayName = "Caught"), // 꼬리를 잡힘
 	Pushed UMETA(DisplayName = "Pushed"), // 밀려남 (앞으로 엎어짐)
-	PushedBack UMETA(DisplayName = "Pushed Back") // 밀려남 (뒤로 넘어짐)
+	PushedBack UMETA(DisplayName = "Pushed Back"), // 밀려남 (뒤로 넘어짐)
+	Throw  UMETA(DisplayName = "Throw")   // 오브젝트 던지기 (양손)
 };
 
 // 전화부스에서 알아보는 대상

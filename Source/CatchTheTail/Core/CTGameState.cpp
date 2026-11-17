@@ -29,6 +29,8 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, TeamColors);
 	DOREPLIFETIME(ACTGameState, TeamRoundWins);
 	DOREPLIFETIME(ACTGameState, TeamSwapRequests);
+	DOREPLIFETIME(ACTGameState, RoundBreakInfo);
+	DOREPLIFETIME(ACTGameState, RoundBreakEndServerTime);
 	DOREPLIFETIME(ACTGameState, Winners);
 	DOREPLIFETIME(ACTGameState, bIsTie);
 }
@@ -63,6 +65,28 @@ void ACTGameState::SetGameResult(const TArray<ACTPlayerState*>& NewWinners, bool
 	}
 	bIsTie = bNewIsTie;
 	ForceNetUpdate();
+}
+
+void ACTGameState::ExtendGameTimes(float Seconds)
+{
+	if (!HasAuthority()) { return; }
+	GameEndServerTime += Seconds;
+	if (ForfeitUnlockServerTime > 0.0) { ForfeitUnlockServerTime += Seconds; }
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetRoundBreak(const FCTRoundBreakInfo& NewInfo, double NewEndServerTime)
+{
+	if (!HasAuthority()) { return; }
+	RoundBreakInfo = NewInfo;
+	RoundBreakEndServerTime = NewEndServerTime;
+	ForceNetUpdate();
+}
+
+float ACTGameState::GetRoundBreakRemainingSeconds() const
+{
+	if (Phase != ECTGamePhase::RoundBreak) { return 0.f; }
+	return static_cast<float>(FMath::Max(0.0, RoundBreakEndServerTime - GetServerWorldTimeSeconds()));
 }
 
 float ACTGameState::GetRoundRemainingSeconds() const

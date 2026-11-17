@@ -80,7 +80,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable", meta = (ClampMin = "0"))
 	float ThrowerSafeSeconds = 0.4f;
 
-	// 들었을 때 캐릭터 몸 기준 위치 (머리 위)
+	// 손 소켓에 붙었을 때 손 기준 위치(손 방향 기준 cm). 공이 손에서 어긋나 보이면 블루프린트에서 조절
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable")
+	FVector HeldHandOffset = FVector::ZeroVector;
+
+	// 손 소켓이 없을 때만 쓰는, 캐릭터 몸 기준 위치 (머리 위)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Throwable")
 	FVector HeldOffset = FVector(0.f, 0.f, 135.f);
 
@@ -91,6 +95,13 @@ protected:
 private:
 	UFUNCTION()
 	void OnRep_HeldBy();
+
+	// 캐릭터는 몸이 닿아도 서로 밀리지 않고 겹쳐 지나가며(겹침 이벤트로 맞음을 알림), 월드(벽, 바닥, 다른 물체)에 닿으면 그 던지기는 더 이상 맞히지 못함
+	UFUNCTION()
+	void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
+	// 놓인 상태의 충돌 설정 (물리 몸체, 캐릭터와는 겹침)
+	void ApplyFreeCollision();
 
 	UFUNCTION()
 	void HandleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);

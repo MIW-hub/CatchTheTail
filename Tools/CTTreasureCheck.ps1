@@ -22,6 +22,7 @@ if ((Count "보물찾기 라운드 \d 정산") -ne 3) { $fail += "라운드 정�
 if ((Count "보물찾기 종료") -ne 1) { $fail += "보물찾기 종료 결과가 1번이 아님" }
 if ((Count "던지기 오브젝트 20개 배치") -ne 3) { $fail += "라운드마다 던지기 오브젝트 20개 배치가 3번이 아님" }
 if ((Count "게임 종료") -ne 1) { $fail += "게임 종료가 1번이 아님" }
+if ((Count "\[CT\] 오류:") -gt 0) { $fail += "오류 로그가 있음: " + (($events | Where-Object { $_ -match "\[CT\] 오류:" } | Select-Object -First 3) -join " / ") }
 $picked = Count "오브젝트 들기"; $thrown = Count "오브젝트 던짐"; $hit = Count "보물찾기 맞음"
 if ($AiCount -gt 0 -and $picked -le 0) { $fail += "AI가 오브젝트를 한 번도 들지 않음" }
 # 에너지를 누가 먹기는 했는지 (AI가 있으면 합계가 0이 아니어야 함)

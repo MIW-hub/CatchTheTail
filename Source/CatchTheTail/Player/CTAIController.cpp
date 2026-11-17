@@ -816,10 +816,24 @@ void ACTAIController::ThinkTreasure(ACTCharacter& Me, double Now)
 	for (const TWeakObjectPtr<ACTEnergyPickup>& Weak : EnergyList)
 	{
 		ACTEnergyPickup* Energy = Weak.Get();
-		if (!Energy || Energy->IsActorBeingDestroyed()) { continue; }
+		if (!Energy || Energy->IsActorBeingDestroyed() || !Energy->IsLanded()) { continue; } // 떨어지는 중인 것은 먹을 수 없음
+		if (const double* SkipUntil = EnergySkipUntil.Find(Weak)) { if (Now < *SkipUntil) { continue; } }
 
 		const float Distance = FVector::Dist2D(MyLocation, Energy->GetActorLocation());
 		if (Distance < BestDistance) { Best = Energy; BestDistance = Distance; }
+	}
+
+	// 같은 에너지를 10초 넘게 쫓는데도 못 먹으면 닿을 수 없는 곳으로 보고 25초 동안 제외
+	if (Best)
+	{
+		if (LastEnergyTarget.Get() != Best) { LastEnergyTarget = Best; LastEnergyTargetSince = Now; }
+		else if (Now - LastEnergyTargetSince > 10.0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT] 오류: AI 가 에너지에 닿지 못해 목표에서 제외함 (%s, 위치 %s)"), *GetNameSafe(GetPawn()), *Best->GetActorLocation().ToString());
+			EnergySkipUntil.Add(Best, Now + 25.0);
+			LastEnergyTarget.Reset();
+			Best = nullptr;
+		}
 	}
 
 	// 오브젝트를 안 들고 있고 가까이에 있으면 집으러 감 (에너지보다 가까울 때)

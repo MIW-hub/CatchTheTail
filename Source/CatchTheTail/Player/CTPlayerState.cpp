@@ -226,6 +226,21 @@ void ACTPlayerState::OnRep_Energy()
 		if (TestVar->GetInt() > 0) { UE_LOG(LogTemp, Log, TEXT("[CT-Test] 클라: 에너지 값 %d"), Energy); }
 	}
 #endif
+	// 보물찾기: 내 에너지가 1개 늘면 작은 소리. 꼬리 하나가 완성되는 10개째는 꼬리 소리(TailGained)가 나오므로 건너뜀
+	if (Energy > LastEnergyForSound && IsLocalPlayerForSound())
+	{
+		constexpr int32 EnergyPerTailForSound = 10; // UCTRule_TreasureHunt::EnergyPerTail 과 같아야 함
+		const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;
+		const bool bTailCompleted = (Energy / EnergyPerTailForSound) > (LastEnergyForSound / EnergyPerTailForSound);
+		if (!bTailCompleted && CTGameState && CTGameState->GetPhase() == ECTGamePhase::Playing)
+		{
+			if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr)
+			{
+				Audio->PlaySfx(ECTSfx::EnergyPicked);
+			}
+		}
+	}
+	LastEnergyForSound = Energy;
 	NotifyChanged();
 }
 

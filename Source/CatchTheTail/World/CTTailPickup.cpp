@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTTailPickup.h"
+#include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
 #include "../Player/CTCharacter.h"
 #include "../Player/CTPlayerState.h"
@@ -108,6 +109,15 @@ int32 ACTTailPickup::DropTailsFromCharacter(ACTCharacter* Character, int32 TailL
 	UWorld* World = Character ? Character->GetWorld() : nullptr;
 	const ACTGameState* CTGameState = World ? World->GetGameState<ACTGameState>() : nullptr;
 	if (!World || !CTGameState || CTGameState->GetPhase() != ECTGamePhase::Playing || !World->GetAuthGameMode()) { return 0; }
+
+	// 꼬리 아이템을 쓰지 않는 모드(보물찾기)는 규칙이 직접 처리함: 에너지를 떨굼
+	if (ACTGameMode* HazardMode = World->GetAuthGameMode<ACTGameMode>())
+	{
+		if (!HazardMode->ModeUsesTailPickups())
+		{
+			return HazardMode->HandleHazardHit(Character, Direction);
+		}
+	}
 
 	ACTPlayerState* PlayerState = Character->GetPlayerState<ACTPlayerState>();
 	if (!PlayerState || PlayerState->IsForfeited() || PlayerState->GetTailCount() <= 0) { return 0; }

@@ -6,6 +6,7 @@
 #include "CTGameState.h"
 #include "../Player/CTPlayerState.h"
 #include "../Player/CTCharacter.h"
+#include "../Player/CTGrappleComponent.h"
 #include "../World/CTEnergyPickup.h"
 #include "../World/CTThrowable.h"
 #include "Components/CapsuleComponent.h"
@@ -99,6 +100,28 @@ void UCTRule_TreasureHunt::OnRoundStart(int32 RoundNumber)
 	CurrentRound = RoundNumber;
 	bRoundScored = false;
 
+	// 쉬는 시간에 이미 준비했으면 다시 하지 않음 (첫 라운드와 쉬는 시간이 없을 때만 여기서 준비)
+	if (!bNextRoundPrepared) { PrepareRound(RoundNumber, 0.f); }
+	else if (RoundNumber == 1) { PlacePlayersRandomly(true); } // 카운트다운 때 준비했고, 그 뒤에 들어온 AI 만 놓음
+	bNextRoundPrepared = false;
+
+	// 라운드가 시작될 때는 에너지가 모두 내려앉아 있어야 함 (아니면 준비 시간 계산 오류)
+	if (UWorld* CheckWorld = Mode->GetWorld())
+	{
+		int32 StillFalling = 0;
+		for (TActorIterator<ACTEnergyPickup> It(CheckWorld); It; ++It) { if (!It->IsLanded()) { ++StillFalling; } }
+		if (StillFalling > 0) { UE_LOG(LogTemp, Log, TEXT("[CT] 오류: 라운드 %d 시작 때 아직 떨어지는 에너지 %d개"), RoundNumber, StillFalling); }
+	}
+	PrePlaced.Reset();
+}
+
+int32 UCTRule_TreasureHunt::PrepareRound(int32 RoundNumber, float DropWindowSeconds)
+{
+	ACTGameMode* Mode = GetGameMode();
+	if (!Mode) { return 0; }
+
+	CurrentRound = RoundNumber;
+
 	// 라운드마다 개인 에너지와 꼬리를 0으로 되돌리고 에너지를 새로 깖
 	for (ACTPlayerState* Player : Mode->CollectPlayers())
 	{
@@ -107,9 +130,79 @@ void UCTRule_TreasureHunt::OnRoundStart(int32 RoundNumber)
 
 	ClearEnergies();
 	ClearThrowables();
-	SpawnEnergies();
+	// 떨어지는 시간(약 0.9초)과 여유를 빼고 남는 만큼 안에서 시작 시각을 흩음 (최대 2초). 준비 시간이 0이면 바로 그 자리에 놓음
+	const int32 Placed = SpawnEnergies(DropWindowSeconds > 0.f ? FMath::Clamp(DropWindowSeconds - 1.4f, 0.f, 2.f) : -1.f);
 	SpawnThrowables();
-	PlacePlayersRandomly();
+	// 첫 라운드는 카운트다운 때 이미 놓인 플레이어를 다시 옮기지 않음
+	PlacePlayersRandomly(RoundNumber == 1);
+	return Placed;
+}
+
+void UCTRule_TreasureHunt::PrepareNextRound(int32 NextRoundNumber)
+{
+	// 쉬는 시간이 시작되고 1초 뒤에 준비하므로, 남은 시간 안에 모두 내려앉아야 함
+	PrepareRound(NextRoundNumber, RoundBreakSeconds - 1.f);
+	bNextRoundPrepared = true;
+}
+
+int32 UCTRule_TreasureHunt::OnHazardHit(ACTCharacter* Victim, const FVector& Direction)
+{
+	ACTPlayerState* VictimState = Victim ? Victim->GetPlayerState<ACTPlayerState>() : nullptr;
+	if (!VictimState || VictimState->IsForfeited() || VictimState->IsOnlyASpectator()) { return 0; }
+
+	// 던진 오브젝트에 맞았을 때와 같음: 에너지의 절반(내림, 1개 이상이면 최소 1개)을 떨어뜨림
+	const int32 Energy = VictimState->GetEnergy();
+	const int32 Loss = (Energy <= 0) ? 0 : FMath::Max(Energy / 2, 1);
+	if (Loss <= 0) { return 0; }
+
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 충돌체에 맞음: %s, 에너지 %d -> %d (-%d)"), *VictimState->GetPlayerName(), Energy, Energy - Loss, Loss);
+	SetPlayerEnergy(VictimState, Energy - Loss);
+	DropEnergies(Victim, Loss);
+	return Loss;
+}
+
+void UCTRule_TreasureHunt::FillRoundBreakInfo(FCTRoundBreakInfo& OutInfo, int32 RoundNumber)
+{
+	ACTGameMode* Mode = GetGameMode();
+	OutInfo.RoundNumber = RoundNumber;
+	OutInfo.TeamEnergy = { GetTeamEnergy(0), GetTeamEnergy(1) };
+	OutInfo.WinsAfter = { RoundWins[0], RoundWins[1] };
+	// 이번 라운드로 오른 승점을 빼서 팝업이 "이전 승점 -> +1" 로 올려 보여줌
+	const int32 E0 = OutInfo.TeamEnergy[0], E1 = OutInfo.TeamEnergy[1];
+	OutInfo.WinsBefore = { RoundWins[0] - (E0 >= E1 ? 1 : 0), RoundWins[1] - (E1 >= E0 ? 1 : 0) };
+
+	OutInfo.Entries.Reset();
+	if (!Mode) { return; }
+	for (ACTPlayerState* Player : Mode->CollectPlayers())
+	{
+		FCTRoundBreakEntry Entry;
+		Entry.Name = Player->GetPlayerName();
+		Entry.TeamId = Player->GetTeamId();
+		Entry.Score = Player->GetEnergy();
+		OutInfo.Entries.Add(Entry);
+	}
+	// 점수 높은 순
+	OutInfo.Entries.Sort([](const FCTRoundBreakEntry& A, const FCTRoundBreakEntry& B) { return A.Score > B.Score; });
+}
+
+void UCTRule_TreasureHunt::OnCountdownStart()
+{
+	// 첫 라운드는 시작 카운트다운 동안 미리 준비: 에너지를 깔아 모두 내려앉게 하고 플레이어를 제자리에 놓음 (카운트다운이 다시 시작돼도 한 번만 깖)
+	ACTGameMode* Mode = GetGameMode();
+	if (Mode && !bNextRoundPrepared)
+	{
+		bNextRoundPrepared = true;
+		// 이동 지도(NavMesh)가 아직 준비되지 않은 맵은 에너지가 거의 안 깔림: 그러면 라운드 시작 때 바로 그 자리에 깖 (떨어뜨리지 않음)
+		if (PrepareRound(1, Mode->GameStartCountdownSeconds) < EnergyPerRound / 2)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CT] 카운트다운 중에는 에너지를 충분히 깔지 못해(이동 지도 준비 중) 라운드 시작 때 다시 깖"));
+			bNextRoundPrepared = false;
+		}
+	}
+	else
+	{
+		PlacePlayersRandomly(true);
+	}
 }
 
 void UCTRule_TreasureHunt::ClearEnergies()
@@ -162,21 +255,23 @@ bool UCTRule_TreasureHunt::PickClearPoint(const FVector& Origin, float Radius, f
 	return true;
 }
 
-void UCTRule_TreasureHunt::SpawnEnergies()
+int32 UCTRule_TreasureHunt::SpawnEnergies(float MaxDropDelay)
 {
 	UWorld* World = GetGameMode() ? GetGameMode()->GetWorld() : nullptr;
-	if (!World) { return; }
+	if (!World) { return 0; }
 
 	// 길찾기가 닿는 범위의 기준이 될 시작점들
 	TArray<FVector> Origins;
 	for (TActorIterator<APlayerStart> It(World); It; ++It) { Origins.Add(It->GetActorLocation()); }
-	if (Origins.IsEmpty()) { return; }
+	if (Origins.IsEmpty()) { return 0; }
 
 	TArray<FVector> Placed;
+	int32 Dropped = 0;
 	for (int32 Attempt = 0; Attempt < EnergyPerRound * 30 && Placed.Num() < EnergyPerRound; ++Attempt)
 	{
 		FVector Point;
-		if (!PickClearPoint(Origins[FMath::RandRange(0, Origins.Num() - 1)], 30000.f, 40.f, 40.f, Point)) { continue; }
+		// 벽에 바짝 붙어 가려 보이는 자리를 피하려고 주변 80cm 가 비어 있는 곳만 고름
+		if (!PickClearPoint(Origins[FMath::RandRange(0, Origins.Num() - 1)], 30000.f, 80.f, 80.f, Point)) { continue; }
 
 		// 서로 너무 가깝게 겹치지 않게
 		bool bTooClose = false;
@@ -186,11 +281,20 @@ void UCTRule_TreasureHunt::SpawnEnergies()
 		}
 		if (bTooClose) { continue; }
 
+		// 머리 위가 하늘로 트여 있으면 하늘에서 떨어뜨림 (천장, 지붕, 나뭇가지 아래는 바로 그 자리에 놓음)
+		const FVector Spot = Point + FVector(0.f, 0.f, 60.f);
+		FHitResult SkyHit;
+		FCollisionQueryParams SkyParams(SCENE_QUERY_STAT(CTEnergySky), false);
+		const bool bOpenSky = !World->SweepSingleByChannel(SkyHit, Spot + FVector(0.f, 0.f, 20.f), Spot + FVector(0.f, 0.f, 1600.f), FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(40.f), SkyParams);
+		const float FallDelay = (bOpenSky && MaxDropDelay >= 0.f) ? FMath::FRandRange(0.f, MaxDropDelay) : -1.f;
+
 		Placed.Add(Point);
-		ACTEnergyPickup::Spawn(World, Point + FVector(0.f, 0.f, 60.f), 1);
+		if (bOpenSky) { ++Dropped; }
+		ACTEnergyPickup::Spawn(World, Spot, 1, FallDelay);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 에너지 %d개 배치"), CurrentRound, Placed.Num());
+	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 에너지 %d개 배치 (하늘에서 %d개)"), CurrentRound, Placed.Num(), Dropped);
+	return Placed.Num();
 }
 
 void UCTRule_TreasureHunt::ClearThrowables()
@@ -251,7 +355,7 @@ void UCTRule_TreasureHunt::SpawnThrowables()
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 던지기 오브젝트 모양: %s"), ThrowableClass ? *ThrowableClass->GetName() : TEXT("기본 공"));
 }
 
-void UCTRule_TreasureHunt::PlacePlayersRandomly()
+void UCTRule_TreasureHunt::PlacePlayersRandomly(bool bOnlyNew)
 {
 	ACTGameMode* Mode = GetGameMode();
 	UWorld* World = Mode ? Mode->GetWorld() : nullptr;
@@ -267,6 +371,11 @@ void UCTRule_TreasureHunt::PlacePlayersRandomly()
 	{
 		ACTCharacter* Character = Cast<ACTCharacter>(Player->GetPawn());
 		if (!Character) { continue; }
+		if (bOnlyNew && PrePlaced.Contains(Player))
+		{
+			Taken.Add(Character->GetActorLocation()); // 이미 놓인 사람 자리는 피함
+			continue;
+		}
 
 		const UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
 		const float Radius = Capsule ? Capsule->GetScaledCapsuleRadius() : 34.f;
@@ -292,12 +401,14 @@ void UCTRule_TreasureHunt::PlacePlayersRandomly()
 		if (!bFound) { continue; } // 못 찾으면 그 자리에 둠
 
 		Taken.Add(Point);
+		PrePlaced.Add(Player);
 		Character->GetCharacterMovement()->StopMovementImmediately();
 		Character->TeleportTo(Point + FVector(0.f, 0.f, HalfHeight + 5.f), FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f));
 		++Moved;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 플레이어 %d명 무작위 스폰"), CurrentRound, Moved);
+	if (bOnlyNew && Moved > 0 && !Taken.IsEmpty() && Moved < Taken.Num()) { UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d: 새로 들어온 플레이어 %d명 추가 배치"), CurrentRound, Moved); }
+	else if (!(bOnlyNew && Moved == 0)) { UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 라운드 %d 준비: 플레이어 %d명 무작위 스폰"), CurrentRound, Moved); }
 }
 
 // 에너지와 꼬리
@@ -391,7 +502,8 @@ void UCTRule_TreasureHunt::DropEnergies(ACTCharacter* Victim, int32 Count)
 		{
 			Spot.Z = Origin.Z - Victim->GetSimpleCollisionHalfHeight();
 		}
-		ACTEnergyPickup::Spawn(World, Spot + FVector(0.f, 0.f, 60.f), 1);
+		// 맞은 사람의 가슴 높이에서 터지듯 튀어 나가 바닥에 내려앉음
+		ACTEnergyPickup::SpawnBurst(World, Origin + FVector(0.f, 0.f, 40.f), Spot + FVector(0.f, 0.f, 60.f), 1);
 	}
 }
 
@@ -465,9 +577,29 @@ bool UCTRule_TreasureHunt::HandleGrab(ACTPlayerState* Grabber, ACTPlayerState* V
 	if (!Grabber || !Victim || Grabber == Victim) { return false; }
 	if (Grabber->GetTeamId() == Victim->GetTeamId()) { return false; } // 아군은 잡을 수 없음
 
+	ACTCharacter* GrabberCharacter = Cast<ACTCharacter>(Grabber->GetPawn());
 	ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn());
 	if (!VictimCharacter || VictimCharacter->IsBoothLocked()) { return false; } // 이미 멈춰 있으면 중복으로 잡지 않음
 
+	// 꼬리잡기와 같은 연타 대결: 잡은 쪽이 이기면 FinalizeGrab(약 2초 멈춤), 잡힌 쪽이 뿌리치면 잡은 쪽이 튕겨 나감
+	if (Mode->bUseGrappleStruggle && GrabberCharacter && GrabberCharacter->GetGrapple() && VictimCharacter->GetGrapple())
+	{
+		return GrabberCharacter->GetGrapple()->BeginGrapple(VictimCharacter);
+	}
+
+	return FinalizeGrab(Grabber, Victim);
+}
+
+bool UCTRule_TreasureHunt::FinalizeGrab(ACTPlayerState* Grabber, ACTPlayerState* Victim)
+{
+	ACTGameMode* Mode = GetGameMode();
+	const ACTGameState* GameState = Mode ? Mode->GetGameState<ACTGameState>() : nullptr;
+	if (!GameState || GameState->GetPhase() != ECTGamePhase::Playing) { return false; }
+	if (!Grabber || !Victim || Grabber == Victim) { return false; }
+	if (Grabber->GetTeamId() == Victim->GetTeamId()) { return false; }
+
+	ACTCharacter* VictimCharacter = Cast<ACTCharacter>(Victim->GetPawn());
+	if (!VictimCharacter || VictimCharacter->IsBoothLocked()) { return false; }
 	// 약 2초 멈춤. 멈춘 동안에도 무적이 아님
 	VictimCharacter->SetBoothLocked(true);
 	VictimCharacter->MulticastPlayAction(ECTCharacterAction::Caught, true);

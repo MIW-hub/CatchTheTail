@@ -7,6 +7,7 @@
 #include "../Player/CTCharacter.h"
 #include "../Player/CTLobbyPlayerController.h"
 #include "../Player/CTPlayerState.h"
+#include "../World/CTLobbyBoundary.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
 #include "TimerManager.h"
@@ -42,6 +43,16 @@ namespace
 		}
 		return Code;
 	}
+}
+
+void ACTLobbyGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 점프로 로비 밖에 나가지 못하게 가장자리에 보이지 않는 벽을 세움
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	GetWorld()->SpawnActor<ACTLobbyBoundary>(ACTLobbyBoundary::StaticClass(), FTransform::Identity, Params);
 }
 
 void ACTLobbyGameMode::InitGameState()

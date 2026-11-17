@@ -17,6 +17,7 @@ enum class ECTSfx : uint8
 	CountdownTick  UMETA(DisplayName = "Countdown Tick"),   // 카운트다운 숫자가 바뀜
 	RoundStart     UMETA(DisplayName = "Round Start"),      // 라운드 시작
 	TailGained     UMETA(DisplayName = "Tail Gained"),      // 내 꼬리가 늘어남
+	EnergyPicked   UMETA(DisplayName = "Energy Picked"),    // 보물찾기: 에너지 1개를 먹음 (10개 모이면 TailGained 가 대신 나옴)
 	TailLost       UMETA(DisplayName = "Tail Lost"),        // 꼬리를 잡힘
 	Push           UMETA(DisplayName = "Push"),             // 밀기
 	GhostRespawn   UMETA(DisplayName = "Ghost Respawn"),    // 유령에서 부활
@@ -89,6 +90,9 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
 	TSoftObjectPtr<USoundBase> TailGained;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
+	TSoftObjectPtr<USoundBase> EnergyPicked;
 
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
 	TSoftObjectPtr<USoundBase> TailLost;

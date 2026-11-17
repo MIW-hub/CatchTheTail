@@ -1,5 +1,9 @@
 ﻿// Copyright Moon Party Games. All Rights Reserved.
 #include "CTCharacter.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
+#include "GameFramework/GameModeBase.h"
 #include "../Core/CTAudioSubsystem.h"
 #include "../Core/CTGameMode.h"
 #include "../Core/CTGameState.h"
@@ -258,6 +262,21 @@ void ACTCharacter::BeginPlay()
 	FillMissingEmoteDefaults();
 	Super::BeginPlay();
 
+	// 바닥 밑으로 떨어졌을 때 되돌리는 기준 높이 (맵이 따로 정하지 않았을 때만)
+	if (HasAuthority())
+	{
+		if (AWorldSettings* Settings = GetWorld()->GetWorldSettings())
+		{
+			if (Settings->KillZ < -100000.f)
+			{
+				// 시작 지점 중 가장 낮은 곳보다 20m 아래를 기준으로 함 (시작 지점이 없으면 -50m)
+				float LowestStartZ = TNumericLimits<float>::Max();
+				for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It) { LowestStartZ = FMath::Min(LowestStartZ, It->GetActorLocation().Z); }
+				Settings->KillZ = (LowestStartZ < TNumericLimits<float>::Max()) ? LowestStartZ - 2000.f : -5000.f;
+			}
+		}
+	}
+
 	EnsureVoiceTalker();
 
 	// 팔 늘리기: 포즈 확정 직후 팔 뼈 조정 (화면이 있는 쪽만)
@@ -282,6 +301,22 @@ void ACTCharacter::BeginPlay()
 	{
 		RefreshChaseBuff();
 	}
+}
+
+void ACTCharacter::FellOutOfWorld(const UDamageType& DmgType)
+{
+	if (!HasAuthority()) { return; }
+	AController* MyController = GetController();
+	AGameModeBase* GM = GetWorld()->GetAuthGameMode();
+	AActor* Start = (GM && MyController) ? GM->FindPlayerStart(MyController) : nullptr;
+	if (!Start)
+	{
+		Super::FellOutOfWorld(DmgType);
+		return;
+	}
+	UE_LOG(LogTemp, Log, TEXT("[CT] %s 맵 밖으로 떨어져 시작 지점으로 되돌림"), *GetName());
+	TeleportTo(Start->GetActorLocation() + FVector(0.f, 0.f, 100.f), Start->GetActorRotation());
+	if (GetCharacterMovement()) { GetCharacterMovement()->StopMovementImmediately(); }
 }
 
 void ACTCharacter::PossessedBy(AController* NewController)
@@ -467,6 +502,7 @@ UAnimMontage* ACTCharacter::GetActionMontage(ECTCharacterAction Action) const
 	switch (Action)
 	{
 	case ECTCharacterAction::Grab:   return GrabMontage;
+	case ECTCharacterAction::Throw:  return ThrowMontage ? ThrowMontage.Get() : GrabMontage.Get();
 	case ECTCharacterAction::Push:   return PushMontage;
 	case ECTCharacterAction::Caught: return CaughtMontage;
 	case ECTCharacterAction::Pushed: return PushedMontage;
@@ -781,6 +817,7 @@ void ACTCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	UpdateRunMontage();
+	UpdateHoldMontage();
 	UpdateGhostWalkMontage();
 	UpdateEmoteMontage();
 	UpdateBushVisibility();
@@ -987,7 +1024,7 @@ void ACTCharacter::OnGrabPressed()
 	// 보물찾기: 오브젝트를 들고 있으면 같은 키로 던짐 (쿨타임 없음)
 	if (IsHoldingThrowable())
 	{
-		PlayActionMontage(ECTCharacterAction::Grab);
+		PlayActionMontage(ECTCharacterAction::Throw);
 		ServerThrow();
 		return;
 	}
@@ -1147,7 +1184,8 @@ void ACTCharacter::ServerSetRunInput_Implementation(bool bPressed)
 
 void ACTCharacter::TryStartRun()
 {
-	if (IsGhost() || bBoothLocked || RunState != ECTRunState::Idle)
+	// 오브젝트를 들고 있는 동안은 달릴 수 없음
+	if (IsGhost() || bBoothLocked || IsHoldingThrowable() || RunState != ECTRunState::Idle)
 	{
 		return;
 	}
@@ -1493,6 +1531,9 @@ bool ACTCharacter::TryPickupThrowable()
 	}
 	if (!Best) { return false; }
 
+	// 달리는 중에 집었다면 달리기를 멈춤
+	StopRun(false);
+
 	HeldThrowable = Best;
 	Best->AttachToHolder(this);
 	ForceNetUpdate();
@@ -1620,7 +1661,7 @@ void ACTCharacter::ServerThrow_Implementation()
 	ForceNetUpdate();
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 오브젝트 던짐: %s"), *GetPlayerState()->GetPlayerName());
 
-	MulticastPlayAction(ECTCharacterAction::Grab, true);
+	MulticastPlayAction(ECTCharacterAction::Throw, true);
 }
 
 void ACTCharacter::AIThrow()
@@ -1699,7 +1740,7 @@ void ACTCharacter::MulticastPlayAction_Implementation(ECTCharacterAction Action,
 	// 본인 잡기/밀기는 입력 시 이미 재생
 	const bool bAlreadyPlayedLocally =
 		IsLocallyControlled() &&
-		(Action == ECTCharacterAction::Grab || Action == ECTCharacterAction::Push);
+		(Action == ECTCharacterAction::Grab || Action == ECTCharacterAction::Push || Action == ECTCharacterAction::Throw);
 
 	if (!bAlreadyPlayedLocally)
 	{
@@ -2019,6 +2060,32 @@ void ACTCharacter::UpdateRunMontage()
 	else if (bPlaying)
 	{
 		AnimInstance->Montage_Stop(RunMontage->BlendOut.GetBlendTime(), RunMontage);
+	}
+}
+
+void ACTCharacter::UpdateHoldMontage()
+{
+	// 전용 서버는 연출 불필요
+	if (!HoldMontage || GetNetMode() == NM_DedicatedServer) { return; }
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance) { return; }
+
+	const bool bWantHold = HeldThrowable != nullptr && !IsGhost();
+	const bool bPlaying = AnimInstance->Montage_IsPlaying(HoldMontage);
+
+	if (bWantHold && !bPlaying)
+	{
+		AnimInstance->Montage_Play(HoldMontage, 1.f);
+		// 끝 자세 섹션이 있으면 거기서 계속 반복
+		if (HoldMontage->GetSectionIndex(HoldMontageLoopSection) != INDEX_NONE)
+		{
+			AnimInstance->Montage_SetNextSection(HoldMontageLoopSection, HoldMontageLoopSection, HoldMontage);
+		}
+	}
+	else if (!bWantHold && bPlaying)
+	{
+		AnimInstance->Montage_Stop(HoldMontage->BlendOut.GetBlendTime(), HoldMontage);
 	}
 }
 

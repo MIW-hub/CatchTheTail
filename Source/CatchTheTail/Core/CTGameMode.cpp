@@ -205,6 +205,9 @@ void ACTGameMode::BeginStartCountdown()
 	CTGameState->SetStartCountdown(CTGameState->GetServerWorldTimeSeconds() + Delay);
 	CTGameState->SetPhase(ECTGamePhase::Countdown);
 
+	// 카운트다운 동안 이미 시작 위치에 서 있게 함 (게임이 시작되는 순간 위치가 바뀌어 보이지 않게)
+	GetRule()->OnCountdownStart();
+
 	GetWorldTimerManager().SetTimer(AutoStartTimerHandle, this, &ACTGameMode::StartGame, Delay, false);
 }
 
@@ -537,11 +540,54 @@ void ACTGameMode::TickGameFlow()
 		{
 			EndGame();
 		}
+		else if (const float BreakSeconds = GetRule()->GetRoundBreakSeconds(); BreakSeconds > 0.f)
+		{
+			BeginRoundBreak(CTGameState->GetRoundNumber(), BreakSeconds);
+		}
 		else
 		{
 			StartNewRound();
 		}
 	}
+}
+
+void ACTGameMode::BeginRoundBreak(int32 FinishedRound, float Seconds)
+{
+	ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState) { return; }
+
+	// 정산 결과를 팝업용으로 정리한 뒤 쉬는 시간 단계로 넘어감 (이 단계에서는 이동, 잡기, 에너지 먹기가 모두 멈춤)
+	FCTRoundBreakInfo Info;
+	GetRule()->FillRoundBreakInfo(Info, FinishedRound);
+
+	const double Now = CTGameState->GetServerWorldTimeSeconds();
+	CTGameState->ExtendGameTimes(Seconds);
+	CTGameState->SetRoundBreak(Info, Now + Seconds);
+	CTGameState->SetPhase(ECTGamePhase::RoundBreak);
+
+	// 팝업이 뜨고 나서 잠시 뒤에 다음 라운드를 준비 (플레이어 이동, 에너지와 오브젝트 재배치)
+	GetWorldTimerManager().SetTimer(RoundBreakPrepareHandle, this, &ACTGameMode::PrepareBreakRound, FMath::Min(1.0f, Seconds * 0.25f), false);
+	GetWorldTimerManager().SetTimer(RoundBreakEndHandle, this, &ACTGameMode::EndRoundBreak, Seconds, false);
+	UE_LOG(LogTemp, Log, TEXT("[CT] 라운드 %d 종료, 쉬는 시간 %.1f초 (결과 팝업)"), FinishedRound, Seconds);
+}
+
+void ACTGameMode::PrepareBreakRound()
+{
+	const ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::RoundBreak) { return; }
+	GetRule()->PrepareNextRound(CTGameState->GetRoundNumber() + 1);
+}
+
+void ACTGameMode::EndRoundBreak()
+{
+	ACTGameState* CTGameState = GetGameState<ACTGameState>();
+	if (!CTGameState || CTGameState->GetPhase() != ECTGamePhase::RoundBreak) { return; }
+
+	// 준비가 아직 안 됐다면(타이머 지연) 여기서 보장됨: 규칙의 OnRoundStart 가 준비되지 않았으면 직접 준비함
+	GetWorldTimerManager().ClearTimer(RoundBreakPrepareHandle);
+	CTGameState->SetPhase(ECTGamePhase::Playing);
+	StartNewRound();
+	GetWorldTimerManager().SetTimer(FlowTimerHandle, this, &ACTGameMode::TickGameFlow, 0.2f, true);
 }
 
 void ACTGameMode::StartNewRound()
@@ -569,6 +615,16 @@ bool ACTGameMode::HandleTailGrabbed(ACTPlayerState* Grabber, ACTPlayerState* Vic
 {
 	// 잡기 처리는 모드 규칙이 함
 	return GetRule()->HandleGrab(Grabber, Victim);
+}
+
+bool ACTGameMode::ModeUsesTailPickups()
+{
+	return GetRule()->UsesTailPickups();
+}
+
+int32 ACTGameMode::HandleHazardHit(ACTCharacter* Victim, const FVector& Direction)
+{
+	return GetRule()->OnHazardHit(Victim, Direction);
 }
 
 bool ACTGameMode::HandleEnergyPickup(ACTCharacter* Picker, int32 Amount)

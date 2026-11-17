@@ -9,6 +9,7 @@
 class ACTGameMode;
 class ACTPlayerState;
 class ACTCharacter;
+struct FCTRoundBreakInfo;
 
 // 게임 모드마다 달라지는 규칙을 맡는 객체 (서버에서만 존재, 복제하지 않음).
 // 접속, 카운트다운, 시간 진행, AI 생성, 로비 복귀 같은 공통 흐름은 ACTGameMode 가 하고,
@@ -26,6 +27,8 @@ public:
 	virtual ECTGameModeType GetModeType() const PURE_VIRTUAL(UCTGameRule::GetModeType, return ECTGameModeType::TailChase;);
 
 	// 경기 시작 때 (플레이어 초기화)
+	// 서버: 게임 시작 카운트다운이 시작될 때 (플레이어를 미리 제자리에 놓을 수 있음)
+	virtual void OnCountdownStart() {}
 	virtual void OnMatchStart() {}
 
 	// 라운드가 시작될 때 (라운드 시간 설정 전에 부름)
@@ -54,6 +57,21 @@ public:
 
 	// 던진 오브젝트가 캐릭터에 맞았을 때 (서버). Thrower 는 없을 수 있음
 	virtual void OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* Victim, const FVector& Velocity) {}
+
+	// 꼬리 아이템(ACTTailPickup)을 쓰는 모드인가. 보물찾기는 쓰지 않음 (부딪히면 에너지를 떨굼)
+	virtual bool UsesTailPickups() const { return true; }
+
+	// 환경 충돌체(차, 통나무, 드럼통, 낙하물)에 맞았을 때. 규칙이 직접 처리하면 잃은 개수를 돌려줌 (UsesTailPickups 가 false 인 모드)
+	virtual int32 OnHazardHit(ACTCharacter* Victim, const FVector& Direction) { return 0; }
+
+	// 라운드 사이 쉬는 시간(초). 0 이면 쉬지 않고 바로 다음 라운드 (결과 팝업과 다음 라운드 준비에 쓰임)
+	virtual float GetRoundBreakSeconds() const { return 0.f; }
+
+	// 쉬는 시간이 시작될 때 팝업에 보여줄 내용을 채움 (라운드 정산 직후)
+	virtual void FillRoundBreakInfo(FCTRoundBreakInfo& OutInfo, int32 RoundNumber) {}
+
+	// 쉬는 시간 중에 다음 라운드를 미리 준비 (에너지, 오브젝트 재배치, 플레이어 이동). OnRoundStart 는 이미 준비된 것을 다시 하지 않음
+	virtual void PrepareNextRound(int32 NextRoundNumber) {}
 
 	// 목표 색(내가 노리는 색) 규칙을 쓰는 모드인가
 	virtual bool UsesTargetColors() const { return true; }
