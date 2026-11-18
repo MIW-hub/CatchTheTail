@@ -48,7 +48,7 @@
 **목적**: NavMesh 위에서 목적지로 이동하되 위험물을 피하고, NavMesh가 없는 맵에서도 멈추지 않게 한다.
 
 **동작 흐름**
-1. `MoveToPoint/MoveToTarget`가 `MoveToLocation/MoveToActor`(길찾기 사용, 목적지를 NavMesh에 투영)를 호출한다. 결과가 `Failed`면 `bDirectMove=true`로 바꾸고 `Tick`에서 `AddMovementInput`으로 직선 이동한다(목적지 60 cm 이내에서 종료).
+1. `MoveToPoint/MoveToTarget`가 `MoveToLocation/MoveToActor`(길찾기 사용, 목적지를 NavMesh에 투영)를 호출한다. 결과가 `Failed`면 `bDirectMove=true`로 바꾸고 `Tick`에서 `AddMovementInput`으로 직선 이동한다(목적지 60 cm 이내에서 종료). 직선 이동 중 0.5초마다 위치를 비교해 20 cm 미만이면 "막힘"으로 보고 목표 방향의 좌우(±90°, 무작위 ±25°) 중 한쪽으로 0.8초 우회한다. 3번 연속 막히면 현재 에너지 목표를 25초 제외하고 직선 이동을 끝내며 `[CT] 오류: AI 가 장애물에 막혀 목표를 포기함` 로그를 남긴다.
 2. 이동 명령은 매 판단마다 내리지 않는다. `NextMoveCommandTime`(도망 0.5 s, 추적 0.25 s, 아이템/에너지 0.2 s, 위험 회피 0.3 s)이 지났거나 `GetMoveStatus()==Idle`일 때만 낸다.
 3. 배회 목적지 `PickWanderPoint`: `GetRandomReachablePointInRadius`로 8회 뽑아 점수 = `-가운데까지 거리/CenterRoamRadius * WanderCenterBias + 난수 * (1-WanderCenterBias)`가 최대인 곳. 위험물 경로 근처(`IsNearHazardPath`)는 제외. 가운데에서 `CenterPullDistance`보다 멀면 가운데 구역(`CenterRoamRadius`)에서 먼저 고른다.
 4. 도망 목적지 `PickFleePoint`: 10회 샘플, 점수 = `추격자와의 거리 + 400 * (반대 방향 내적) - FleeCenterWeight * 가운데까지 거리`. NavMesh가 없으면 `반대 방향 * FleeSampleRadius * 0.6` 직선.
@@ -81,7 +81,7 @@
 **설계 이유와 주의점**
 - 위험물 목록을 0.4초마다만 모으는 것은 매 판단(0.12초)마다 `TActorIterator`로 전체를 순회하는 비용을 피하기 위해서다. 대신 새로 생긴 위험물은 최대 0.4초 늦게 인식한다.
 - 유령은 위험물에 맞지 않으므로 `GoToTailPickup(bIgnoreHazards=true)`로 도로 위 아이템도 먹으러 간다.
-- NavMesh가 없는 맵의 직선 이동은 벽에 막힐 수 있다(대체 수단일 뿐).
+- NavMesh가 없는 맵의 직선 이동은 벽에 막힐 수 있다(대체 수단일 뿐). 막힘 우회와 목표 포기로 멈춤은 막지만, 근본 해결은 맵에 NavMeshBoundsVolume을 두는 것이다. 큐브 시티(`L_Box`)에는 2026-11-18에 추가했다(`Tools/CTAddNavVolume.py`로 맵 범위에 맞춰 생성, 실행 중 동적 생성 방식).
 
 ---
 
