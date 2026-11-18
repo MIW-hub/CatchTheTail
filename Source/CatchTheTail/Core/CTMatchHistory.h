@@ -50,6 +50,20 @@ struct FCTMatchRecord
 
 	UPROPERTY(BlueprintReadWrite, Category = "CT|History")
 	TArray<FCTMatchRecordEntry> Entries;
+
+	// 보물찾기: 팀 승점으로만 간단히 기록 (A팀 : B팀, 이긴 쪽 승 / 진 쪽 패)
+	UPROPERTY(BlueprintReadWrite, Category = "CT|History")
+	bool bTreasure = false;
+
+	UPROPERTY(BlueprintReadWrite, Category = "CT|History")
+	int32 WinsA = 0;
+
+	UPROPERTY(BlueprintReadWrite, Category = "CT|History")
+	int32 WinsB = 0;
+
+	// 내가 속한 팀 (0 = A팀, 1 = B팀). 내 칸 강조용
+	UPROPERTY(BlueprintReadWrite, Category = "CT|History")
+	int32 MyTeam = 0;
 };
 
 // 방 전적 보관. 게임 메모리에만 두며 방을 나가면 지움 (방 전적이지 내 전적이 아님). 최근 판이 앞에 옴

@@ -69,6 +69,9 @@ private:
 	// bOnlyNew: 이미 놓인 플레이어는 그대로 두고 (그 자리는 피해서) 새로 생긴 플레이어만 놓음
 	void PlacePlayersRandomly(bool bOnlyNew = false);
 
+	// 팀 배정(로비에서 정해진 팀은 유지)과 팀 색을 정해 플레이어에게 입힘. 이미 정해진 팀 색은 그대로 씀
+	void AssignTeamsAndColors(int32 OutTeamCount[2]);
+
 	// 라운드 준비(에너지, 오브젝트, 플레이어 위치)를 쉬는 시간에 이미 했는가
 	bool bNextRoundPrepared = false;
 	// DropWindowSeconds: 라운드가 시작될 때까지 남은 준비 시간 (이 안에 에너지가 모두 내려앉아야 함)

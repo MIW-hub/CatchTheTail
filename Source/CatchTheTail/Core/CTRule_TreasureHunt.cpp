@@ -19,16 +19,11 @@
 
 // 경기 시작: 팀 배정과 팀 색
 
-void UCTRule_TreasureHunt::OnMatchStart()
+void UCTRule_TreasureHunt::AssignTeamsAndColors(int32 OutTeamCount[2])
 {
 	ACTGameMode* Mode = GetGameMode();
 	ACTGameState* GameState = Mode ? Mode->GetGameState<ACTGameState>() : nullptr;
 	if (!Mode || !GameState) { return; }
-
-	CurrentRound = 0;
-	bRoundScored = false;
-	RoundWins[0] = RoundWins[1] = 0;
-	CollectedTotal.Reset();
 
 	const TArray<ACTPlayerState*> Players = Mode->CollectPlayers();
 
@@ -56,10 +51,17 @@ void UCTRule_TreasureHunt::OnMatchStart()
 	// 팀 색: 서로 다른 색 두 개를 무작위로. 같은 팀은 모두 같은 색
 	// (로비에서 미리 정해 둔 색이 있으면 그대로 씀)
 	TArray<ECTColor> TeamColors;
+	if (GameState->GetTeamColor(0) != ECTColor::None && GameState->GetTeamColor(1) != ECTColor::None && GameState->GetTeamColor(0) != GameState->GetTeamColor(1))
+	{
+		TeamColors = { GameState->GetTeamColor(0), GameState->GetTeamColor(1) };
+	}
+	if (TeamColors.Num() != 2)
+	{
 	if (const UCTGameInstance* GameInstance = Mode->GetGameInstance<UCTGameInstance>())
 	{
 		const TArray<ECTColor>& Stored = GameInstance->GetStoredTeamColors();
 		if (Stored.Num() == 2 && Stored[0] != Stored[1]) { TeamColors = Stored; }
+	}
 	}
 	if (TeamColors.Num() != 2)
 	{
@@ -69,12 +71,33 @@ void UCTRule_TreasureHunt::OnMatchStart()
 		TeamColors = { static_cast<ECTColor>(ColorIndices[0]), static_cast<ECTColor>(ColorIndices[1]) };
 	}
 	GameState->SetTeamColors(TeamColors);
-	GameState->SetTeamRoundWins({ 0, 0 });
 
+	// 이미 정해진 팀 색(카운트다운 때 미리 정함)이 있으면 그대로 씀: 게임이 시작될 때 색이 바뀌어 보이지 않게
+	OutTeamCount[0] = TeamCount[0];
+	OutTeamCount[1] = TeamCount[1];
 	for (ACTPlayerState* Player : Players)
 	{
-		// 목표 색은 쓰지 않음 (None)
 		Player->SetColors(TeamColors[Player->GetTeamId()], ECTColor::None);
+	}
+}
+
+void UCTRule_TreasureHunt::OnMatchStart()
+{
+	ACTGameMode* Mode = GetGameMode();
+	ACTGameState* GameState = Mode ? Mode->GetGameState<ACTGameState>() : nullptr;
+	if (!Mode || !GameState) { return; }
+
+	CurrentRound = 0;
+	bRoundScored = false;
+	RoundWins[0] = RoundWins[1] = 0;
+	CollectedTotal.Reset();
+
+	int32 TeamCount[2] = { 0, 0 };
+	AssignTeamsAndColors(TeamCount);
+	GameState->SetTeamRoundWins({ 0, 0 });
+	const TArray<ACTPlayerState*> Players = Mode->CollectPlayers();
+	for (ACTPlayerState* Player : Players)
+	{
 		Player->SetEnergy(0);
 		Player->SetResultEnergy(0);
 		Player->SetTailCount(0);
@@ -158,6 +181,7 @@ int32 UCTRule_TreasureHunt::OnHazardHit(ACTCharacter* Victim, const FVector& Dir
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 충돌체에 맞음: %s, 에너지 %d -> %d (-%d)"), *VictimState->GetPlayerName(), Energy, Energy - Loss, Loss);
 	SetPlayerEnergy(VictimState, Energy - Loss);
 	DropEnergies(Victim, Loss);
+	Victim->MulticastPlayHitSfx(ECTSfx::ThrowHit);
 	return Loss;
 }
 
@@ -187,6 +211,13 @@ void UCTRule_TreasureHunt::FillRoundBreakInfo(FCTRoundBreakInfo& OutInfo, int32 
 
 void UCTRule_TreasureHunt::OnCountdownStart()
 {
+	// 카운트다운 동안 이미 팀과 팀 색을 입혀 둠 (흰색에서 색이 바뀌는 모습이 보이지 않게)
+	{
+		int32 TeamCount[2] = { 0, 0 };
+		AssignTeamsAndColors(TeamCount);
+		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 카운트다운 중 팀 색 미리 입힘: 팀0 %d명, 팀1 %d명"), TeamCount[0], TeamCount[1]);
+	}
+
 	// 첫 라운드는 시작 카운트다운 동안 미리 준비: 에너지를 깔아 모두 내려앉게 하고 플레이어를 제자리에 놓음 (카운트다운이 다시 시작돼도 한 번만 깖)
 	ACTGameMode* Mode = GetGameMode();
 	if (Mode && !bNextRoundPrepared)
@@ -472,6 +503,7 @@ void UCTRule_TreasureHunt::OnThrowableHit(ACTCharacter* Thrower, ACTCharacter* V
 
 	// 맞은 연출은 에너지가 없어도 보여줌
 	Victim->PlayKnockedDown(Velocity);
+	Victim->MulticastPlayHitSfx(ECTSfx::ThrowHit);
 	if (Loss <= 0) { return; }
 
 	SetPlayerEnergy(VictimState, Energy - Loss);

@@ -280,6 +280,8 @@ private:
 	// 포커스를 게임 화면으로 복귀
 	void ReturnFocusToGame();
 
+	friend class ACTLobbyPlayerController; // 개발용 미리보기에서 맵 설정 창을 열 때
+
 	// 맵 선택
 	void RefreshMap(bool bIsHost, bool bStarting);
 	void SetMapSelectOpen(bool bOpen);

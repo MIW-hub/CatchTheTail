@@ -54,6 +54,14 @@ public:
 	UFUNCTION(Exec)
 	void CTLobbyPreview();
 
+	// 디자인 확인용: N초 뒤에 화면(UI 포함)을 저장함
+	UFUNCTION(Exec)
+	void CTLobbyShotAfter(int32 Seconds);
+
+	// 디자인 확인용: 맵 설정 창을 엶
+	UFUNCTION(Exec)
+	void CTOpenMapSettings();
+
 	// 채팅 전송 요청
 	UFUNCTION(BlueprintCallable, Category = "CT|Lobby|Chat")
 	void SendChat(const FString& Message);

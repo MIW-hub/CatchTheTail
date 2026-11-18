@@ -17,6 +17,7 @@
 #include "../World/CTPhoneBooth.h"
 #include "CTCharacter.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
 #include "InputCoreTypes.h"
 #include "UObject/ConstructorHelpers.h"
 #include "EnhancedInputSubsystems.h"
@@ -230,8 +231,21 @@ void ACTPlayerController::ApplyModeUI()
 	}
 	if (!TreasureHudWidget) { return; }
 
-	if (!TreasureHudWidget->IsInViewport()) { TreasureHudWidget->AddToViewport(0); }
-	if (HUDWidget) { HUDWidget->SetVisibility(ESlateVisibility::Collapsed); }
+	if (!TreasureHudWidget->IsInViewport()) { TreasureHudWidget->AddToViewport(1); }
+
+	// 기본 HUD 는 그대로 쓰되(키 안내, 마이크, 순위표) 타겟 / 시간 / 내 꼬리 칸은 보물찾기 HUD 가 대신하므로 숨김. 순위표는 꼬리 수(에너지 10개 = 꼬리 1개)로 매김
+	if (HUDWidget)
+	{
+		// 키 안내: 보물찾기에서는 같은 키로 잡기, 집기, 던지기를 함
+		if (UTextBlock* GrabLabel = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Label_KeyGrab"))))
+		{
+			GrabLabel->SetText(NSLOCTEXT("CT", "UI_Key_GrabThrow", "잡기 / 던지기"));
+		}
+		for (const TCHAR* Name : { TEXT("Group_Target"), TEXT("Group_Time"), TEXT("Group_Tails") })
+		{
+			if (UWidget* Group = HUDWidget->GetWidgetFromName(Name)) { Group->SetVisibility(ESlateVisibility::Collapsed); }
+		}
+	}
 }
 
 void ACTPlayerController::CTStoreShots(int32 Count)
@@ -411,6 +425,7 @@ void ACTPlayerController::ShowRoundBreakPopup()
 	const int32 MyTeam = (MyState && MyState->GetTeamId() >= 0) ? FMath::Clamp(MyState->GetTeamId(), 0, 1) : 0;
 	RoundBreakWidget->Show(GameState->GetRoundBreakInfo(), MyTeam);
 	if (!RoundBreakWidget->IsInViewport()) { RoundBreakWidget->AddToViewport(40); }
+	if (UCTAudioSubsystem* Audio = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCTAudioSubsystem>() : nullptr) { Audio->PlaySfx(ECTSfx::RoundBreak); }
 	UE_LOG(LogTemp, Log, TEXT("[CT-Test] 라운드 결과 팝업 표시: 라운드 %d, 줄 %d개"), GameState->GetRoundBreakInfo().RoundNumber, GameState->GetRoundBreakInfo().Entries.Num());
 }
 

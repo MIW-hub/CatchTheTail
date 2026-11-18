@@ -277,6 +277,7 @@ public:
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayAction(ECTCharacterAction Action, bool bSuccess);
 
+
 	// 서버 호출: 기믹에 맞은 소리를 전원 화면에서 재생
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayHitSfx(ECTSfx Sfx);

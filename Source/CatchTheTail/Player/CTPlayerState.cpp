@@ -286,8 +286,10 @@ void ACTPlayerState::OnRep_IsGhost()
 
 bool ACTPlayerState::IsLocalPlayerForSound() const
 {
+	// AI 는 서버(방장)에서 로컬로 잡히므로, 이 화면의 사람 플레이어 컨트롤러가 조종하는 경우만 인정함 (남이 먹는 소리가 들리지 않게)
 	const APawn* ControlledPawn = GetPawn();
-	return ControlledPawn && ControlledPawn->IsLocallyControlled();
+	const APlayerController* Controller = ControlledPawn ? Cast<APlayerController>(ControlledPawn->GetController()) : nullptr;
+	return Controller && Controller->IsLocalController();
 }
 
 void ACTPlayerState::NotifyChanged()

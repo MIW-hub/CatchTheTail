@@ -292,6 +292,17 @@ void ACTLobbyPlayerController::ServerSetReady_Implementation(bool bReady)
 	}
 }
 
+void ACTLobbyPlayerController::CTLobbyShotAfter(int32 Seconds)
+{
+	FTimerHandle Handle;
+	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("Shot ShowUI")); }), static_cast<float>(FMath::Max(Seconds, 1)), false);
+}
+
+void ACTLobbyPlayerController::CTOpenMapSettings()
+{
+	if (LobbyWidget) { LobbyWidget->SetMapSelectOpen(true); }
+}
+
 void ACTLobbyPlayerController::CTLobbyPreview()
 {
 	const ACTGameState* CTGameState = GetWorld() ? GetWorld()->GetGameState<ACTGameState>() : nullptr;

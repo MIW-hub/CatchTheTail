@@ -144,6 +144,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildRoundBreakRowDesign(UBlueprint* WidgetBlueprint);
 
+	// 로비 경기 설정 한 줄의 모양(글자, 화살표 버튼, 칸 크기)을 다른 줄과 똑같이 맞춤
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool CopySettingRowStyle(UBlueprint* WidgetBlueprint, FName FromKey, FName ToKey);
+
+	// 로비 플레이어 한 줄에 팀 색 칩을 넣고 줄 높이를 줄임 (WBP_CTLobbyPlayerEntryWidget)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool UpgradeLobbyPlayerEntry(UBlueprint* WidgetBlueprint);
+
+	// 로비 팀 변경 버튼을 머리 줄 오른쪽으로 옮기고 파란 버튼으로 (WBP_CTLobbyWidget)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool MoveLobbyChangeTeamButton(UBlueprint* WidgetBlueprint);
+
+	// 보물찾기 HUD 위쪽 세 칸을 패널 하나로 합침 (WBP_CTTreasureHudWidget, 나머지는 그대로)
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint);
+
 	// 보물찾기 경기 결과 화면 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildTreasureResultDesign(UBlueprint* WidgetBlueprint);

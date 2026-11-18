@@ -106,7 +106,12 @@ TArray<ACTPlayerState*> UCTUserWidget::GetSortedPlayers(const ACTGameState* Game
 int32 UCTUserWidget::GetPlayerScore(const ACTGameState* GameState, const ACTPlayerState* Player)
 {
 	if (!Player) { return 0; }
-	return (GameState && GameState->GetModeType() == ECTGameModeType::TreasureHunt) ? Player->GetResultEnergy() : Player->GetTailCount();
+	// 보물찾기: 경기 중에는 모두에게 보이는 꼬리 수(에너지 10개 = 꼬리 1개)로 순위를 매기고(다른 사람의 에너지는 서버가 알려 주지 않음), 경기가 끝나면 모은 에너지 합계를 공개함
+	if (GameState && GameState->GetModeType() == ECTGameModeType::TreasureHunt && GameState->GetPhase() == ECTGamePhase::Finished)
+	{
+		return Player->GetResultEnergy();
+	}
+	return Player->GetTailCount();
 }
 
 void UCTUserWidget::InheritColorIcons(const UCTUserWidget* From)

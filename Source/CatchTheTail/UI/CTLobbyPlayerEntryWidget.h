@@ -24,7 +24,8 @@ class CATCHTHETAIL_API UCTLobbyPlayerEntryWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void SetEntry(const FString& PlayerName, ECTLobbyPlayerKind Kind, bool bIsMe);
+	// TeamColor 가 있으면(팀전) 줄 배경이 그 색으로 물들고, 방장 표시 왼쪽의 색 칩에도 그 색이 입혀짐. 없으면 원래 분홍 줄
+	void SetEntry(const FString& PlayerName, ECTLobbyPlayerKind Kind, bool bIsMe, const TOptional<FLinearColor>& TeamColor = TOptional<FLinearColor>());
 
 protected:
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -38,6 +39,18 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> Image_StatePill;
 
+	// 줄 배경 (팀전에서는 팀 색으로 물듦)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_PlayerBack;
+
+	// 방장 표시 왼쪽의 팀 색 칩 (팀전에서만 보임)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Image_TeamColor;
+
+	// 팀 색을 줄 배경에 입힐 때 흰색과 섞는 비율 (1 이면 팀 색 그대로, 작을수록 연함)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI", meta = (ClampMin = "0", ClampMax = "1"))
+	float TeamTintStrength = 0.5f;
+
 	// 방장일 때만 보이는 왕관
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> Image_Host;
@@ -45,6 +58,10 @@ protected:
 	// 내 줄일 때만 보이는 강조
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> Image_Me;
+
+	virtual void NativeOnInitialized() override;
+
+	FLinearColor DefaultBackColor = FLinearColor(1.f, 0.76f, 0.86f, 1.f);
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FLinearColor HostColor = FLinearColor(1.f, 0.72f, 0.05f, 1.f);

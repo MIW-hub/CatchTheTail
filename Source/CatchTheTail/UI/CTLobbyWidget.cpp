@@ -327,7 +327,13 @@ void UCTLobbyWidget::RefreshLobby()
 
 		// 팀전 모드(보물찾기): 참가 목록이 두 팀 칸으로 나뉨
 		const bool bTeamMode = CTGameState->GetMatchSettings().GetMode() == ECTGameModeType::TreasureHunt;
-		const bool bTeamPanels = bTeamMode && Scroll_TeamA && Scroll_TeamB && PlayerEntryClass;
+		// 팀 칸 두 개로 나누지 않고 한 목록에 8명이 모두 보이게 함: 내 팀이 위에서부터 차례로, 줄 배경과 색 칩이 팀 색
+		const bool bTeamPanels = false;
+		if (bTeamMode)
+		{
+			const int32 MyTeamForSort = (MyState && MyState->GetTeamId() == 1) ? 1 : 0;
+			Rows.StableSort([MyTeamForSort](const FRow& A, const FRow& B) { return (A.Team == MyTeamForSort) && (B.Team != MyTeamForSort); });
+		}
 		if (Panel_TeamLists) { Panel_TeamLists->SetVisibility(bTeamPanels ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed); }
 		if (Scroll_LobbyPlayers) { Scroll_LobbyPlayers->SetVisibility(bTeamPanels ? ESlateVisibility::Collapsed : ESlateVisibility::Visible); }
 		if (bTeamPanels)
@@ -381,7 +387,7 @@ void UCTLobbyWidget::RefreshLobby()
 			{
 				if (Request.Requester == MyState) { bHasMyRequest = true; }
 			}
-			Button_ChangeTeam->SetVisibility(bTeamPanels ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+			Button_ChangeTeam->SetVisibility(bTeamMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 			Button_ChangeTeam->SetIsEnabled(MyState && !MyState->IsReady() && !bStarting && !bHasMyRequest);
 			if (Text_ChangeTeamLabel)
 			{
@@ -410,7 +416,14 @@ void UCTLobbyWidget::RefreshLobby()
 			}
 			for (int32 Index = 0; Index < PlayerEntries.Num() && Index < Rows.Num(); ++Index)
 			{
-				if (PlayerEntries[Index]) { PlayerEntries[Index]->SetEntry(Rows[Index].Name, Rows[Index].Kind, Rows[Index].bIsMe); }
+				if (!PlayerEntries[Index]) { continue; }
+				TOptional<FLinearColor> TeamTint;
+				if (bTeamMode)
+				{
+					const ECTColor TeamColor = CTGameState->GetTeamColor(Rows[Index].Team);
+					TeamTint = (TeamColor == ECTColor::None) ? FLinearColor(0.7f, 0.7f, 0.7f, 1.f) : ACTPlayerState::GetLinearColorOf(TeamColor);
+				}
+				PlayerEntries[Index]->SetEntry(Rows[Index].Name, Rows[Index].Kind, Rows[Index].bIsMe, TeamTint);
 			}
 			if (Text_PlayerList) { Text_PlayerList->SetVisibility(ESlateVisibility::Collapsed); }
 		}

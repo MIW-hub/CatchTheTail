@@ -184,7 +184,7 @@ FText FCTMatchSettings::FormatValue(ECTMatchSetting Setting, int32 Value)
 		return Value != 0 ? NSLOCTEXT("CT", "Match_ValueOn", "켜기") : NSLOCTEXT("CT", "Match_ValueOff", "끄기");
 	case ECTMatchSetting::Mode:
 		return Value == static_cast<int32>(ECTGameModeType::TreasureHunt)
-			? NSLOCTEXT("CT", "Match_ValueTreasure", "보물찾기 (준비 중)")
+			? NSLOCTEXT("CT", "Match_ValueTreasure", "보물찾기")
 			: NSLOCTEXT("CT", "Match_ValueTailChase", "꼬리잡기");
 	default: return FText::GetEmpty();
 	}

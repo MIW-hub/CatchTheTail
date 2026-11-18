@@ -20,6 +20,12 @@ public class CatchTheTail : ModuleRules
 			"Slate", "SlateCore", "EngineSettings"
 		});
 
+		// 에디터 전용: 애니메이션 블루프린트에 상체 슬롯을 넣고 몽타주를 만드는 도구(Core/CTAnimTools.cpp). 게임 빌드에는 들어가지 않음
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "AnimGraph", "BlueprintGraph", "KismetCompiler", "AnimGraphRuntime" });
+		}
+
 		// Uncomment if you are using online features
 		PrivateDependencyModuleNames.AddRange(new string[] { "OnlineSubsystem", "OnlineSubsystemUtils" });
 

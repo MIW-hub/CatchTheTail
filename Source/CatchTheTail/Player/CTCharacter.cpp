@@ -1662,6 +1662,7 @@ void ACTCharacter::ServerThrow_Implementation()
 	UE_LOG(LogTemp, Log, TEXT("[CT] 보물찾기 오브젝트 던짐: %s"), *GetPlayerState()->GetPlayerName());
 
 	MulticastPlayAction(ECTCharacterAction::Throw, true);
+	MulticastPlayHitSfx(ECTSfx::Throw);
 }
 
 void ACTCharacter::AIThrow()
@@ -2077,6 +2078,7 @@ void ACTCharacter::UpdateHoldMontage()
 	if (bWantHold && !bPlaying)
 	{
 		AnimInstance->Montage_Play(HoldMontage, 1.f);
+		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 들고 있는 상체 몽타주 재생: %s"), *GetName());
 		// 끝 자세 섹션이 있으면 거기서 계속 반복
 		if (HoldMontage->GetSectionIndex(HoldMontageLoopSection) != INDEX_NONE)
 		{

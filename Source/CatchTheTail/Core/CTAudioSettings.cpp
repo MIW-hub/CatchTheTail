@@ -26,6 +26,9 @@ UCTAudioSettings::UCTAudioSettings()
 	RoundStart    = SoundPath(TEXT("SFX_Round_Start"));
 	TailGained    = SoundPath(TEXT("SFX_Battery_Collect"));
 	EnergyPicked  = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/sound/sfx/SFX_Energy_Pick.SFX_Energy_Pick")));
+	Throw         = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/sound/sfx/SFX_Throw.SFX_Throw")));
+	ThrowHit      = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/sound/sfx/SFX_Throw_Hit.SFX_Throw_Hit")));
+	RoundBreak    = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/sound/sfx/SFX_Round_Break.SFX_Round_Break")));
 	TailLost      = SoundPath(TEXT("SFX_Tail_Lost"));
 	Push          = SoundPath(TEXT("SFX_Push_Boing"));
 	GhostRespawn  = SoundPath(TEXT("SFX_Ghost_Respawn"));
@@ -51,6 +54,9 @@ USoundBase* UCTAudioSettings::LoadSfx(ECTSfx Sfx) const
 	case ECTSfx::RoundStart:    return RoundStart.LoadSynchronous();
 	case ECTSfx::TailGained:    return TailGained.LoadSynchronous();
 	case ECTSfx::EnergyPicked:  return EnergyPicked.LoadSynchronous();
+	case ECTSfx::Throw:         return Throw.LoadSynchronous();
+	case ECTSfx::ThrowHit:      return ThrowHit.LoadSynchronous();
+	case ECTSfx::RoundBreak:    return RoundBreak.LoadSynchronous();
 	case ECTSfx::TailLost:      return TailLost.LoadSynchronous();
 	case ECTSfx::Push:          return Push.LoadSynchronous();
 	case ECTSfx::GhostRespawn:  return GhostRespawn.LoadSynchronous();

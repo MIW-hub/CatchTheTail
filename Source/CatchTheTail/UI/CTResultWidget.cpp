@@ -211,6 +211,13 @@ void UCTResultWidget::ShowResult()
 			Entry.TailCount = GetPlayerScore(GameState, Sorted[Index]);
 			Entry.bIsMe = (Sorted[Index] == MyPlayerState);
 		}
+		if (GameState->GetModeType() == ECTGameModeType::TreasureHunt)
+		{
+			Record.bTreasure = true;
+			Record.WinsA = GameState->GetTeamRoundWins(0);
+			Record.WinsB = GameState->GetTeamRoundWins(1);
+			Record.MyTeam = (MyPlayerState->GetTeamId() == 1) ? 1 : 0;
+		}
 		UCTMatchHistory::AddRecord(Record);
 	}
 

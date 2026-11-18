@@ -18,6 +18,9 @@ enum class ECTSfx : uint8
 	RoundStart     UMETA(DisplayName = "Round Start"),      // 라운드 시작
 	TailGained     UMETA(DisplayName = "Tail Gained"),      // 내 꼬리가 늘어남
 	EnergyPicked   UMETA(DisplayName = "Energy Picked"),    // 보물찾기: 에너지 1개를 먹음 (10개 모이면 TailGained 가 대신 나옴)
+	Throw          UMETA(DisplayName = "Throw"),            // 보물찾기: 오브젝트를 던짐
+	ThrowHit       UMETA(DisplayName = "Throw Hit"),        // 보물찾기: 던진 오브젝트나 충돌체에 맞음
+	RoundBreak     UMETA(DisplayName = "Round Break"),      // 보물찾기: 라운드 결과 팝업이 뜸
 	TailLost       UMETA(DisplayName = "Tail Lost"),        // 꼬리를 잡힘
 	Push           UMETA(DisplayName = "Push"),             // 밀기
 	GhostRespawn   UMETA(DisplayName = "Ghost Respawn"),    // 유령에서 부활
@@ -93,6 +96,15 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
 	TSoftObjectPtr<USoundBase> EnergyPicked;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
+	TSoftObjectPtr<USoundBase> Throw;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
+	TSoftObjectPtr<USoundBase> ThrowHit;
+
+	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
+	TSoftObjectPtr<USoundBase> RoundBreak;
 
 	UPROPERTY(Config, EditAnywhere, Category = "SFX|Game")
 	TSoftObjectPtr<USoundBase> TailLost;

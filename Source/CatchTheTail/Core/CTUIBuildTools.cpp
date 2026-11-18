@@ -3351,19 +3351,26 @@ int32 UCTUIBuildTools::BuildTeamSwapRequestDesign(UBlueprint* WidgetBlueprint)
 #endif
 }
 
-// 보물찾기 HUD 임시 뼈대 (처음 한 번). 디자인은 이 위젯을 열어 직접 바꾸면 됨. 위젯 이름은 UCTTreasureHudWidget 이 값을 채우는 이름과 같아야 함
+// 보물찾기 HUD 뼈대 (처음 한 번). 기본 HUD 와 같은 이미지(UI_Time, UI_Target, UI_Tail)로 꾸밈. 기본 HUD 는 그대로 켜 두고(키 안내, 마이크, 순위표) 시간 / 타겟 / 내 꼬리 칸만 이 HUD 가 대신함.
+// 위젯 이름은 UCTTreasureHudWidget 이 값을 채우는 이름과 같아야 함
 int32 UCTUIBuildTools::BuildTreasureHudDesign(UBlueprint* WidgetBlueprint)
 {
 #if WITH_EDITOR
 	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTTreasureHudWidget"))) { return -1; }
 
-	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
-	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
-	const FLinearColor PinkFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC));
-
 	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_TreasureHud"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	Tree->RootWidget = Canvas;
+
+	const FLinearColor White = FLinearColor::White;
+	const FVector2D TopLeft(0.f, 0.f), TopCenter(0.5f, 0.f), BottomLeft(0.f, 1.f), Center(0.5f, 0.5f);
+
+	auto NewGroup = [](const TCHAR* Name)
+	{
+		UCanvasPanel* Group = Make<UCanvasPanel>(Name);
+		Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		return Group;
+	};
 
 	// 둥근 색 칩 (색은 코드가 입힘)
 	auto MakeColorChip = [&](const TCHAR* Name)
@@ -3372,85 +3379,45 @@ int32 UCTUIBuildTools::BuildTreasureHudDesign(UBlueprint* WidgetBlueprint)
 		FSlateBrush Brush;
 		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
 		Brush.TintColor = FSlateColor(FLinearColor::White);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(DarkPurple), 3.f);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(15.f, 15.f, 15.f, 15.f), FSlateColor(HudDarkText), 2.f);
 		Chip->SetBrush(Brush);
 		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
 		return Chip;
 	};
 
-	// 위쪽 가운데: 라운드 승점 / 라운드 번호 / 남은 시간
+	// 위 가운데: 시간 카드 (라운드 번호, 남은 시간)
 	{
-		UOverlay* TopBar = Make<UOverlay>(TEXT("Overlay_TopBar"));
-		TopBar->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UCanvasPanelSlot* TopSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(TopBar));
-		TopSlot->SetAnchors(FAnchors(0.5f, 0.f));
-		TopSlot->SetAlignment(FVector2D(0.5f, 0.f));
-		TopSlot->SetPosition(FVector2D(0.f, 24.f));
-		TopSlot->SetAutoSize(true);
-
-		UImage* Back = Make<UImage>(TEXT("Image_TopBarBack"));
-		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
-		Back->SetColorAndOpacity(PinkFill);
-		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
-		UOverlaySlot* BackSlot = TopBar->AddChildToOverlay(Back);
-		BackSlot->SetHorizontalAlignment(HAlign_Fill);
-		BackSlot->SetVerticalAlignment(VAlign_Fill);
-
-		UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_TopBar"));
-		Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UOverlaySlot* RowSlot = TopBar->AddChildToOverlay(Row);
-		RowSlot->SetHorizontalAlignment(HAlign_Fill);
-		RowSlot->SetVerticalAlignment(VAlign_Center);
-		RowSlot->SetPadding(FMargin(32.f, 12.f, 32.f, 12.f));
-
-		AddH(Row, Sized(TEXT("Size_MyTeamColor"), MakeColorChip(TEXT("Image_MyTeamColor")), 40.f, 40.f), 14.f, false);
-		UTextBlock* MyWins = MakeText(TEXT("Text_MyTeamWins"), TEXT("0"), TEXT("Bold"), 44, DarkPurple, ETextJustify::Center);
-		MyWins->SetAutoWrapText(false);
-		AddH(Row, Sized(TEXT("Size_MyTeamWins"), MyWins, 64.f, 0.f), 22.f, false);
-
-		UVerticalBox* Center = Make<UVerticalBox>(TEXT("Column_Round"));
-		Center->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(Center, MakeText(TEXT("Text_RoundLabel"), TEXT("라운드"), TEXT("Bold"), 16, Magenta, ETextJustify::Center), 0.f);
-		AddV(Center, MakeText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), TEXT("Bold"), 32, Magenta, ETextJustify::Center), 0.f);
-		AddV(Center, MakeText(TEXT("Text_RoundTimer"), TEXT("1:00"), TEXT("Bold"), 26, DarkPurple, ETextJustify::Center), 0.f);
-		AddH(Row, Sized(TEXT("Size_Round"), Center, 130.f, 0.f), 22.f, false);
-
-		UTextBlock* EnemyWins = MakeText(TEXT("Text_EnemyTeamWins"), TEXT("0"), TEXT("Bold"), 44, DarkPurple, ETextJustify::Center);
-		EnemyWins->SetAutoWrapText(false);
-		AddH(Row, Sized(TEXT("Size_EnemyTeamWins"), EnemyWins, 64.f, 0.f), 14.f, false);
-		AddH(Row, Sized(TEXT("Size_EnemyTeamColor"), MakeColorChip(TEXT("Image_EnemyTeamColor")), 40.f, 40.f), 0.f, false);
+		UCanvasPanel* Group = NewGroup(TEXT("Group_Time"));
+		PlaceHud(Canvas, Group, FVector2D(0.f, 28.f), FVector2D(216.f, 109.f), TopCenter, TopCenter);
+		PlaceHud(Group, MakeHudImage(TEXT("Image_TimePanel"), TEXT("UI_Time"), FVector2D(216.f, 109.f)), FVector2D::ZeroVector, FVector2D(216.f, 109.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), 15, White, ETextJustify::Center, 1), FVector2D(109.f, 12.f), FVector2D(130.f, 28.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 36, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(108.f, 58.f), FVector2D(200.f, 62.f), TopLeft, Center);
 	}
 
-	// 왼쪽 아래: 내 에너지 / 우리 팀 에너지 (상대 팀 에너지는 표시하지 않음)
+	// 시간 카드 양옆: 라운드 승점 카드 (왼쪽 우리 팀, 오른쪽 상대 팀). 타겟 카드 이미지를 씀
+	auto BuildWinsCard = [&](const TCHAR* GroupName, const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ChipName, const TCHAR* WinsName, float OffsetX)
 	{
-		UOverlay* Energy = Make<UOverlay>(TEXT("Overlay_Energy"));
-		Energy->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UCanvasPanelSlot* EnergySlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Energy));
-		EnergySlot->SetAnchors(FAnchors(0.f, 1.f));
-		EnergySlot->SetAlignment(FVector2D(0.f, 1.f));
-		EnergySlot->SetPosition(FVector2D(32.f, -32.f));
-		EnergySlot->SetAutoSize(true);
+		UCanvasPanel* Group = NewGroup(GroupName);
+		PlaceHud(Canvas, Group, FVector2D(OffsetX, 28.f), FVector2D(200.f, 107.f), TopCenter, TopCenter);
+		PlaceHud(Group, MakeHudImage(*FString::Printf(TEXT("Image_%sPanel"), GroupName), TEXT("UI_Target"), FVector2D(200.f, 107.f)), FVector2D::ZeroVector, FVector2D(200.f, 107.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, LabelText, 15, White, ETextJustify::Center, 1), FVector2D(101.f, 12.8f), FVector2D::ZeroVector, TopLeft, Center);
+		PlaceHud(Group, MakeColorChip(ChipName), FVector2D(20.f, 38.f), FVector2D(34.f, 34.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 40, HudDarkText, ETextJustify::Center, 0), FVector2D(60.f, 28.f), FVector2D(120.f, 56.f), TopLeft, TopLeft);
+	};
+	BuildWinsCard(TEXT("Group_MyTeamWins"), TEXT("Label_MyTeamWins"), TEXT("우리 팀 승점"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamWins"), -216.f);
+	BuildWinsCard(TEXT("Group_EnemyTeamWins"), TEXT("Label_EnemyTeamWins"), TEXT("상대 팀 승점"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamWins"), 216.f);
 
-		UImage* Back = Make<UImage>(TEXT("Image_EnergyBack"));
-		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
-		Back->SetColorAndOpacity(PinkFill);
-		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
-		UOverlaySlot* BackSlot = Energy->AddChildToOverlay(Back);
-		BackSlot->SetHorizontalAlignment(HAlign_Fill);
-		BackSlot->SetVerticalAlignment(VAlign_Fill);
-
-		UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_Energy"));
-		Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UOverlaySlot* ColumnSlot = Energy->AddChildToOverlay(Column);
-		ColumnSlot->SetHorizontalAlignment(HAlign_Fill);
-		ColumnSlot->SetVerticalAlignment(VAlign_Fill);
-		ColumnSlot->SetPadding(FMargin(28.f, 16.f, 28.f, 16.f));
-
-		AddV(Column, MakeText(TEXT("Label_MyEnergy"), TEXT("내 에너지"), TEXT("Bold"), 18, Magenta, ETextJustify::Left), 0.f);
-		AddV(Column, MakeText(TEXT("Text_MyEnergy"), TEXT("0"), TEXT("Bold"), 52, DarkPurple, ETextJustify::Left), 6.f);
-		AddV(Column, MakeText(TEXT("Label_TeamEnergy"), TEXT("우리 팀 에너지"), TEXT("Bold"), 18, Magenta, ETextJustify::Left), 0.f);
-		AddV(Column, MakeText(TEXT("Text_TeamEnergy"), TEXT("-"), TEXT("Bold"), 36, DarkPurple, ETextJustify::Left), 0.f);
-	}
+	// 왼쪽 아래: 내 에너지 / 우리 팀 에너지 (내 꼬리 카드 이미지를 씀). 상대 팀 에너지는 표시하지 않음
+	auto BuildEnergyCard = [&](const TCHAR* GroupName, const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ValueName, float OffsetY)
+	{
+		UCanvasPanel* Group = NewGroup(GroupName);
+		PlaceHud(Canvas, Group, FVector2D(40.f, OffsetY), FVector2D(265.f, 70.f), BottomLeft, BottomLeft);
+		PlaceHud(Group, MakeHudImage(*FString::Printf(TEXT("Image_%sPanel"), GroupName), TEXT("UI_Tail"), FVector2D(265.f, 70.f)), FVector2D::ZeroVector, FVector2D(265.f, 70.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, LabelText, 22, White, ETextJustify::Left, 2), FVector2D(76.f, 24.f), FVector2D(110.f, 32.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(ValueName, TEXT("0"), 28, HudDarkText, ETextJustify::Center, 0), FVector2D(184.f, -8.f), FVector2D(66.f, 57.5f), TopLeft, TopLeft);
+	};
+	BuildEnergyCard(TEXT("Group_TeamEnergy"), TEXT("Label_TeamEnergy"), TEXT("팀 에너지"), TEXT("Text_TeamEnergy"), -112.f);
+	BuildEnergyCard(TEXT("Group_MyEnergy"), TEXT("Label_MyEnergy"), TEXT("내 에너지"), TEXT("Text_MyEnergy"), -30.f);
 
 	return CloseTree(WidgetBlueprint);
 #else
@@ -3777,5 +3744,264 @@ int32 UCTUIBuildTools::BuildTreasureResultDesign(UBlueprint* WidgetBlueprint)
 	return CloseTree(WidgetBlueprint);
 #else
 	return 0;
+#endif
+}
+
+// 로비 경기 설정의 한 줄(이름, < 값 >)을 다른 줄의 모양과 똑같이 맞춤. 나중에 추가된 게임 모드 줄이 다른 줄과 달라 막힌 것처럼 보이던 문제용
+bool UCTUIBuildTools::CopySettingRowStyle(UBlueprint* WidgetBlueprint, FName FromKey, FName ToKey)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!WidgetTree) { return false; }
+
+	auto Find = [&](const TCHAR* Prefix, FName Key, const TCHAR* Suffix = TEXT("")) -> UWidget*
+	{
+		return WidgetTree->FindWidget(*FString::Printf(TEXT("%s%s%s"), Prefix, *Key.ToString(), Suffix));
+	};
+	auto CopyText = [&](UWidget* From, UWidget* To)
+	{
+		UTextBlock* A = Cast<UTextBlock>(From);
+		UTextBlock* B = Cast<UTextBlock>(To);
+		if (!A || !B) { return; }
+		B->SetFont(A->GetFont());
+		B->SetColorAndOpacity(A->GetColorAndOpacity());
+		B->SetShadowColorAndOpacity(A->GetShadowColorAndOpacity());
+		B->SetShadowOffset(A->GetShadowOffset());
+	};
+	auto CopySize = [&](UWidget* From, UWidget* To)
+	{
+		USizeBox* A = Cast<USizeBox>(From);
+		USizeBox* B = Cast<USizeBox>(To);
+		if (!A || !B) { return; }
+		if (A->bOverride_WidthOverride) { B->SetWidthOverride(A->GetWidthOverride()); } else { B->ClearWidthOverride(); }
+		if (A->bOverride_HeightOverride) { B->SetHeightOverride(A->GetHeightOverride()); } else { B->ClearHeightOverride(); }
+	};
+	auto CopyButton = [&](UWidget* From, UWidget* To)
+	{
+		UButton* A = Cast<UButton>(From);
+		UButton* B = Cast<UButton>(To);
+		if (!A || !B) { return; }
+		B->SetStyle(A->GetStyle());
+		B->SetColorAndOpacity(A->GetColorAndOpacity());
+		B->SetBackgroundColor(A->GetBackgroundColor());
+		if (A->GetChildrenCount() > 0 && B->GetChildrenCount() > 0) { CopyText(A->GetChildAt(0), B->GetChildAt(0)); }
+	};
+
+	bool bAny = false;
+	for (const TCHAR* Part : { TEXT("Prev"), TEXT("Next") })
+	{
+		UWidget* From = WidgetTree->FindWidget(*FString::Printf(TEXT("Button_Setting_%s_%s"), *FromKey.ToString(), Part));
+		UWidget* To = WidgetTree->FindWidget(*FString::Printf(TEXT("Button_Setting_%s_%s"), *ToKey.ToString(), Part));
+		CopyButton(From, To);
+		CopySize(WidgetTree->FindWidget(*FString::Printf(TEXT("Size_Button_Setting_%s_%s"), *FromKey.ToString(), Part)), WidgetTree->FindWidget(*FString::Printf(TEXT("Size_Button_Setting_%s_%s"), *ToKey.ToString(), Part)));
+		bAny |= (From && To);
+	}
+	CopyText(Find(TEXT("Label_Setting_"), FromKey), Find(TEXT("Label_Setting_"), ToKey));
+	CopyText(Find(TEXT("Text_Setting_"), FromKey), Find(TEXT("Text_Setting_"), ToKey));
+	CopySize(Find(TEXT("Size_Label_Setting_"), FromKey), Find(TEXT("Size_Label_Setting_"), ToKey));
+	CopySize(Find(TEXT("Size_Text_Setting_"), FromKey), Find(TEXT("Size_Text_Setting_"), ToKey));
+	CopySize(Find(TEXT("Size_Row_Setting_"), FromKey), Find(TEXT("Size_Row_Setting_"), ToKey));
+
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return bAny;
+#else
+	return false;
+#endif
+}
+
+// 로비 플레이어 한 줄(WBP_CTLobbyPlayerEntryWidget)에 방장 표시 왼쪽 팀 색 칩을 넣고, 8명이 한 목록에 다 보이도록 줄 높이를 줄임
+bool UCTUIBuildTools::UpgradeLobbyPlayerEntry(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTLobbyPlayerEntryWidget");
+
+	UHorizontalBox* Row = Cast<UHorizontalBox>(Tree->FindWidget(TEXT("Row_Player")));
+	UWidget* HostSize = Tree->FindWidget(TEXT("Size_Host"));
+	if (!Row || !HostSize) { Tree = nullptr; return false; }
+
+	if (!Tree->FindWidget(TEXT("Image_TeamColor")))
+	{
+		const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
+		UImage* Chip = Make<UImage>(TEXT("Image_TeamColor"));
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(14.f, 14.f, 14.f, 14.f), FSlateColor(DarkPurple), 3.f);
+		Chip->SetBrush(Brush);
+		Chip->SetVisibility(ESlateVisibility::Collapsed);
+		USizeBox* ChipBox = Sized(TEXT("Size_TeamColor"), Chip, 26.f, 26.f);
+		UHorizontalBoxSlot* ChipSlot = Cast<UHorizontalBoxSlot>(Row->InsertChildAt(Row->GetChildIndex(HostSize), ChipBox));
+		if (ChipSlot)
+		{
+			ChipSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+			ChipSlot->SetVerticalAlignment(VAlign_Center);
+		}
+	}
+
+	// 줄 높이를 줄여 8명이 한 목록에 다 보이게 함
+	if (UOverlaySlot* RowSlot = Cast<UOverlaySlot>(Row->Slot)) { RowSlot->SetPadding(FMargin(18.f, 4.f, 18.f, 4.f)); }
+	if (UBorder* Root = Cast<UBorder>(Tree->FindWidget(TEXT("Border_PlayerRoot")))) { Root->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f)); }
+	if (UTextBlock* NameText = Cast<UTextBlock>(Tree->FindWidget(TEXT("Text_Name"))))
+	{
+		FSlateFontInfo Font = NameText->GetFont();
+		Font.Size = 22;
+		NameText->SetFont(Font);
+	}
+
+	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
+#endif
+}
+
+// 로비 "팀 변경" 버튼을 플레이어 패널 바깥(오른쪽 위)으로 옮기고 두꺼운 정사각형에 가까운 버튼 모양(키 버튼)으로 바꿈
+bool UCTUIBuildTools::MoveLobbyChangeTeamButton(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UButton* Button = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(TEXT("Button_ChangeTeam"))) : nullptr;
+	UCanvasPanel* LobbyCanvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->FindWidget(TEXT("Canvas_CompactPlayers"))) : nullptr;
+	if (!Button || !LobbyCanvas) { return false; }
+
+	FButtonStyle Style = Button->GetStyle();
+	FSlateBrush ButtonBrush;
+	if (UTexture2D* KeyTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/UI_KeyButton_Small.UI_KeyButton_Small")))
+	{
+		ButtonBrush.SetResourceObject(KeyTexture);
+		ButtonBrush.ImageSize = FVector2D(KeyTexture->GetSizeX(), KeyTexture->GetSizeY());
+	}
+	ButtonBrush.DrawAs = ESlateBrushDrawType::Box;
+	ButtonBrush.Margin = FMargin(0.3f, 0.3f, 0.3f, 0.4f);
+	Style.Normal = ButtonBrush;
+	Style.Hovered = ButtonBrush;
+	Style.Hovered.TintColor = FSlateColor(FLinearColor(0.82f, 0.82f, 0.82f, 1.f));
+	Style.Pressed = ButtonBrush;
+	Style.Pressed.TintColor = FSlateColor(FLinearColor(0.66f, 0.66f, 0.66f, 1.f));
+	Style.Disabled = ButtonBrush;
+	Style.Disabled.TintColor = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 0.8f));
+	Button->SetStyle(Style);
+
+	// 안의 글자: 작은 칸에 맞게 줄바꿈
+	if (UTextBlock* Label = Cast<UTextBlock>(Button->GetChildAt(0)))
+	{
+		FSlateFontInfo Font = Label->GetFont();
+		Font.Size = 17;
+		Label->SetFont(Font);
+		Label->SetAutoWrapText(true);
+	}
+
+	// 플레이어 패널과 같은 캔버스 좌표계에서 패널 오른쪽 바로 바깥에 둠: 패널이 커지거나 줄어도 항상 붙어 있음 (패널 폭 780 + 틈 8)
+	Button->RemoveFromParent();
+	UCanvasPanelSlot* ButtonSlot = Cast<UCanvasPanelSlot>(LobbyCanvas->AddChild(Button));
+	if (!ButtonSlot) { return false; }
+	ButtonSlot->SetAnchors(FAnchors(0.f, 0.f));
+	ButtonSlot->SetAlignment(FVector2D(0.0, 0.0));
+	ButtonSlot->SetPosition(FVector2D(788.0, 0.0));
+	ButtonSlot->SetSize(FVector2D(120.0, 104.0));
+	ButtonSlot->SetZOrder(7);
+
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+// 보물찾기 HUD 위쪽 세 칸(시간 / 우리 팀 승점 / 상대 팀 승점)을 패널 하나로 합침: 바깥 틀 안에 왼쪽 칸, 가운데 파란 시간 칸(위에 라운드 알약), 오른쪽 칸.
+// 이미 있는 HUD 위젯에서 이 세 묶음만 바꾸고 나머지(에너지 칸 등)는 그대로 둠
+bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	Tree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!Tree) { return false; }
+	WidgetCount = 0;
+	BlueprintName = TEXT("WBP_CTTreasureHudWidget");
+
+	UCanvasPanel* Canvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_TreasureHud")));
+	if (!Canvas) { Tree = nullptr; return false; }
+
+	// 예전 세 묶음과 그 안의 위젯을 모두 지움
+	for (const TCHAR* GroupName : { TEXT("Group_Time"), TEXT("Group_MyTeamWins"), TEXT("Group_EnemyTeamWins"), TEXT("Group_TopPanel") })
+	{
+		UWidget* Group = Tree->FindWidget(GroupName);
+		if (!Group) { continue; }
+		TArray<UWidget*> All;
+		Tree->GetAllWidgets(All);
+		TArray<UWidget*> ToRemove;
+		for (UWidget* Widget : All)
+		{
+			for (UWidget* Parent = Widget; Parent; Parent = Parent->GetParent())
+			{
+				if (Parent == Group) { ToRemove.Add(Widget); break; }
+			}
+		}
+		for (UWidget* Widget : ToRemove) { Tree->RemoveWidget(Widget); }
+	}
+
+	const FLinearColor White = FLinearColor::White;
+	const FVector2D TopLeft(0.f, 0.f), TopCenter(0.5f, 0.f), Center(0.5f, 0.5f);
+	const FLinearColor FrameFill = FLinearColor::FromSRGBColor(FColor(0xE9, 0xE9, 0xE9));
+	const FLinearColor CellFill = FLinearColor::FromSRGBColor(FColor(0xF4, 0xF4, 0xF4));
+	const FLinearColor Outline = FLinearColor::FromSRGBColor(FColor(0x9B, 0x1B, 0x3A));
+
+	auto RoundedBox = [&](const TCHAR* Name, const FLinearColor& Fill, float Radius)
+	{
+		UImage* Image = Make<UImage>(Name);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(Fill);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius), FSlateColor(Outline), 2.f);
+		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	};
+
+	// 패널 하나 (가운데 위): 틀이 아래쪽, 라운드 알약이 틀 위로 튀어나옴
+	UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Group_TopPanel"));
+	Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	PlaceHud(Canvas, Group, FVector2D(0.f, 20.f), FVector2D(580.f, 124.f), TopCenter, TopCenter);
+
+	PlaceHud(Group, RoundedBox(TEXT("Image_TopPanelFrame"), FrameFill, 22.f), FVector2D(0.f, 22.f), FVector2D(580.f, 100.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_MyWinsCell"), CellFill, 16.f), FVector2D(12.f, 34.f), FVector2D(172.f, 76.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_EnemyWinsCell"), CellFill, 16.f), FVector2D(396.f, 34.f), FVector2D(172.f, 76.f), TopLeft, TopLeft);
+
+	// 가운데: 파란 시간 칸 + 라운드 알약 (기본 시간 카드 이미지)
+	PlaceHud(Group, MakeHudImage(TEXT("Image_TimePanel"), TEXT("UI_Time"), FVector2D(216.f, 109.f)), FVector2D(182.f, 0.f), FVector2D(216.f, 109.f), TopLeft, TopLeft);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), 15, White, ETextJustify::Center, 1), FVector2D(290.f, 12.f), FVector2D(130.f, 28.f), TopLeft, Center);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 36, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(290.f, 58.f), FVector2D(200.f, 62.f), TopLeft, Center);
+
+	// 양옆 칸: 팀 색 칩 + 승점 (작은 글자는 칸 위쪽)
+	auto BuildWinsCell = [&](const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ChipName, const TCHAR* WinsName, float X)
+	{
+		UImage* Chip = Make<UImage>(ChipName);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(FLinearColor::White);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(15.f, 15.f, 15.f, 15.f), FSlateColor(HudDarkText), 2.f);
+		Chip->SetBrush(Brush);
+		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
+		PlaceHud(Group, Chip, FVector2D(X + 14.f, 64.f), FVector2D(30.f, 30.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, LabelText, 14, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 86.f, 46.f), FVector2D(160.f, 22.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 40, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 56.f, 58.f), FVector2D(100.f, 50.f), TopLeft, TopLeft);
+	};
+	BuildWinsCell(TEXT("Label_MyTeamWins"), TEXT("우리 팀 승점"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamWins"), 12.f);
+	BuildWinsCell(TEXT("Label_EnemyTeamWins"), TEXT("상대 팀 승점"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamWins"), 396.f);
+
+	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
 #endif
 }

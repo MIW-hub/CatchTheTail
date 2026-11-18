@@ -757,3 +757,18 @@ bool UCTSettingsSubsystem::ChangePlayerName(const FString& NewName, FText& OutEr
 
 	return GameInstance->ChangePlayerName(NewName, OutError);
 }
+
+#if !UE_BUILD_SHIPPING
+// 개발용: 콘솔에서 ct.SetLanguage ko|en|ja 로 언어를 바꾸고 저장함 (번역 시험용)
+static FAutoConsoleCommandWithWorldAndArgs CVarSetLanguageCommand(
+	TEXT("ct.SetLanguage"),
+	TEXT("언어를 바꾸고 저장함: ct.SetLanguage ko|en|ja"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World || Args.IsEmpty()) { return; }
+		if (UGameInstance* Instance = World->GetGameInstance())
+		{
+			if (UCTSettingsSubsystem* Settings = Instance->GetSubsystem<UCTSettingsSubsystem>()) { Settings->SetLanguage(Args[0], true); }
+		}
+	}));
+#endif

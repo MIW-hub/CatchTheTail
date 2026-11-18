@@ -60,7 +60,9 @@ void UCTAudioSubsystem::PlaySfx(ECTSfx Sfx)
 	USoundBase* Sound = GetSfx(Sfx);
 	if (!World || !Sound) { return; }
 
-	UGameplayStatics::PlaySound2D(World, Sound);
+	// 자주 나는 소리는 작게 (에너지 한 개를 먹을 때마다 나는 소리)
+	const float Volume = (Sfx == ECTSfx::EnergyPicked) ? 0.3f : 1.f;
+	UGameplayStatics::PlaySound2D(World, Sound, Volume);
 }
 
 void UCTAudioSubsystem::PlaySfxAtLocation(ECTSfx Sfx, FVector Location, float Volume, float Pitch)

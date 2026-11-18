@@ -255,7 +255,7 @@ AI 인원	AI Players	AI人数
 아직 전적이 없어요. 한 판 해 보세요!	No records yet. Play a match!	まだ戦績がありません。1戦してみましょう!
 게임 모드	Game Mode	ゲームモード
 꼬리잡기	Tail Chase	しっぽ取り
-보물찾기 (준비 중)	Treasure Hunt (Coming Soon)	宝探し（準備中）
+보물찾기	Treasure	宝探し
 라운드	Round	ラウンド
 내 에너지	My Energy	自分のエネルギー
 우리 팀 에너지	Team Energy	チームのエネルギー
@@ -266,3 +266,26 @@ B팀	Team B	Bチーム
 팀 변경	Change Team	チーム変更
 팀 변경 신청	Request Team Swap	チーム変更を申請
 온라인에 연결한 뒤 사용할 수 있습니다.	You can use this after connecting online.	オンラインに接続してから利用できます。
+20초 후 로비로 돌아갑니다	Returning to the lobby in 20s	20秒後にロビーへ戻ります
+A팀 승리!	Team A wins!	Aチームの勝利！
+B팀 승리!	Team B wins!	Bチームの勝利！
+라운드 1 결과	Round 1 Results	ラウンド1の結果
+라운드 {0} 결과	Round {0} Results	ラウンド{0}の結果
+로비로	Lobby	ロビーへ
+메인 메뉴	Main Menu	メインメニュー
+상대 팀	Enemy Team	相手チーム
+상대 팀 승점	Enemy Wins	相手の勝ち点
+승리	Win	勝利
+승점	Wins	勝ち点
+에너지	Energy	エネルギー
+에너지 총합	Total Energy	エネルギー合計
+우리 팀	My Team	自チーム
+우리 팀 승점	My Wins	自分の勝ち点
+팀 에너지	Team Energy	チームのエネルギー
+{0} : {1}	{0} : {1}	{0} : {1}
++1	+1	+1
+잡기 / 던지기	Grab / Throw	つかむ / 投げる
+승	W	勝
+패	L	負
+무	D	分
+{0} {1}팀	{0} Team {1}	{0} {1}チーム

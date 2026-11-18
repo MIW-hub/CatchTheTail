@@ -13,6 +13,27 @@ void UCTMatchHistoryEntryWidget::SetRecord(const FCTMatchRecord& Record, int32 G
 	if (Text_Index) { Text_Index->SetText(FText::AsNumber(GameNumber)); }
 	if (Text_MapName) { Text_MapName->SetText(FText::FromString(Record.MapName)); }
 
+	// 보물찾기: 1칸 = A팀, 2칸 = B팀 (이긴 쪽 "승", 진 쪽 "패", 같으면 "무"), 칸 오른쪽에 팀 승점. 3칸은 비움
+	if (Record.bTreasure)
+	{
+		const int32 Wins[2] = { Record.WinsA, Record.WinsB };
+		const TCHAR* const TeamNames[2] = { TEXT("A"), TEXT("B") };
+		UTextBlock* const TeamNameTexts[2] = { Text_Name1, Text_Name2 };
+		UTextBlock* const TeamWinTexts[2] = { Text_Tail1, Text_Tail2 };
+		UImage* const TeamCells[2] = { Image_Cell1, Image_Cell2 };
+		for (int32 Team = 0; Team < 2; ++Team)
+		{
+			const FText Result = (Wins[0] == Wins[1]) ? NSLOCTEXT("CT", "UI_History_Draw", "무") : (Wins[Team] > Wins[1 - Team] ? NSLOCTEXT("CT", "UI_History_Win", "승") : NSLOCTEXT("CT", "UI_History_Lose", "패"));
+			if (TeamNameTexts[Team]) { TeamNameTexts[Team]->SetText(FText::Format(NSLOCTEXT("CT", "UI_History_TeamLine", "{0} {1}팀"), Result, FText::FromString(TeamNames[Team]))); }
+			if (TeamWinTexts[Team]) { TeamWinTexts[Team]->SetText(FText::AsNumber(Wins[Team])); }
+			if (TeamCells[Team]) { TeamCells[Team]->SetColorAndOpacity(Record.MyTeam == Team ? MyCellColor : OtherCellColor); }
+		}
+		if (Text_Name3) { Text_Name3->SetText(FText::GetEmpty()); }
+		if (Text_Tail3) { Text_Tail3->SetText(FText::GetEmpty()); }
+		if (Image_Cell3) { Image_Cell3->SetColorAndOpacity(OtherCellColor); }
+		return;
+	}
+
 	UTextBlock* const Names[3] = { Text_Name1, Text_Name2, Text_Name3 };
 	UTextBlock* const Tails[3] = { Text_Tail1, Text_Tail2, Text_Tail3 };
 	UImage* const Cells[3] = { Image_Cell1, Image_Cell2, Image_Cell3 };
