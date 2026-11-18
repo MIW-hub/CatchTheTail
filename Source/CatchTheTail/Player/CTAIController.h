@@ -251,4 +251,11 @@ private:
 	// 길찾기 실패 시 직선 이동
 	bool bDirectMove = false;
 	FVector DirectMoveTarget = FVector::ZeroVector;
+
+	// 직선 이동 중 막힘 감지: 0.5초 동안 거의 못 움직이면 옆으로 돌아가 보고, 계속 막히면 그 에너지 목표를 포기
+	FVector StuckLastPosition = FVector::ZeroVector;
+	double StuckNextCheckTime = 0.0;
+	int32 StuckCount = 0;
+	double DetourUntil = 0.0;
+	FVector DetourDirection = FVector::ZeroVector;
 };

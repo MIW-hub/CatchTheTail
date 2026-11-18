@@ -74,7 +74,39 @@ void ACTAIController::Tick(float DeltaSeconds)
 		ToTarget.Z = 0.f;
 		if (ToTarget.SizeSquared() > FMath::Square(60.f))
 		{
-			Me->AddMovementInput(ToTarget.GetSafeNormal(), 1.f);
+			FVector MoveDirection = ToTarget.GetSafeNormal();
+			const double StuckNow = World->GetTimeSeconds();
+
+			// 막힘 감지 (박스 같은 장애물에 계속 부딪히는 경우)
+			if (StuckNow >= StuckNextCheckTime)
+			{
+				const FVector Here = Me->GetActorLocation();
+				if (StuckNextCheckTime > 0.0 && StuckNow < StuckNextCheckTime + 1.0 && FVector::Dist2D(Here, StuckLastPosition) < 20.f)
+				{
+					++StuckCount;
+					// 목표 방향의 좌우 중 한쪽으로 0.8초 돌아가 봄
+					const float Side = FMath::RandBool() ? 90.f : -90.f;
+					DetourDirection = MoveDirection.RotateAngleAxis(Side + FMath::FRandRange(-25.f, 25.f), FVector::UpVector);
+					DetourUntil = StuckNow + 0.8;
+					if (StuckCount >= 3)
+					{
+						// 계속 막히면 닿을 수 없는 목표로 보고 포기
+						if (ACTEnergyPickup* Energy = LastEnergyTarget.Get()) { EnergySkipUntil.Add(Energy, StuckNow + 25.0); }
+						LastEnergyTarget.Reset();
+						UE_LOG(LogTemp, Log, TEXT("[CT] 오류: AI 가 장애물에 막혀 목표를 포기함 (%s, 위치 %s)"), *GetNameSafe(Me), *Here.ToString());
+						StuckCount = 0;
+						bDirectMove = false;
+						NextWanderTime = 0.0;
+						DetourUntil = 0.0;
+					}
+				}
+				else { StuckCount = 0; }
+				StuckLastPosition = Here;
+				StuckNextCheckTime = StuckNow + 0.5;
+			}
+
+			if (StuckNow < DetourUntil) { MoveDirection = DetourDirection; }
+			Me->AddMovementInput(MoveDirection, 1.f);
 		}
 		else
 		{

@@ -2079,10 +2079,20 @@ void ACTCharacter::UpdateHoldMontage()
 	{
 		AnimInstance->Montage_Play(HoldMontage, 1.f);
 		UE_LOG(LogTemp, Log, TEXT("[CT-Test] 들고 있는 상체 몽타주 재생: %s"), *GetName());
-		// 끝 자세 섹션이 있으면 거기서 계속 반복
+		// 몽타주 자산에 들어 있는 "Loop" 구간 자기 반복을 끊어, 끝까지 한 번만 재생되게 함
 		if (HoldMontage->GetSectionIndex(HoldMontageLoopSection) != INDEX_NONE)
 		{
-			AnimInstance->Montage_SetNextSection(HoldMontageLoopSection, HoldMontageLoopSection, HoldMontage);
+			AnimInstance->Montage_SetNextSection(HoldMontageLoopSection, NAME_None, HoldMontage);
+		}
+	}
+	else if (bWantHold && bPlaying)
+	{
+		// 반복하지 않고, 블렌드 아웃이 시작되기 직전 자세(들고 있는 끝 자세)에서 멈춰 유지
+		const float FreezeAt = FMath::Max(0.f, HoldMontage->GetPlayLength() - HoldMontage->BlendOut.GetBlendTime() - 0.03f);
+		if (AnimInstance->Montage_GetPosition(HoldMontage) >= FreezeAt)
+		{
+			AnimInstance->Montage_SetPosition(HoldMontage, FreezeAt);
+			AnimInstance->Montage_SetPlayRate(HoldMontage, 0.f);
 		}
 	}
 	else if (!bWantHold && bPlaying)
