@@ -192,5 +192,5 @@ FText FCTMatchSettings::FormatValue(ECTMatchSetting Setting, int32 Value)
 
 FText FCTMatchSettings::MakeSummary() const
 {
-	return FText::Format(NSLOCTEXT("CT", "Match_Summary", "{0}분 · 라운드 {1}초 · 최대 {2}명"), GameMinutes, RoundSeconds, MaxPlayers);
+	return FText::Format(NSLOCTEXT("CT", "Match_Summary", "{0}분 · {1}초 · {2}명"), GameMinutes, RoundSeconds, MaxPlayers);
 }

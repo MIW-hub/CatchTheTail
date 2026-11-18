@@ -132,10 +132,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CT|Game")
 	int32 GetTeamRoundWins(int32 TeamId) const { return TeamRoundWins.IsValidIndex(TeamId) ? TeamRoundWins[TeamId] : 0; }
 
+	// 보물찾기: 이번 라운드 팀별 에너지 합계 (두 팀 모두 모두에게 보임)
+	UFUNCTION(BlueprintPure, Category = "CT|Game")
+	int32 GetTeamScore(int32 TeamId) const { return TeamScores.IsValidIndex(TeamId) ? TeamScores[TeamId] : 0; }
+
 	// 서버 전용 쓰기
 	void SetModeType(ECTGameModeType NewModeType);
 	void SetTeamColors(const TArray<ECTColor>& NewTeamColors);
 	void SetTeamRoundWins(const TArray<int32>& NewTeamRoundWins);
+	void SetTeamScores(const TArray<int32>& NewTeamScores);
 
 	// 로비 팀 변경 요청 목록 (오래된 순). 남은 시간은 GetServerWorldTimeSeconds() 기준
 	const TArray<FCTTeamSwapRequest>& GetTeamSwapRequests() const { return TeamSwapRequests; }
@@ -281,6 +286,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	TArray<int32> TeamRoundWins;
+
+	UPROPERTY(Replicated)
+	TArray<int32> TeamScores;
 
 	UPROPERTY(Replicated)
 	TArray<FCTTeamSwapRequest> TeamSwapRequests;

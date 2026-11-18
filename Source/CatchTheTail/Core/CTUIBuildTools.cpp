@@ -4067,8 +4067,8 @@ bool UCTUIBuildTools::MoveLobbyChangeTeamButton(UBlueprint* WidgetBlueprint)
 #endif
 }
 
-// 보물찾기 HUD 위쪽 세 칸(시간 / 우리 팀 승점 / 상대 팀 승점)을 패널 하나로 합침: 바깥 틀 안에 왼쪽 칸, 가운데 파란 시간 칸(위에 라운드 알약), 오른쪽 칸.
-// 이미 있는 HUD 위젯에서 이 세 묶음만 바꾸고 나머지(에너지 칸 등)는 그대로 둠
+// 보물찾기 HUD 위쪽을 패널 하나로 합침: 가운데 틀 안에 [우리 팀 점수 | 파란 시간 칸(위에 라운드 알약) | 상대 팀 점수], 양옆 바깥에 팀 승수 상자 하나씩.
+// 이미 있는 HUD 위젯에서 이 묶음만 바꾸고 나머지(에너지 칸 등)는 그대로 둠
 bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 {
 #if WITH_EDITOR
@@ -4082,7 +4082,7 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 	UCanvasPanel* Canvas = Cast<UCanvasPanel>(Tree->FindWidget(TEXT("Canvas_TreasureHud")));
 	if (!Canvas) { Tree = nullptr; return false; }
 
-	// 예전 세 묶음과 그 안의 위젯을 모두 지움
+	// 예전 묶음과 그 안의 위젯을 모두 지움
 	for (const TCHAR* GroupName : { TEXT("Group_Time"), TEXT("Group_MyTeamWins"), TEXT("Group_EnemyTeamWins"), TEXT("Group_TopPanel") })
 	{
 		UWidget* Group = Tree->FindWidget(GroupName);
@@ -4105,33 +4105,11 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 	const FLinearColor FrameFill = FLinearColor::FromSRGBColor(FColor(0xE9, 0xE9, 0xE9));
 	const FLinearColor CellFill = FLinearColor::FromSRGBColor(FColor(0xF4, 0xF4, 0xF4));
 	const FLinearColor Outline = FLinearColor::FromSRGBColor(FColor(0x9B, 0x1B, 0x3A));
-
-	auto RoundedBox = [&](const TCHAR* Name, const FLinearColor& Fill, float Radius)
-	{
-		UImage* Image = Make<UImage>(Name);
-		FSlateBrush Brush;
-		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-		Brush.TintColor = FSlateColor(Fill);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius), FSlateColor(Outline), 2.f);
-		Image->SetBrush(Brush);
-		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
-		return Image;
-	};
-
-	// 패널 하나 (가운데 위): 틀이 아래쪽, 라운드 알약이 틀 위로 튀어나옴
-	UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Group_TopPanel"));
-	Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	PlaceHud(Canvas, Group, FVector2D(0.f, 20.f), FVector2D(580.f, 136.f), TopCenter, TopCenter);
-
-	PlaceHud(Group, RoundedBox(TEXT("Image_TopPanelFrame"), FrameFill, 22.f), FVector2D(0.f, 22.f), FVector2D(580.f, 112.f), TopLeft, TopLeft);
-	PlaceHud(Group, RoundedBox(TEXT("Image_MyWinsCell"), CellFill, 16.f), FVector2D(12.f, 34.f), FVector2D(172.f, 88.f), TopLeft, TopLeft);
-	PlaceHud(Group, RoundedBox(TEXT("Image_EnemyWinsCell"), CellFill, 16.f), FVector2D(396.f, 34.f), FVector2D(172.f, 88.f), TopLeft, TopLeft);
-
-	// 가운데: 두꺼운 파란 시간 칸(아래 그림자 한 겹) + 위에 걸친 분홍 라운드 알약 (예전 시간 카드 이미지는 쓰지 않음)
 	const FLinearColor BlueTop = FLinearColor::FromSRGBColor(FColor(0x19, 0xA3, 0xFF));
 	const FLinearColor BlueShadow = FLinearColor::FromSRGBColor(FColor(0x0B, 0x5F, 0xB8));
 	const FLinearColor PillFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0x2D, 0x6E));
-	auto PlainRounded = [&](const TCHAR* Name, const FLinearColor& Fill, const FLinearColor& Edge, float Radius)
+
+	auto RoundedBox = [&](const TCHAR* Name, const FLinearColor& Fill, const FLinearColor& Edge, float Radius)
 	{
 		UImage* Image = Make<UImage>(Name);
 		FSlateBrush Brush;
@@ -4142,14 +4120,26 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
 		return Image;
 	};
-	PlaceHud(Group, PlainRounded(TEXT("Image_TimeShadow"), BlueShadow, BlueShadow, 20.f), FVector2D(203.f, 40.f), FVector2D(174.f, 82.f), TopLeft, TopLeft);
-	PlaceHud(Group, PlainRounded(TEXT("Image_TimeCell"), BlueTop, BlueShadow, 20.f), FVector2D(203.f, 34.f), FVector2D(174.f, 76.f), TopLeft, TopLeft);
-	PlaceHud(Group, PlainRounded(TEXT("Image_RoundPill"), PillFill, FLinearColor::FromSRGBColor(FColor(0xB3, 0x14, 0x4A)), 16.f), FVector2D(232.f, 8.f), FVector2D(116.f, 32.f), TopLeft, TopLeft);
-	PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), 16, White, ETextJustify::Center, 1), FVector2D(290.f, 24.f), FVector2D(116.f, 28.f), TopLeft, Center);
-	PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 40, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(290.f, 74.f), FVector2D(170.f, 56.f), TopLeft, Center);
 
-	// 양옆 칸: 팀 색 칩 + 승점 (작은 글자는 칸 위쪽)
-	auto BuildWinsCell = [&](const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ChipName, const TCHAR* WinsName, float X)
+	// 묶음 전체 (가운데 위): 폭 760 = 바깥 승수 상자 104 + 틈 8 + 가운데 틀 536 + 틈 8 + 바깥 승수 상자 104
+	UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Group_TopPanel"));
+	Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	PlaceHud(Canvas, Group, FVector2D(0.f, 20.f), FVector2D(760.f, 136.f), TopCenter, TopCenter);
+
+	// 가운데 틀과 세 칸
+	PlaceHud(Group, RoundedBox(TEXT("Image_TopPanelFrame"), FrameFill, Outline, 22.f), FVector2D(112.f, 22.f), FVector2D(536.f, 112.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_MyScoreCell"), CellFill, Outline, 16.f), FVector2D(124.f, 34.f), FVector2D(156.f, 88.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_EnemyScoreCell"), CellFill, Outline, 16.f), FVector2D(480.f, 34.f), FVector2D(156.f, 88.f), TopLeft, TopLeft);
+
+	// 가운데: 두꺼운 파란 시간 칸 + 위에 걸친 분홍 라운드 알약
+	PlaceHud(Group, RoundedBox(TEXT("Image_TimeShadow"), BlueShadow, BlueShadow, 20.f), FVector2D(295.f, 42.f), FVector2D(170.f, 80.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_TimeCell"), BlueTop, BlueShadow, 20.f), FVector2D(295.f, 36.f), FVector2D(170.f, 78.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_RoundPill"), PillFill, FLinearColor::FromSRGBColor(FColor(0xB3, 0x14, 0x4A)), 16.f), FVector2D(300.f, 8.f), FVector2D(160.f, 32.f), TopLeft, TopLeft);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("라운드 1 / 3"), 15, White, ETextJustify::Center, 1), FVector2D(380.f, 24.f), FVector2D(160.f, 28.f), TopLeft, Center);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 34, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(380.f, 78.f), FVector2D(170.f, 50.f), TopLeft, Center);
+
+	// 점수 칸: 라벨은 칸 위쪽 가운데, 숫자는 칸 가운데, 팀 색 칩은 왼쪽 아래
+	auto BuildScoreCell = [&](const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ChipName, const TCHAR* ScoreName, float X)
 	{
 		UImage* Chip = Make<UImage>(ChipName);
 		FSlateBrush Brush;
@@ -4158,14 +4148,93 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(15.f, 15.f, 15.f, 15.f), FSlateColor(HudDarkText), 2.f);
 		Chip->SetBrush(Brush);
 		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
-		PlaceHud(Group, Chip, FVector2D(X + 12.f, 78.f), FVector2D(30.f, 30.f), TopLeft, TopLeft);
-		PlaceHud(Group, MakeHudText(LabelName, LabelText, 14, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 86.f, 52.f), FVector2D(160.f, 22.f), TopLeft, Center);
-		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 34, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 56.f, 66.f), FVector2D(100.f, 48.f), TopLeft, TopLeft);
+		PlaceHud(Group, Chip, FVector2D(X + 10.f, 74.f), FVector2D(26.f, 26.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, LabelText, 14, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 78.f, 50.f), FVector2D(150.f, 22.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(ScoreName, TEXT("0"), 34, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 98.f, 90.f), FVector2D(100.f, 46.f), TopLeft, Center);
 	};
-	BuildWinsCell(TEXT("Label_MyTeamWins"), TEXT("우리 팀 승점"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamWins"), 12.f);
-	BuildWinsCell(TEXT("Label_EnemyTeamWins"), TEXT("상대 팀 승점"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamWins"), 396.f);
+	BuildScoreCell(TEXT("Label_MyTeamScore"), TEXT("우리 팀 점수"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamScore"), 124.f);
+	BuildScoreCell(TEXT("Label_EnemyTeamScore"), TEXT("상대 팀 점수"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamScore"), 480.f);
+
+	// 바깥 승수 상자 (왼쪽 우리 팀, 오른쪽 상대 팀)
+	auto BuildWinsBox = [&](const TCHAR* BoxName, const TCHAR* LabelName, const TCHAR* WinsName, float X)
+	{
+		PlaceHud(Group, RoundedBox(BoxName, FrameFill, Outline, 22.f), FVector2D(X, 22.f), FVector2D(104.f, 112.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, TEXT("승수"), 15, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 52.f, 46.f), FVector2D(90.f, 22.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 44, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 52.f, 92.f), FVector2D(90.f, 56.f), TopLeft, Center);
+	};
+	BuildWinsBox(TEXT("Image_MyWinsBox"), TEXT("Label_MyTeamWins"), TEXT("Text_MyTeamWins"), 0.f);
+	BuildWinsBox(TEXT("Image_EnemyWinsBox"), TEXT("Label_EnemyTeamWins"), TEXT("Text_EnemyTeamWins"), 656.f);
 
 	return CloseTree(WidgetBlueprint) >= 0;
+#else
+	return false;
+#endif
+}
+
+// 위젯 블루프린트 안의 글자 크기를 Factor 배로 줄이거나 늘림 (위치, 색, 글꼴은 그대로). NameContains 가 비어 있지 않으면 이름에 그 글자가 든 글자 상자만. 바꾼 개수를 돌려줌
+int32 UCTUIBuildTools::ScaleTextSizes(UBlueprint* WidgetBlueprint, float Factor, int32 MinSize, const FString& NameContains)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return -1; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!WidgetTree) { return -1; }
+
+	int32 Changed = 0;
+	TArray<UWidget*> All;
+	WidgetTree->GetAllWidgets(All);
+	for (UWidget* Widget : All)
+	{
+		UTextBlock* Text = Cast<UTextBlock>(Widget);
+		if (!Text) { continue; }
+		if (!NameContains.IsEmpty() && !Text->GetName().Contains(NameContains)) { continue; }
+		FSlateFontInfo Font = Text->GetFont();
+		const int32 NewSize = FMath::Max(MinSize, FMath::RoundToInt(Font.Size * Factor));
+		if (NewSize == Font.Size) { continue; }
+		Font.Size = NewSize;
+		Text->SetFont(Font);
+		++Changed;
+	}
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return Changed;
+#else
+	return -1;
+#endif
+}
+
+// 가로 상자 안 위젯의 바깥 여백(왼, 위, 오른, 아래)을 바꿈. 위젯이 가로 상자 칸에 있어야 함
+bool UCTUIBuildTools::SetHorizontalSlotPadding(UBlueprint* WidgetBlueprint, FName WidgetName, float Left, float Top, float Right, float Bottom)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UWidget* Widget = WidgetTree ? WidgetTree->FindWidget(WidgetName) : nullptr;
+	UHorizontalBoxSlot* BoxSlot = Widget ? Cast<UHorizontalBoxSlot>(Widget->Slot) : nullptr;
+	if (!BoxSlot) { return false; }
+	BoxSlot->SetPadding(FMargin(Left, Top, Right, Bottom));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
+// 글자 상자의 글자를 바꿈 (번역 키는 위젯 이름 기준으로 유지). 위치, 크기, 색은 그대로
+bool UCTUIBuildTools::SetTextByName(UBlueprint* WidgetBlueprint, FName TextName, const FString& NewText)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UTextBlock* Text = WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(TextName)) : nullptr;
+	if (!Text) { return false; }
+	Text->SetText(Loc(*TextName.ToString(), *NewText));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
 #else
 	return false;
 #endif

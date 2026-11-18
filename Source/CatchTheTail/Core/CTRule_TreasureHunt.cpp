@@ -460,6 +460,8 @@ void UCTRule_TreasureHunt::SetPlayerEnergy(ACTPlayerState* Player, int32 NewEner
 		{
 			if (Other->GetTeamId() == Team) { Other->SetTeamEnergy(Sum); }
 		}
+		// 팀 점수(두 팀 에너지 합계)는 모두에게 보임
+		if (ACTGameState* ScoreState = Mode->GetGameState<ACTGameState>()) { ScoreState->SetTeamScores({ GetTeamEnergy(0), GetTeamEnergy(1) }); }
 	}
 }
 

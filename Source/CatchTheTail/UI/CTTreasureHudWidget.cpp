@@ -21,7 +21,7 @@ void UCTTreasureHudWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	const int32 Round = GameState->GetRoundNumber();
 	if (Text_RoundNumber)
 	{
-		Text_RoundNumber->SetText(FText::Format(NSLOCTEXT("CT", "UI_Treasure_Round", "{0} / {1}"), FMath::Max(Round, 1), TotalRounds));
+		Text_RoundNumber->SetText(FText::Format(NSLOCTEXT("CT", "UI_Treasure_RoundOf", "라운드 {0} / {1}"), FMath::Max(Round, 1), TotalRounds));
 	}
 	if (Text_RoundTimer)
 	{
@@ -32,6 +32,10 @@ void UCTTreasureHudWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		LastRound = Round;
 		BP_OnRoundChanged(Round);
 	}
+
+	// 팀 점수 (이번 라운드 에너지 합계)
+	if (Text_MyTeamScore) { Text_MyTeamScore->SetText(FText::AsNumber(GameState->GetTeamScore(MyTeam))); }
+	if (Text_EnemyTeamScore) { Text_EnemyTeamScore->SetText(FText::AsNumber(GameState->GetTeamScore(EnemyTeam))); }
 
 	// 라운드 승점
 	const int32 MyWins = GameState->GetTeamRoundWins(MyTeam);

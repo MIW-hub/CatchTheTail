@@ -160,6 +160,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint);
 
+	// 위젯 안 글자 크기를 Factor 배로 바꿈 (위치와 색은 그대로). NameContains 가 있으면 이름에 그 글자가 든 것만
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static int32 ScaleTextSizes(UBlueprint* WidgetBlueprint, float Factor, int32 MinSize, const FString& NameContains);
+
+	// 가로 상자 칸에 든 위젯의 바깥 여백을 바꿈
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool SetHorizontalSlotPadding(UBlueprint* WidgetBlueprint, FName WidgetName, float Left, float Top, float Right, float Bottom);
+
+	// 글자 상자의 글자를 바꿈
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool SetTextByName(UBlueprint* WidgetBlueprint, FName TextName, const FString& NewText);
+
 	// 보물찾기 경기 결과 화면 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildTreasureResultDesign(UBlueprint* WidgetBlueprint);

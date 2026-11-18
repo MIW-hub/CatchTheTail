@@ -55,6 +55,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_RoundTimer;
 
+	// 팀 점수(이번 라운드 팀 에너지 합계). 두 팀 모두 보임
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_MyTeamScore;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_EnemyTeamScore;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_MyTeamWins;
 

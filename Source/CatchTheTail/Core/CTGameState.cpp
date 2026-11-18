@@ -28,6 +28,7 @@ void ACTGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ACTGameState, ModeType);
 	DOREPLIFETIME(ACTGameState, TeamColors);
 	DOREPLIFETIME(ACTGameState, TeamRoundWins);
+	DOREPLIFETIME(ACTGameState, TeamScores);
 	DOREPLIFETIME(ACTGameState, TeamSwapRequests);
 	DOREPLIFETIME(ACTGameState, RoundBreakInfo);
 	DOREPLIFETIME(ACTGameState, RoundBreakEndServerTime);
@@ -166,6 +167,15 @@ void ACTGameState::SetTeamRoundWins(const TArray<int32>& NewTeamRoundWins)
 	if (!HasAuthority()) { return; }
 
 	TeamRoundWins = NewTeamRoundWins;
+	ForceNetUpdate();
+}
+
+void ACTGameState::SetTeamScores(const TArray<int32>& NewTeamScores)
+{
+	if (!HasAuthority()) { return; }
+	if (TeamScores == NewTeamScores) { return; }
+
+	TeamScores = NewTeamScores;
 	ForceNetUpdate();
 }
 
