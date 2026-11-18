@@ -64,6 +64,23 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|UI")
 	void BP_OnReveal(bool bMyTeamWon, bool bEnemyTeamWon);
 
+	// 승패가 나오면 이긴 팀 머리 알약은 분홍 + 흰 글자 + 왕관, 진 팀은 연보라 + 진한 글자
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor WinnerHeaderColor = FLinearColor(0.888f, 0.024f, 0.147f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor LoserHeaderColor = FLinearColor(0.83f, 0.78f, 0.89f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor DarkTextColor = FLinearColor(0.058f, 0.0006f, 0.032f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor LoserResultColor = FLinearColor(0.2f, 0.09f, 0.18f, 1.f);
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_MyTeamHeader;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_EnemyTeamHeader;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_MyCrown;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_EnemyCrown;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_RoundTitle;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_MyTeamLabel;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_EnemyTeamLabel;

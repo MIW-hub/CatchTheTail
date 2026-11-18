@@ -82,6 +82,19 @@ void UCTTreasureResultWidget::ShowResult()
 		Text_WinnerBig->SetText(Big);
 	}
 
+	// 팀 머리 막대와 점수 숫자 색: 이긴 쪽 강조
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		const bool bWin = (WinnerTeam == Team);
+		UImage* Header = (Team == 0) ? Image_TeamAHeader.Get() : Image_TeamBHeader.Get();
+		UTextBlock* Name = (Team == 0) ? Text_TeamAName.Get() : Text_TeamBName.Get();
+		UTextBlock* ScoreText = (Team == 0) ? Text_ScoreA.Get() : Text_ScoreB.Get();
+		if (Header) { Header->SetColorAndOpacity(bWin ? WinnerHeaderColor : LoserHeaderColor); }
+		if (Name) { Name->SetColorAndOpacity(FSlateColor(bWin ? FLinearColor::White : DarkTextColor)); }
+		if (ScoreText) { ScoreText->SetText(FText::AsNumber(Team == 0 ? WinsA : WinsB)); ScoreText->SetColorAndOpacity(FSlateColor(bWin ? ScoreWinColor : DarkTextColor)); }
+	}
+	if (Image_WinnerCrown) { Image_WinnerCrown->SetVisibility(WinnerTeam >= 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden); }
+
 	const ACTPlayerState* Me = GetOwningCTPlayerState();
 	BP_OnTeamResult(WinnerTeam, Me && WinnerTeam >= 0 && Me->GetTeamId() == WinnerTeam);
 }

@@ -43,7 +43,26 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
 	FLinearColor FallbackTeamColor = FLinearColor(0.7f, 0.7f, 0.7f, 1.f);
 
+	// 팀 머리 막대: 이긴 팀은 분홍 + 흰 글자, 아니면 연보라 + 진한 글자
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor WinnerHeaderColor = FLinearColor(0.888f, 0.024f, 0.147f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor LoserHeaderColor = FLinearColor(0.83f, 0.78f, 0.89f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor DarkTextColor = FLinearColor(0.058f, 0.0006f, 0.032f, 1.f);
+
+	// 이긴 쪽 점수 숫자 색
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|UI")
+	FLinearColor ScoreWinColor = FLinearColor(0.888f, 0.024f, 0.147f, 1.f);
+
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_WinnerBig;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_ScoreA;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_ScoreB;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_TeamAHeader;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_TeamBHeader;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> Image_WinnerCrown;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_RoundScore;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_TeamAName;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> Text_TeamBName;

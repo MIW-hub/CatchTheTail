@@ -3433,9 +3433,17 @@ int32 UCTUIBuildTools::BuildRoundBreakRowDesign(UBlueprint* WidgetBlueprint)
 
 	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
 
+	// 줄 아래에 가는 구분선이 있는 세로 묶음
+	UVerticalBox* RowRoot = Make<UVerticalBox>(TEXT("Column_RoundBreakEntry"));
+	RowRoot->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Tree->RootWidget = RowRoot;
 	UHorizontalBox* Row = Make<UHorizontalBox>(TEXT("Row_RoundBreakEntry"));
 	Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	Tree->RootWidget = Row;
+	AddV(RowRoot, Row, 4.f);
+	UImage* RowLine = Make<UImage>(TEXT("Image_EntryLine"));
+	RowLine->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(0xE3, 0xD7, 0xE6)));
+	RowLine->SetVisibility(ESlateVisibility::HitTestInvisible);
+	AddV(RowRoot, Sized(TEXT("Size_EntryLine"), RowLine, 0.f, 2.f), 4.f);
 
 	UImage* Chip = Make<UImage>(TEXT("Image_Color"));
 	FSlateBrush Brush;
@@ -3460,16 +3468,47 @@ int32 UCTUIBuildTools::BuildRoundBreakRowDesign(UBlueprint* WidgetBlueprint)
 #endif
 }
 
-// 라운드 사이 결과 팝업 뼈대 (처음 한 번). 디자인은 WBP 에서 직접 바꿈. 위젯 이름은 UCTRoundBreakWidget 이 값을 채우는 이름과 같아야 함
+// 라운드 사이 결과 팝업 뼈대 (처음 한 번). 흰 큰 패널 위에 걸친 분홍 제목 알약, 팀마다 가로 카드 한 장(팀 머리 알약과 승패 / 에너지와 승점 / 표).
+// 디자인은 WBP 에서 직접 바꿈. 위젯 이름은 UCTRoundBreakWidget 이 값을 채우는 이름과 같아야 함
 int32 UCTUIBuildTools::BuildRoundBreakDesign(UBlueprint* WidgetBlueprint)
 {
 #if WITH_EDITOR
 	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTRoundBreakWidget"))) { return -1; }
 
-	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
-	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
-	const FLinearColor PinkFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC));
-	const FLinearColor WhiteFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xF4, 0xF9));
+	const FLinearColor Ink = FLinearColor::FromSRGBColor(FColor(0x4B, 0x0F, 0x36));
+	const FLinearColor DarkText(0.058f, 0.0006f, 0.032f, 1.f);
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xF2, 0x2B, 0x6B));
+	const FLinearColor SoftLabel = FLinearColor::FromSRGBColor(FColor(0x7A, 0x5A, 0x78));
+	const FLinearColor Lavender = FLinearColor::FromSRGBColor(FColor(0xEB, 0xE4, 0xF2));
+	const FLinearColor PanelEdge = FLinearColor::FromSRGBColor(FColor(0xE9, 0xD6, 0xF2));
+	const FLinearColor LineColor = FLinearColor::FromSRGBColor(FColor(0xD9, 0xCC, 0xDD));
+
+	auto Rounded = [&](const FString& Name, const FLinearColor& Fill, const FLinearColor& Edge, float Radius, float EdgeWidth)
+	{
+		UImage* Image = Make<UImage>(*Name);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(Fill);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius), FSlateColor(Edge), EdgeWidth);
+		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	};
+	auto Fill = [](UOverlay* Parent, UWidget* Child, const FMargin& Padding = FMargin(0.f))
+	{
+		UOverlaySlot* Slot = Parent->AddChildToOverlay(Child);
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+		Slot->SetPadding(Padding);
+		return Slot;
+	};
+	auto Divider = [&](const FString& Name)
+	{
+		UImage* Line = Make<UImage>(*Name);
+		Line->SetColorAndOpacity(LineColor);
+		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Sized(*(Name + TEXT("_Size")), Line, 2.f, 0.f);
+	};
 
 	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_RoundBreak"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -3483,116 +3522,151 @@ int32 UCTUIBuildTools::BuildRoundBreakDesign(UBlueprint* WidgetBlueprint)
 	DimSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
 	DimSlot->SetOffsets(FMargin(0.f));
 
-	// 가운데 패널
+	// 큰 패널 (가운데): 흰 틀 + 아래 연보라 그림자 + 위에 걸친 제목 알약
 	UOverlay* Panel = Make<UOverlay>(TEXT("Overlay_RoundBreakPanel"));
 	Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Panel));
+	USizeBox* PanelSize = Sized(TEXT("Size_RoundBreakPanel"), Panel, 1440.f, 900.f);
+	UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(PanelSize));
 	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
 	PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 	PanelSlot->SetPosition(FVector2D::ZeroVector);
 	PanelSlot->SetAutoSize(true);
 
-	UImage* PanelBack = Make<UImage>(TEXT("Image_RoundBreakBack"));
-	PanelBack->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
-	PanelBack->SetColorAndOpacity(PinkFill);
-	PanelBack->SetVisibility(ESlateVisibility::HitTestInvisible);
-	UOverlaySlot* PanelBackSlot = Panel->AddChildToOverlay(PanelBack);
-	PanelBackSlot->SetHorizontalAlignment(HAlign_Fill);
-	PanelBackSlot->SetVerticalAlignment(VAlign_Fill);
+	Fill(Panel, Rounded(TEXT("Image_RoundBreakShadow"), PanelEdge, Ink, 34.f, 4.f), FMargin(0.f, 56.f, 0.f, 0.f));
+	Fill(Panel, Rounded(TEXT("Image_RoundBreakBack"), FLinearColor::White, Ink, 34.f, 4.f), FMargin(0.f, 52.f, 0.f, 12.f));
 
 	UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_RoundBreak"));
 	Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UOverlaySlot* ColumnSlot = Panel->AddChildToOverlay(Column);
-	ColumnSlot->SetHorizontalAlignment(HAlign_Fill);
-	ColumnSlot->SetVerticalAlignment(VAlign_Fill);
-	ColumnSlot->SetPadding(FMargin(48.f, 32.f, 48.f, 36.f));
+	Fill(Panel, Column, FMargin(40.f, 0.f, 40.f, 40.f));
 
-	AddV(Column, MakeText(TEXT("Text_RoundTitle"), TEXT("라운드 1 결과"), TEXT("Bold"), 44, Magenta, ETextJustify::Center), 20.f);
+	// 제목 알약 (위에 걸침)
+	UOverlay* TitlePill = Make<UOverlay>(TEXT("Overlay_RoundBreakTitle"));
+	TitlePill->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Fill(TitlePill, Rounded(TEXT("Image_RoundBreakTitleBack"), Magenta, Ink, 40.f, 4.f));
+	UTextBlock* Title = MakeText(TEXT("Text_RoundTitle"), TEXT("라운드 1 결과"), TEXT("Bold"), 50, FLinearColor::White, ETextJustify::Center);
+	UOverlaySlot* TitleSlot = TitlePill->AddChildToOverlay(Title);
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
+	TitleSlot->SetVerticalAlignment(VAlign_Center);
+	UVerticalBoxSlot* TitleBoxSlot = AddV(Column, Sized(TEXT("Size_RoundBreakTitle"), TitlePill, 620.f, 96.f), 22.f);
+	TitleBoxSlot->SetHorizontalAlignment(HAlign_Center);
 
-	// 팀 한 줄: 색 칩 / 이름 / 에너지 합계 / 승점(+1) / 승패 / 오른쪽 끝에 개인 점수 목록
-	auto BuildTeamRow = [&](const FString& Prefix, const TCHAR* ChipName, const TCHAR* LabelName, const TCHAR* EnergyName, const TCHAR* WinsName, const TCHAR* PlusName, const TCHAR* ResultName, const TCHAR* BoxName, const TCHAR* Label)
+	// 팀 카드 한 장: [머리 알약 + 승패] | 에너지 | 승점 | [표]
+	auto BuildTeamCard = [&](const FString& Prefix, const TCHAR* LabelText)
 	{
 		auto N = [&](const TCHAR* Kind) { return FString::Printf(TEXT("%s_%s"), Kind, *Prefix); };
 
-		UOverlay* Team = Make<UOverlay>(*N(TEXT("Overlay_Team")));
-		Team->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-
-		UImage* Back = Make<UImage>(*N(TEXT("Image_TeamBack")));
-		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
-		Back->SetColorAndOpacity(WhiteFill);
-		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
-		UOverlaySlot* BackSlot = Team->AddChildToOverlay(Back);
-		BackSlot->SetHorizontalAlignment(HAlign_Fill);
-		BackSlot->SetVerticalAlignment(VAlign_Fill);
+		UOverlay* Card = Make<UOverlay>(*N(TEXT("Overlay_Team")));
+		Card->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(Card, Rounded(N(TEXT("Image_TeamBack")), FLinearColor::White, Ink, 26.f, 3.f));
 
 		UHorizontalBox* Row = Make<UHorizontalBox>(*N(TEXT("Row_Team")));
 		Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UOverlaySlot* RowSlot = Team->AddChildToOverlay(Row);
-		RowSlot->SetHorizontalAlignment(HAlign_Fill);
-		RowSlot->SetVerticalAlignment(VAlign_Center);
-		RowSlot->SetPadding(FMargin(28.f, 18.f, 28.f, 18.f));
+		Fill(Card, Row, FMargin(22.f, 16.f, 22.f, 16.f));
 
-		UImage* Chip = Make<UImage>(ChipName);
-		FSlateBrush Brush;
-		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
-		Brush.TintColor = FSlateColor(FLinearColor::White);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(DarkPurple), 3.f);
-		Chip->SetBrush(Brush);
+		// 왼쪽: 팀 머리 알약(색 칩, 왕관, 이름) + 승패 글자
+		UVerticalBox* Left = Make<UVerticalBox>(*N(TEXT("Column_TeamHead")));
+		Left->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlay* Header = Make<UOverlay>(*N(TEXT("Overlay_TeamHeader")));
+		Header->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(Header, Rounded(FString::Printf(TEXT("Image_%sTeamHeader"), *Prefix), Lavender, Ink, 34.f, 3.f));
+		UHorizontalBox* Head = Make<UHorizontalBox>(*N(TEXT("Row_TeamHeadInner")));
+		Head->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UImage* Chip = Make<UImage>(*FString::Printf(TEXT("Image_%sTeamColor"), *Prefix));
+		FSlateBrush ChipBrush;
+		ChipBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		ChipBrush.TintColor = FSlateColor(FLinearColor::White);
+		ChipBrush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(Ink), 3.f);
+		Chip->SetBrush(ChipBrush);
 		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
-		AddH(Row, Sized(*N(TEXT("Size_TeamColor")), Chip, 40.f, 40.f), 14.f, false);
+		UHorizontalBoxSlot* ChipSlot = AddH(Head, Sized(*N(TEXT("Size_TeamColor")), Chip, 42.f, 42.f), 12.f, false);
+		ChipSlot->SetVerticalAlignment(VAlign_Center);
+		UImage* Crown = Make<UImage>(*FString::Printf(TEXT("Image_%sCrown"), *Prefix));
+		if (UTexture2D* CrownTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/ico/ico_crown.ico_crown"))) { Crown->SetBrushFromTexture(CrownTexture); }
+		Crown->SetVisibility(ESlateVisibility::Collapsed);
+		UHorizontalBoxSlot* CrownSlot = AddH(Head, Sized(*N(TEXT("Size_Crown")), Crown, 46.f, 46.f), 8.f, false);
+		CrownSlot->SetVerticalAlignment(VAlign_Center);
+		UTextBlock* Name = MakeText(*FString::Printf(TEXT("Text_%sTeamLabel"), *Prefix), LabelText, TEXT("Bold"), 34, DarkText, ETextJustify::Left);
+		Name->SetAutoWrapText(false);
+		AddH(Head, Name, 0.f, true);
+		UOverlaySlot* HeadSlot = Header->AddChildToOverlay(Head);
+		HeadSlot->SetHorizontalAlignment(HAlign_Fill);
+		HeadSlot->SetVerticalAlignment(VAlign_Center);
+		HeadSlot->SetPadding(FMargin(18.f, 0.f, 18.f, 0.f));
+		UVerticalBoxSlot* HeaderSlot = AddV(Left, Sized(*N(TEXT("Size_TeamHeader")), Header, 0.f, 70.f), 14.f);
+		HeaderSlot->SetHorizontalAlignment(HAlign_Fill);
+		UTextBlock* Result = MakeText(*FString::Printf(TEXT("Text_%sResult"), *Prefix), TEXT("승리"), TEXT("Bold"), 52, SoftLabel, ETextJustify::Center);
+		Result->SetAutoWrapText(false);
+		Result->SetVisibility(ESlateVisibility::Hidden);
+		UVerticalBoxSlot* ResultSlot = AddV(Left, Result, 0.f);
+		ResultSlot->SetHorizontalAlignment(HAlign_Center);
+		UHorizontalBoxSlot* LeftSlot = AddH(Row, Sized(*N(TEXT("Size_TeamLeft")), Left, 400.f, 0.f), 0.f, false);
+		LeftSlot->SetVerticalAlignment(VAlign_Center);
+		LeftSlot->SetPadding(FMargin(0.f, 0.f, 18.f, 0.f));
 
-		UTextBlock* LabelText = MakeText(LabelName, Label, TEXT("Bold"), 30, DarkPurple, ETextJustify::Left);
-		LabelText->SetAutoWrapText(false);
-		AddH(Row, Sized(*N(TEXT("Size_TeamLabel")), LabelText, 130.f, 0.f), 24.f, false);
+		AddH(Row, Divider(N(TEXT("Image_DividerA"))), 18.f, false);
 
-		// 에너지 합계
-		UVerticalBox* EnergyBox = Make<UVerticalBox>(*N(TEXT("Column_Energy")));
-		EnergyBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(EnergyBox, MakeText(*N(TEXT("Label_Energy")), TEXT("에너지"), TEXT("Bold"), 16, Magenta, ETextJustify::Center), 0.f);
-		UTextBlock* EnergyText = MakeText(EnergyName, TEXT("0"), TEXT("Bold"), 56, DarkPurple, ETextJustify::Center);
-		EnergyText->SetAutoWrapText(false);
-		AddV(EnergyBox, EnergyText, 0.f);
-		AddH(Row, Sized(*N(TEXT("Size_Energy")), EnergyBox, 150.f, 0.f), 24.f, false);
+		// 가운데: 에너지, 승점
+		auto StatColumn = [&](const TCHAR* Kind, const TCHAR* Caption, const FString& ValueName, const TCHAR* PlusName)
+		{
+			UVerticalBox* Box = Make<UVerticalBox>(*N(Kind));
+			Box->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			UVerticalBoxSlot* CaptionSlot = AddV(Box, MakeText(*FString::Printf(TEXT("Label_%s_%s"), Kind, *Prefix), Caption, TEXT("Bold"), 26, DarkText, ETextJustify::Center), 0.f);
+			CaptionSlot->SetHorizontalAlignment(HAlign_Center);
+			UOverlay* ValueOverlay = Make<UOverlay>(*FString::Printf(TEXT("Overlay_%s_%s"), Kind, *Prefix));
+			ValueOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			UTextBlock* Value = MakeText(*ValueName, TEXT("0"), TEXT("Bold"), 80, DarkText, ETextJustify::Center);
+			Value->SetAutoWrapText(false);
+			UOverlaySlot* ValueSlot = ValueOverlay->AddChildToOverlay(Value);
+			ValueSlot->SetHorizontalAlignment(HAlign_Center);
+			if (PlusName)
+			{
+				UTextBlock* Plus = MakeText(PlusName, TEXT("+1"), TEXT("Bold"), 40, Magenta, ETextJustify::Center);
+				Plus->SetAutoWrapText(false);
+				Plus->SetVisibility(ESlateVisibility::Hidden);
+				UOverlaySlot* PlusSlot = ValueOverlay->AddChildToOverlay(Plus);
+				PlusSlot->SetHorizontalAlignment(HAlign_Right);
+				PlusSlot->SetVerticalAlignment(VAlign_Top);
+				PlusSlot->SetPadding(FMargin(0.f, 0.f, -30.f, 0.f));
+			}
+			UVerticalBoxSlot* OverlaySlot = AddV(Box, ValueOverlay, 0.f);
+			OverlaySlot->SetHorizontalAlignment(HAlign_Center);
+			return Box;
+		};
+		const FString PlusName = FString::Printf(TEXT("Text_%sWinPlus"), *Prefix);
+		UHorizontalBoxSlot* EnergySlot = AddH(Row, Sized(*N(TEXT("Size_Energy")), StatColumn(TEXT("Column_Energy"), TEXT("에너지"), FString::Printf(TEXT("Text_%sTeamEnergy"), *Prefix), nullptr), 190.f, 0.f), 0.f, false);
+		EnergySlot->SetVerticalAlignment(VAlign_Center);
+		UHorizontalBoxSlot* WinsSlot = AddH(Row, Sized(*N(TEXT("Size_Wins")), StatColumn(TEXT("Column_Wins"), TEXT("승점"), FString::Printf(TEXT("Text_%sTeamWins"), *Prefix), *PlusName), 190.f, 0.f), 18.f, false);
+		WinsSlot->SetVerticalAlignment(VAlign_Center);
 
-		// 승점 + "+1"
-		UOverlay* WinsOverlay = Make<UOverlay>(*N(TEXT("Overlay_Wins")));
-		WinsOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UVerticalBox* WinsBox = Make<UVerticalBox>(*N(TEXT("Column_Wins")));
-		WinsBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(WinsBox, MakeText(*N(TEXT("Label_Wins")), TEXT("승점"), TEXT("Bold"), 16, Magenta, ETextJustify::Center), 0.f);
-		UTextBlock* WinsText = MakeText(WinsName, TEXT("0"), TEXT("Bold"), 56, DarkPurple, ETextJustify::Center);
-		WinsText->SetAutoWrapText(false);
-		AddV(WinsBox, WinsText, 0.f);
-		UOverlaySlot* WinsBoxSlot = WinsOverlay->AddChildToOverlay(WinsBox);
-		WinsBoxSlot->SetHorizontalAlignment(HAlign_Fill);
-		UTextBlock* PlusText = MakeText(PlusName, TEXT("+1"), TEXT("Bold"), 40, Magenta, ETextJustify::Center);
-		PlusText->SetAutoWrapText(false);
-		PlusText->SetVisibility(ESlateVisibility::Hidden);
-		UOverlaySlot* PlusSlot = WinsOverlay->AddChildToOverlay(PlusText);
-		PlusSlot->SetHorizontalAlignment(HAlign_Right);
-		PlusSlot->SetVerticalAlignment(VAlign_Top);
-		PlusSlot->SetPadding(FMargin(0.f, 0.f, -36.f, 0.f));
-		AddH(Row, Sized(*N(TEXT("Size_Wins")), WinsOverlay, 110.f, 0.f), 24.f, false);
+		AddH(Row, Divider(N(TEXT("Image_DividerB"))), 18.f, false);
 
-		// 승패
-		UTextBlock* ResultText = MakeText(ResultName, TEXT("승리"), TEXT("Bold"), 38, Magenta, ETextJustify::Center);
-		ResultText->SetAutoWrapText(false);
-		ResultText->SetVisibility(ESlateVisibility::Hidden);
-		AddH(Row, Sized(*N(TEXT("Size_Result")), ResultText, 130.f, 0.f), 0.f, false);
-
-		// 가운데 여백, 그리고 오른쪽 끝에 개인 점수 목록
-		USpacer* Gap = Make<USpacer>(*N(TEXT("Spacer_Gap")));
-		AddH(Row, Gap, 0.f, true);
-
-		UVerticalBox* Players = Make<UVerticalBox>(BoxName);
+		// 오른쪽: 표 (머리글 띠 + 개인 줄)
+		UVerticalBox* Table = Make<UVerticalBox>(*N(TEXT("Column_Table")));
+		Table->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		UOverlay* TableHead = Make<UOverlay>(*N(TEXT("Overlay_TableHead")));
+		TableHead->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(TableHead, Rounded(N(TEXT("Image_TableHeadBack")), Lavender, Lavender, 10.f, 0.f));
+		UHorizontalBox* TableHeadRow = Make<UHorizontalBox>(*N(TEXT("Row_TableHead")));
+		TableHeadRow->SetVisibility(ESlateVisibility::HitTestInvisible);
+		AddH(TableHeadRow, MakeText(*N(TEXT("Label_Player")), TEXT("플레이어"), TEXT("Bold"), 22, SoftLabel, ETextJustify::Left), 0.f, true);
+		AddH(TableHeadRow, MakeText(*N(TEXT("Label_TableEnergy")), TEXT("에너지"), TEXT("Bold"), 22, SoftLabel, ETextJustify::Right), 0.f, false);
+		UOverlaySlot* TableHeadSlot = TableHead->AddChildToOverlay(TableHeadRow);
+		TableHeadSlot->SetHorizontalAlignment(HAlign_Fill);
+		TableHeadSlot->SetVerticalAlignment(VAlign_Center);
+		TableHeadSlot->SetPadding(FMargin(18.f, 6.f, 18.f, 6.f));
+		AddV(Table, TableHead, 6.f);
+		UVerticalBox* Players = Make<UVerticalBox>(*FString::Printf(TEXT("Box_%sPlayers"), *Prefix));
 		Players->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddH(Row, Sized(*N(TEXT("Size_Players")), Players, 340.f, 0.f), 0.f, false);
-
-		return Team;
+		UVerticalBoxSlot* PlayersSlot = AddV(Table, Players, 0.f);
+		PlayersSlot->SetPadding(FMargin(18.f, 0.f, 18.f, 0.f));
+		AddH(Row, Table, 0.f, true);
+		return Card;
 	};
 
-	AddV(Column, Sized(TEXT("Size_MyTeamRow"), BuildTeamRow(TEXT("My"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamLabel"), TEXT("Text_MyTeamEnergy"), TEXT("Text_MyTeamWins"), TEXT("Text_MyWinPlus"), TEXT("Text_MyResult"), TEXT("Box_MyPlayers"), TEXT("우리 팀")), 1180.f, 0.f), 16.f);
-	AddV(Column, Sized(TEXT("Size_EnemyTeamRow"), BuildTeamRow(TEXT("Enemy"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamLabel"), TEXT("Text_EnemyTeamEnergy"), TEXT("Text_EnemyTeamWins"), TEXT("Text_EnemyWinPlus"), TEXT("Text_EnemyResult"), TEXT("Box_EnemyPlayers"), TEXT("상대 팀")), 1180.f, 0.f), 0.f);
+	UVerticalBoxSlot* MySlot = AddV(Column, Sized(TEXT("Size_MyTeamRow"), BuildTeamCard(TEXT("My"), TEXT("우리 팀")), 0.f, 330.f), 18.f);
+	MySlot->SetHorizontalAlignment(HAlign_Fill);
+	UVerticalBoxSlot* EnemySlot = AddV(Column, Sized(TEXT("Size_EnemyTeamRow"), BuildTeamCard(TEXT("Enemy"), TEXT("상대 팀")), 0.f, 330.f), 0.f);
+	EnemySlot->SetHorizontalAlignment(HAlign_Fill);
 
 	return CloseTree(WidgetBlueprint);
 #else
@@ -3600,16 +3674,40 @@ int32 UCTUIBuildTools::BuildRoundBreakDesign(UBlueprint* WidgetBlueprint)
 #endif
 }
 
-// 보물찾기 결과 화면 뼈대 (처음 한 번). 왼쪽 A팀 / 오른쪽 B팀 / 가운데 큰 승리 글자. 디자인은 WBP 에서 직접 바꿈. 위젯 이름은 UCTTreasureResultWidget 이 값을 채우는 이름과 같아야 함
+// 보물찾기 경기 결과 화면 뼈대 (처음 한 번). 흰 큰 패널 위에 걸친 분홍 제목 알약, 왼쪽 A팀 / 가운데 왕관과 큰 승리 글자 / 오른쪽 B팀(머리 막대, 승점과 에너지, 표 머리글, 줄). 아래 버튼과 안내는 꼬리잡기 결과 화면과 같은 이름.
+// 디자인은 WBP 에서 직접 바꿈. 위젯 이름은 UCTTreasureResultWidget 이 값을 채우는 이름과 같아야 함
 int32 UCTUIBuildTools::BuildTreasureResultDesign(UBlueprint* WidgetBlueprint)
 {
 #if WITH_EDITOR
 	if (!WidgetBlueprint || !OpenTree(WidgetBlueprint, TEXT("WBP_CTTreasureResultWidget"))) { return -1; }
 
-	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xFF, 0x27, 0x83));
-	const FLinearColor DarkPurple(0.058f, 0.0006f, 0.032f, 1.f);
-	const FLinearColor PinkFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC2, 0xDC));
-	const FLinearColor WhiteFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0xF4, 0xF9));
+	const FLinearColor Ink = FLinearColor::FromSRGBColor(FColor(0x4B, 0x0F, 0x36));      // 테두리와 진한 글자
+	const FLinearColor DarkText(0.058f, 0.0006f, 0.032f, 1.f);
+	const FLinearColor Magenta = FLinearColor::FromSRGBColor(FColor(0xF2, 0x2B, 0x6B));
+	const FLinearColor SoftLabel = FLinearColor::FromSRGBColor(FColor(0x7A, 0x5A, 0x78));
+	const FLinearColor Lavender = FLinearColor::FromSRGBColor(FColor(0xEB, 0xE4, 0xF2));
+	const FLinearColor PanelEdge = FLinearColor::FromSRGBColor(FColor(0xE9, 0xD6, 0xF2));
+
+	// 둥근 상자 이미지 (채움색, 테두리색, 모서리)
+	auto Rounded = [&](const FString& Name, const FLinearColor& Fill, const FLinearColor& Edge, float Radius, float EdgeWidth)
+	{
+		UImage* Image = Make<UImage>(*Name);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(Fill);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius), FSlateColor(Edge), EdgeWidth);
+		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	};
+	auto Fill = [](UOverlay* Parent, UWidget* Child, const FMargin& Padding = FMargin(0.f))
+	{
+		UOverlaySlot* Slot = Parent->AddChildToOverlay(Child);
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+		Slot->SetPadding(Padding);
+		return Slot;
+	};
 
 	UCanvasPanel* Canvas = Make<UCanvasPanel>(TEXT("Canvas_TreasureResult"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -3622,104 +3720,154 @@ int32 UCTUIBuildTools::BuildTreasureResultDesign(UBlueprint* WidgetBlueprint)
 	DimSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
 	DimSlot->SetOffsets(FMargin(0.f));
 
-	// 한 팀 패널: 위에 색 칩, 팀 이름, 승점 / 에너지 총합, 아래에 개인 점수 줄
-	auto BuildTeamPanel = [&](const FString& Suffix, const TCHAR* Label, float AnchorX, float PosX)
+	// 큰 패널 (가운데): 흰 틀 + 아래 연보라 그림자 + 위에 걸친 제목 알약
+	UOverlay* Panel = Make<UOverlay>(TEXT("Overlay_TreasureResultPanel"));
+	Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	USizeBox* PanelSize = Sized(TEXT("Size_TreasureResultPanel"), Panel, 1500.f, 820.f);
+	UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(PanelSize));
+	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+	PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	PanelSlot->SetPosition(FVector2D::ZeroVector);
+	PanelSlot->SetAutoSize(true);
+
+	Fill(Panel, Rounded(TEXT("Image_TreasureResultShadow"), PanelEdge, Ink, 34.f, 4.f), FMargin(0.f, 56.f, 0.f, 0.f));
+	Fill(Panel, Rounded(TEXT("Image_TreasureResultFrame"), FLinearColor::White, Ink, 34.f, 4.f), FMargin(0.f, 52.f, 0.f, 12.f));
+
+	UVerticalBox* Column = Make<UVerticalBox>(TEXT("Column_TreasureResult"));
+	Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Fill(Panel, Column, FMargin(56.f, 0.f, 56.f, 40.f));
+
+	// 제목 알약 (위에 걸침)
+	UOverlay* TitlePill = Make<UOverlay>(TEXT("Overlay_TreasureResultTitle"));
+	TitlePill->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Fill(TitlePill, Rounded(TEXT("Image_TreasureResultTitleBack"), Magenta, Ink, 40.f, 4.f));
+	UTextBlock* Title = MakeText(TEXT("Text_TreasureResultTitle"), TEXT("경기 결과"), TEXT("Bold"), 50, FLinearColor::White, ETextJustify::Center);
+	UOverlaySlot* TitleSlot = TitlePill->AddChildToOverlay(Title);
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
+	TitleSlot->SetVerticalAlignment(VAlign_Center);
+	UVerticalBoxSlot* TitleBoxSlot = AddV(Column, Sized(TEXT("Size_TreasureResultTitle"), TitlePill, 560.f, 96.f), 26.f);
+	TitleBoxSlot->SetHorizontalAlignment(HAlign_Center);
+
+	// 가운데 줄: A팀 / 승리 / B팀
+	UHorizontalBox* Body = Make<UHorizontalBox>(TEXT("Row_TreasureResultBody"));
+	Body->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	auto BuildTeamCard = [&](const FString& Suffix, const TCHAR* Label)
 	{
 		auto N = [&](const TCHAR* Kind) { return FString::Printf(TEXT("%s_%s"), Kind, *Suffix); };
 
-		UOverlay* Panel = Make<UOverlay>(*N(TEXT("Overlay_Team")));
-		Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Panel));
-		PanelSlot->SetAnchors(FAnchors(AnchorX, 0.5f));
-		PanelSlot->SetAlignment(FVector2D(AnchorX, 0.5f));
-		PanelSlot->SetPosition(FVector2D(PosX, 0.f));
-		PanelSlot->SetAutoSize(true);
+		UOverlay* Card = Make<UOverlay>(*N(TEXT("Overlay_Team")));
+		Card->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(Card, Rounded(N(TEXT("Image_TeamBack")), FLinearColor::White, Ink, 22.f, 3.f));
 
-		UImage* Back = Make<UImage>(*N(TEXT("Image_TeamBack")));
-		Back->SetBrush(StyleTextureBrush(TEXT("UI_Row_Flat"), FMargin(0.14f, 0.4f, 0.14f, 0.4f), ESlateBrushDrawType::Box));
-		Back->SetColorAndOpacity(PinkFill);
-		Back->SetVisibility(ESlateVisibility::HitTestInvisible);
-		UOverlaySlot* BackSlot = Panel->AddChildToOverlay(Back);
-		BackSlot->SetHorizontalAlignment(HAlign_Fill);
-		BackSlot->SetVerticalAlignment(VAlign_Fill);
+		UVerticalBox* Inner = Make<UVerticalBox>(*N(TEXT("Column_Team")));
+		Inner->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(Card, Inner);
 
-		UVerticalBox* Column = Make<UVerticalBox>(*N(TEXT("Column_Team")));
-		Column->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UOverlaySlot* ColumnSlot = Panel->AddChildToOverlay(Column);
-		ColumnSlot->SetHorizontalAlignment(HAlign_Fill);
-		ColumnSlot->SetVerticalAlignment(VAlign_Fill);
-		ColumnSlot->SetPadding(FMargin(32.f, 28.f, 32.f, 32.f));
-
-		// 팀 이름 줄
+		// 머리 막대: 색과 글자색은 코드가 이긴 팀 / 진 팀에 맞춰 바꿈
+		UOverlay* Header = Make<UOverlay>(*N(TEXT("Overlay_TeamHeader")));
+		Header->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Fill(Header, Rounded(FString::Printf(TEXT("Image_Team%sHeader"), *Suffix), Lavender, Ink, 22.f, 3.f));
 		UHorizontalBox* Head = Make<UHorizontalBox>(*N(TEXT("Row_TeamHead")));
 		Head->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		UImage* Chip = Make<UImage>(*FString::Printf(TEXT("Image_Team%sColor"), *Suffix));
 		FSlateBrush Brush;
 		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
 		Brush.TintColor = FSlateColor(FLinearColor::White);
-		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(DarkPurple), 3.f);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(20.f, 20.f, 20.f, 20.f), FSlateColor(Ink), 3.f);
 		Chip->SetBrush(Brush);
 		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
-		AddH(Head, Sized(*N(TEXT("Size_TeamColor")), Chip, 44.f, 44.f), 14.f, false);
-		UTextBlock* Name = MakeText(*FString::Printf(TEXT("Text_Team%sName"), *Suffix), Label, TEXT("Bold"), 44, DarkPurple, ETextJustify::Left);
+		UHorizontalBoxSlot* ChipSlot = AddH(Head, Sized(*N(TEXT("Size_TeamColor")), Chip, 38.f, 38.f), 14.f, false);
+		ChipSlot->SetVerticalAlignment(VAlign_Center);
+		UTextBlock* Name = MakeText(*FString::Printf(TEXT("Text_Team%sName"), *Suffix), Label, TEXT("Bold"), 34, DarkText, ETextJustify::Left);
 		Name->SetAutoWrapText(false);
 		AddH(Head, Name, 0.f, true);
-		AddV(Column, Head, 18.f);
+		UOverlaySlot* HeadSlot = Header->AddChildToOverlay(Head);
+		HeadSlot->SetHorizontalAlignment(HAlign_Fill);
+		HeadSlot->SetVerticalAlignment(VAlign_Center);
+		HeadSlot->SetPadding(FMargin(24.f, 0.f, 24.f, 0.f));
+		AddV(Inner, Sized(*N(TEXT("Size_TeamHeader")), Header, 0.f, 72.f), 12.f);
 
 		// 승점 / 에너지 총합
 		UHorizontalBox* Stats = Make<UHorizontalBox>(*N(TEXT("Row_TeamStats")));
 		Stats->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		UVerticalBox* WinsBox = Make<UVerticalBox>(*N(TEXT("Column_Wins")));
-		WinsBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(WinsBox, MakeText(*N(TEXT("Label_Wins")), TEXT("승점"), TEXT("Bold"), 18, Magenta, ETextJustify::Center), 0.f);
-		UTextBlock* Wins = MakeText(*FString::Printf(TEXT("Text_Team%sWins"), *Suffix), TEXT("0"), TEXT("Bold"), 64, DarkPurple, ETextJustify::Center);
-		Wins->SetAutoWrapText(false);
-		AddV(WinsBox, Wins, 0.f);
-		AddH(Stats, Sized(*N(TEXT("Size_Wins")), WinsBox, 150.f, 0.f), 24.f, false);
-		UVerticalBox* EnergyBox = Make<UVerticalBox>(*N(TEXT("Column_Energy")));
-		EnergyBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(EnergyBox, MakeText(*N(TEXT("Label_Energy")), TEXT("에너지 총합"), TEXT("Bold"), 18, Magenta, ETextJustify::Center), 0.f);
-		UTextBlock* Energy = MakeText(*FString::Printf(TEXT("Text_Team%sEnergy"), *Suffix), TEXT("0"), TEXT("Bold"), 64, DarkPurple, ETextJustify::Center);
-		Energy->SetAutoWrapText(false);
-		AddV(EnergyBox, Energy, 0.f);
-		AddH(Stats, Sized(*N(TEXT("Size_Energy")), EnergyBox, 200.f, 0.f), 0.f, false);
-		AddV(Column, Stats, 22.f);
+		auto StatColumn = [&](const TCHAR* Kind, const TCHAR* LabelText, const FString& ValueName)
+		{
+			UVerticalBox* Box = Make<UVerticalBox>(*N(Kind));
+			Box->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			UVerticalBoxSlot* LabelSlot = AddV(Box, MakeText(*FString::Printf(TEXT("Label_%s_%s"), Kind, *Suffix), LabelText, TEXT("Bold"), 20, DarkText, ETextJustify::Center), 0.f);
+			LabelSlot->SetHorizontalAlignment(HAlign_Center);
+			UTextBlock* Value = MakeText(*ValueName, TEXT("0"), TEXT("Bold"), 60, DarkText, ETextJustify::Center);
+			Value->SetAutoWrapText(false);
+			UVerticalBoxSlot* ValueSlot = AddV(Box, Value, 0.f);
+			ValueSlot->SetHorizontalAlignment(HAlign_Center);
+			return Box;
+		};
+		UHorizontalBoxSlot* WinsSlot = AddH(Stats, StatColumn(TEXT("Column_Wins"), TEXT("승점"), FString::Printf(TEXT("Text_Team%sWins"), *Suffix)), 0.f, true);
+		WinsSlot->SetHorizontalAlignment(HAlign_Center);
+		UHorizontalBoxSlot* EnergySlot = AddH(Stats, StatColumn(TEXT("Column_Energy"), TEXT("에너지 총합"), FString::Printf(TEXT("Text_Team%sEnergy"), *Suffix)), 0.f, true);
+		EnergySlot->SetHorizontalAlignment(HAlign_Center);
+		AddV(Inner, Stats, 12.f);
+
+		// 가는 선 + 표 머리글(플레이어 / 에너지)
+		UImage* Line = Make<UImage>(*N(TEXT("Image_TeamLine")));
+		Line->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(0xD9, 0xCC, 0xDD)));
+		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
+		AddV(Inner, Sized(*N(TEXT("Size_TeamLine")), Line, 0.f, 2.f), 6.f);
+		UHorizontalBox* TableHead = Make<UHorizontalBox>(*N(TEXT("Row_TableHead")));
+		TableHead->SetVisibility(ESlateVisibility::HitTestInvisible);
+		AddH(TableHead, MakeText(*N(TEXT("Label_Player")), TEXT("플레이어"), TEXT("Bold"), 20, SoftLabel, ETextJustify::Left), 0.f, true);
+		AddH(TableHead, MakeText(*N(TEXT("Label_TableEnergy")), TEXT("에너지"), TEXT("Bold"), 20, SoftLabel, ETextJustify::Right), 0.f, false);
+		UVerticalBoxSlot* TableHeadSlot = AddV(Inner, TableHead, 4.f);
+		TableHeadSlot->SetPadding(FMargin(28.f, 0.f, 28.f, 4.f));
 
 		// 개인 점수 줄
 		UVerticalBox* Players = Make<UVerticalBox>(*FString::Printf(TEXT("Box_Team%sPlayers"), *Suffix));
 		Players->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		AddV(Column, Sized(*N(TEXT("Size_Players")), Players, 420.f, 0.f), 0.f);
+		UVerticalBoxSlot* PlayersSlot = AddV(Inner, Players, 0.f);
+		PlayersSlot->SetPadding(FMargin(28.f, 0.f, 28.f, 22.f));
+		return Sized(*N(TEXT("Size_TeamColumn")), Card, 400.f, 0.f);
 	};
 
-	BuildTeamPanel(TEXT("A"), TEXT("A팀"), 0.f, 90.f);
-	BuildTeamPanel(TEXT("B"), TEXT("B팀"), 1.f, -90.f);
+	UHorizontalBoxSlot* LeftSlot = AddH(Body, BuildTeamCard(TEXT("A"), TEXT("A팀")), 24.f, false);
+	LeftSlot->SetVerticalAlignment(VAlign_Top);
 
-	// 가운데: 이긴 팀(크게) + 라운드 승점
+	// 가운데: 왕관 / 이긴 팀(진한 글자) / 점수 (이긴 쪽 숫자는 분홍, 코드가 입힘)
 	UVerticalBox* Center = Make<UVerticalBox>(TEXT("Column_Center"));
 	Center->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UCanvasPanelSlot* CenterSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Center));
-	CenterSlot->SetAnchors(FAnchors(0.5f, 0.5f));
-	CenterSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-	CenterSlot->SetPosition(FVector2D(0.f, -40.f));
-	CenterSlot->SetAutoSize(true);
-	UTextBlock* Big = MakeText(TEXT("Text_WinnerBig"), TEXT("A팀 승리!"), TEXT("Bold"), 96, Magenta, ETextJustify::Center);
+	UImage* Crown = Make<UImage>(TEXT("Image_WinnerCrown"));
+	if (UTexture2D* CrownTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/2D/UI/ico/ico_crown.ico_crown"))) { Crown->SetBrushFromTexture(CrownTexture); }
+	Crown->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UVerticalBoxSlot* CrownSlot = AddV(Center, Sized(TEXT("Size_WinnerCrown"), Crown, 96.f, 96.f), 12.f);
+	CrownSlot->SetHorizontalAlignment(HAlign_Center);
+	UTextBlock* Big = MakeText(TEXT("Text_WinnerBig"), TEXT("A팀 승리!"), TEXT("Bold"), 60, DarkText, ETextJustify::Center);
 	Big->SetAutoWrapText(false);
-	AddV(Center, Big, 8.f);
-	UTextBlock* Score = MakeText(TEXT("Text_RoundScore"), TEXT("0 : 0"), TEXT("Bold"), 56, FLinearColor::White, ETextJustify::Center);
-	Score->SetAutoWrapText(false);
-	AddV(Center, Score, 0.f);
+	UVerticalBoxSlot* BigSlot = AddV(Center, Big, 8.f);
+	BigSlot->SetHorizontalAlignment(HAlign_Center);
+	UHorizontalBox* ScoreRow = Make<UHorizontalBox>(TEXT("Row_RoundScore"));
+	ScoreRow->SetVisibility(ESlateVisibility::HitTestInvisible);
+	auto ScoreText = [&](const TCHAR* Name, const TCHAR* Value)
+	{
+		UTextBlock* Text = MakeText(Name, Value, TEXT("Bold"), 64, DarkText, ETextJustify::Center);
+		Text->SetAutoWrapText(false);
+		return Text;
+	};
+	AddH(ScoreRow, ScoreText(TEXT("Text_ScoreA"), TEXT("0")), 16.f, false);
+	AddH(ScoreRow, ScoreText(TEXT("Text_ScoreColon"), TEXT(":")), 16.f, false);
+	AddH(ScoreRow, ScoreText(TEXT("Text_ScoreB"), TEXT("0")), 0.f, false);
+	UVerticalBoxSlot* ScoreSlot = AddV(Center, ScoreRow, 0.f);
+	ScoreSlot->SetHorizontalAlignment(HAlign_Center);
+	UHorizontalBoxSlot* CenterSlot = AddH(Body, Center, 24.f, true);
+	CenterSlot->SetVerticalAlignment(VAlign_Center);
 
-	// 아래: 안내 글자와 버튼 (꼬리잡기 결과 화면과 같은 이름)
-	UVerticalBox* Bottom = Make<UVerticalBox>(TEXT("Column_ResultButtons"));
-	Bottom->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	UCanvasPanelSlot* BottomSlot = Cast<UCanvasPanelSlot>(Canvas->AddChild(Bottom));
-	BottomSlot->SetAnchors(FAnchors(0.5f, 1.f));
-	BottomSlot->SetAlignment(FVector2D(0.5f, 1.f));
-	BottomSlot->SetPosition(FVector2D(0.f, -48.f));
-	BottomSlot->SetAutoSize(true);
+	UHorizontalBoxSlot* RightSlot = AddH(Body, BuildTeamCard(TEXT("B"), TEXT("B팀")), 0.f, false);
+	RightSlot->SetVerticalAlignment(VAlign_Top);
+	AddV(Column, Body, 14.f, true);
 
-	UTextBlock* Hint = MakeText(TEXT("Text_ReturnHint"), TEXT("20초 후 로비로 돌아갑니다"), TEXT("Bold"), 24, FLinearColor::White, ETextJustify::Center);
-	AddV(Bottom, Hint, 14.f);
+	// 아래: 안내 글자와 버튼 (꼬리잡기 결과 화면과 같은 이름, 모양은 그대로)
+	UTextBlock* Hint = MakeText(TEXT("Text_ReturnHint"), TEXT("20초 후 로비로 돌아갑니다"), TEXT("Bold"), 22, DarkText, ETextJustify::Center);
+	UVerticalBoxSlot* HintSlot = AddV(Column, Hint, 10.f);
+	HintSlot->SetHorizontalAlignment(HAlign_Center);
 
 	UHorizontalBox* Buttons = Make<UHorizontalBox>(TEXT("Row_ResultButtons"));
 	Buttons->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -3739,7 +3887,8 @@ int32 UCTUIBuildTools::BuildTreasureResultDesign(UBlueprint* WidgetBlueprint)
 	};
 	AddH(Buttons, Sized(TEXT("Size_ReturnToLobby"), MakeButton(TEXT("Button_ReturnToLobby"), TEXT("UI_Btn_Blue_L"), TEXT("Text_ReturnToLobbyLabel"), TEXT("로비로")), 300.f, 72.f), 24.f, false);
 	AddH(Buttons, Sized(TEXT("Size_LeaveToMenu"), MakeButton(TEXT("Button_LeaveToMenu"), TEXT("UI_Btn_Pink_L"), TEXT("Text_LeaveToMenuLabel"), TEXT("메인 메뉴")), 300.f, 72.f), 0.f, false);
-	AddV(Bottom, Buttons, 0.f);
+	UVerticalBoxSlot* ButtonsSlot = AddV(Column, Buttons, 0.f);
+	ButtonsSlot->SetHorizontalAlignment(HAlign_Center);
 
 	return CloseTree(WidgetBlueprint);
 #else
@@ -3972,16 +4121,32 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 	// 패널 하나 (가운데 위): 틀이 아래쪽, 라운드 알약이 틀 위로 튀어나옴
 	UCanvasPanel* Group = Make<UCanvasPanel>(TEXT("Group_TopPanel"));
 	Group->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	PlaceHud(Canvas, Group, FVector2D(0.f, 20.f), FVector2D(580.f, 124.f), TopCenter, TopCenter);
+	PlaceHud(Canvas, Group, FVector2D(0.f, 20.f), FVector2D(580.f, 136.f), TopCenter, TopCenter);
 
-	PlaceHud(Group, RoundedBox(TEXT("Image_TopPanelFrame"), FrameFill, 22.f), FVector2D(0.f, 22.f), FVector2D(580.f, 100.f), TopLeft, TopLeft);
-	PlaceHud(Group, RoundedBox(TEXT("Image_MyWinsCell"), CellFill, 16.f), FVector2D(12.f, 34.f), FVector2D(172.f, 76.f), TopLeft, TopLeft);
-	PlaceHud(Group, RoundedBox(TEXT("Image_EnemyWinsCell"), CellFill, 16.f), FVector2D(396.f, 34.f), FVector2D(172.f, 76.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_TopPanelFrame"), FrameFill, 22.f), FVector2D(0.f, 22.f), FVector2D(580.f, 112.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_MyWinsCell"), CellFill, 16.f), FVector2D(12.f, 34.f), FVector2D(172.f, 88.f), TopLeft, TopLeft);
+	PlaceHud(Group, RoundedBox(TEXT("Image_EnemyWinsCell"), CellFill, 16.f), FVector2D(396.f, 34.f), FVector2D(172.f, 88.f), TopLeft, TopLeft);
 
-	// 가운데: 파란 시간 칸 + 라운드 알약 (기본 시간 카드 이미지)
-	PlaceHud(Group, MakeHudImage(TEXT("Image_TimePanel"), TEXT("UI_Time"), FVector2D(216.f, 109.f)), FVector2D(182.f, 0.f), FVector2D(216.f, 109.f), TopLeft, TopLeft);
-	PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), 15, White, ETextJustify::Center, 1), FVector2D(290.f, 12.f), FVector2D(130.f, 28.f), TopLeft, Center);
-	PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 36, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(290.f, 58.f), FVector2D(200.f, 62.f), TopLeft, Center);
+	// 가운데: 두꺼운 파란 시간 칸(아래 그림자 한 겹) + 위에 걸친 분홍 라운드 알약 (예전 시간 카드 이미지는 쓰지 않음)
+	const FLinearColor BlueTop = FLinearColor::FromSRGBColor(FColor(0x19, 0xA3, 0xFF));
+	const FLinearColor BlueShadow = FLinearColor::FromSRGBColor(FColor(0x0B, 0x5F, 0xB8));
+	const FLinearColor PillFill = FLinearColor::FromSRGBColor(FColor(0xFF, 0x2D, 0x6E));
+	auto PlainRounded = [&](const TCHAR* Name, const FLinearColor& Fill, const FLinearColor& Edge, float Radius)
+	{
+		UImage* Image = Make<UImage>(Name);
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+		Brush.TintColor = FSlateColor(Fill);
+		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(Radius, Radius, Radius, Radius), FSlateColor(Edge), 2.f);
+		Image->SetBrush(Brush);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	};
+	PlaceHud(Group, PlainRounded(TEXT("Image_TimeShadow"), BlueShadow, BlueShadow, 20.f), FVector2D(203.f, 40.f), FVector2D(174.f, 82.f), TopLeft, TopLeft);
+	PlaceHud(Group, PlainRounded(TEXT("Image_TimeCell"), BlueTop, BlueShadow, 20.f), FVector2D(203.f, 34.f), FVector2D(174.f, 76.f), TopLeft, TopLeft);
+	PlaceHud(Group, PlainRounded(TEXT("Image_RoundPill"), PillFill, FLinearColor::FromSRGBColor(FColor(0xB3, 0x14, 0x4A)), 16.f), FVector2D(232.f, 8.f), FVector2D(116.f, 32.f), TopLeft, TopLeft);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundNumber"), TEXT("1 / 3"), 16, White, ETextJustify::Center, 1), FVector2D(290.f, 24.f), FVector2D(116.f, 28.f), TopLeft, Center);
+	PlaceHud(Group, MakeHudText(TEXT("Text_RoundTimer"), TEXT("1:00"), 40, White, ETextJustify::Center, 2, FLinearColor(0.02f, 0.18f, 0.45f, 1.f)), FVector2D(290.f, 74.f), FVector2D(170.f, 56.f), TopLeft, Center);
 
 	// 양옆 칸: 팀 색 칩 + 승점 (작은 글자는 칸 위쪽)
 	auto BuildWinsCell = [&](const TCHAR* LabelName, const TCHAR* LabelText, const TCHAR* ChipName, const TCHAR* WinsName, float X)
@@ -3993,9 +4158,9 @@ bool UCTUIBuildTools::ReplaceTreasureTopPanel(UBlueprint* WidgetBlueprint)
 		Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(15.f, 15.f, 15.f, 15.f), FSlateColor(HudDarkText), 2.f);
 		Chip->SetBrush(Brush);
 		Chip->SetVisibility(ESlateVisibility::HitTestInvisible);
-		PlaceHud(Group, Chip, FVector2D(X + 14.f, 64.f), FVector2D(30.f, 30.f), TopLeft, TopLeft);
-		PlaceHud(Group, MakeHudText(LabelName, LabelText, 14, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 86.f, 46.f), FVector2D(160.f, 22.f), TopLeft, Center);
-		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 40, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 56.f, 58.f), FVector2D(100.f, 50.f), TopLeft, TopLeft);
+		PlaceHud(Group, Chip, FVector2D(X + 12.f, 78.f), FVector2D(30.f, 30.f), TopLeft, TopLeft);
+		PlaceHud(Group, MakeHudText(LabelName, LabelText, 14, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 86.f, 52.f), FVector2D(160.f, 22.f), TopLeft, Center);
+		PlaceHud(Group, MakeHudText(WinsName, TEXT("0"), 34, HudDarkText, ETextJustify::Center, 0), FVector2D(X + 56.f, 66.f), FVector2D(100.f, 48.f), TopLeft, TopLeft);
 	};
 	BuildWinsCell(TEXT("Label_MyTeamWins"), TEXT("우리 팀 승점"), TEXT("Image_MyTeamColor"), TEXT("Text_MyTeamWins"), 12.f);
 	BuildWinsCell(TEXT("Label_EnemyTeamWins"), TEXT("상대 팀 승점"), TEXT("Image_EnemyTeamColor"), TEXT("Text_EnemyTeamWins"), 396.f);

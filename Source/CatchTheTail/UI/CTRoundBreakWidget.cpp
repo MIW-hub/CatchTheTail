@@ -44,6 +44,10 @@ void UCTRoundBreakWidget::Show(const FCTRoundBreakInfo& Info, int32 MyTeam)
 		if (Hidden) { Hidden->SetVisibility(ESlateVisibility::Hidden); }
 	}
 
+	// 머리 알약은 처음에는 둘 다 연보라, 왕관은 숨김 (승패가 나오면 바뀜)
+	for (UImage* Header : { Image_MyTeamHeader.Get(), Image_EnemyTeamHeader.Get() }) { if (Header) { Header->SetColorAndOpacity(LoserHeaderColor); } }
+	for (UImage* Crown : { Image_MyCrown.Get(), Image_EnemyCrown.Get() }) { if (Crown) { Crown->SetVisibility(ESlateVisibility::Collapsed); } }
+	for (UTextBlock* Name : { Text_MyTeamLabel.Get(), Text_EnemyTeamLabel.Get() }) { if (Name) { Name->SetColorAndOpacity(FSlateColor(DarkTextColor)); } }
 	FillPlayers(Box_MyPlayers, Info, MyTeam, MyColor, MyTeam);
 	FillPlayers(Box_EnemyPlayers, Info, Enemy, EnemyColor, MyTeam);
 
@@ -111,6 +115,19 @@ void UCTRoundBreakWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		if (Text_EnemyResult) { Text_EnemyResult->SetText(ResultText(bEnemyWon)); Text_EnemyResult->SetVisibility(ESlateVisibility::HitTestInvisible); }
 		if (Text_MyTeamWins) { Text_MyTeamWins->SetText(FText::AsNumber(At(ShownInfo.WinsAfter, ShownMyTeam))); }
 		if (Text_EnemyTeamWins) { Text_EnemyTeamWins->SetText(FText::AsNumber(At(ShownInfo.WinsAfter, Enemy))); }
+		// 이긴 팀 강조 (동점이면 둘 다 강조 없이 연보라)
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const bool bWin = !bTie && (Side == 0 ? bMyWon : bEnemyWon);
+			UImage* Header = (Side == 0) ? Image_MyTeamHeader.Get() : Image_EnemyTeamHeader.Get();
+			UImage* Crown = (Side == 0) ? Image_MyCrown.Get() : Image_EnemyCrown.Get();
+			UTextBlock* Name = (Side == 0) ? Text_MyTeamLabel.Get() : Text_EnemyTeamLabel.Get();
+			UTextBlock* SideResult = (Side == 0) ? Text_MyResult.Get() : Text_EnemyResult.Get();
+			if (Header) { Header->SetColorAndOpacity(bWin ? WinnerHeaderColor : LoserHeaderColor); }
+			if (Crown) { Crown->SetVisibility(bWin ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed); }
+			if (Name) { Name->SetColorAndOpacity(FSlateColor(bWin ? FLinearColor::White : DarkTextColor)); }
+			if (SideResult) { SideResult->SetColorAndOpacity(FSlateColor(bWin ? WinnerHeaderColor : LoserResultColor)); }
+		}
 		BP_OnReveal(bMyWon, bEnemyWon);
 	}
 
