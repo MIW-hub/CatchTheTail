@@ -30,3 +30,7 @@ Packaged/
 # 기준선 확인용 전체 로그 (크기가 커서 올리지 않음)
 docs/baseline/*.log
 Config/Windows/WindowsEngine.ini
+
+# 에디터/IDE가 자동으로 만드는 파일
+Build/Windows/FileOpenOrder/
+*.sln.DotSettings.user
