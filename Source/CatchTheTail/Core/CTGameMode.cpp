@@ -22,6 +22,7 @@
 #include "TimerManager.h"
 #include "HAL/IConsoleManager.h"
 #include "../World/CTThrowable.h"
+#include "../World/CTBroadcastCamera.h"
 
 #if !UE_BUILD_SHIPPING
 // 개발용: 1이면 보물찾기 경기에서 던지기 시험 시나리오를 자동으로 실행하고 [CT-Test] 로그를 남김
@@ -115,6 +116,25 @@ void ACTGameMode::InitPlayerForGame(APlayerController* NewPlayer)
 		// listen 서버 로컬 플레이어가 방장
 		NewPlayerState->SetIsHost(NewPlayer->IsLocalController());
 	}
+
+#if !UE_BUILD_SHIPPING
+	// 개발용 중계 촬영: AI 들만 경기를 하고 로컬 플레이어는 관전자로 카메라만 잡음 (Tools/CTRenderBroadcast.ps1)
+	int32 BroadcastStyle = 0;
+	if (!bBroadcastSetup && NewPlayer && NewPlayer->IsLocalController() && FParse::Value(FCommandLine::Get(), TEXT("CTBroadcast="), BroadcastStyle) && BroadcastStyle > 0)
+	{
+		bBroadcastSetup = true;
+		if (APawn* OwnPawn = NewPlayer->GetPawn()) { OwnPawn->Destroy(); }
+		if (APlayerState* PS = NewPlayer->PlayerState) { PS->SetIsSpectator(true); PS->SetIsOnlyASpectator(true); }
+		if (ACTBroadcastCamera* Camera = GetWorld()->SpawnActor<ACTBroadcastCamera>(FVector(0.f, 0.f, 2000.f), FRotator::ZeroRotator))
+		{
+			Camera->Style = BroadcastStyle >= 2 ? 1 : 0;
+			{ float S = 1.f; FParse::Value(FCommandLine::Get(), TEXT("CTBroadcastScale="), S); Camera->AerialScale = S; }
+			Camera->bHideHud = !FParse::Param(FCommandLine::Get(), TEXT("CTBroadcastHud"));
+			NewPlayer->SetViewTarget(Camera);
+		}
+		UE_LOG(LogTemp, Log, TEXT("[CT] 중계 촬영 시작: 스타일 %d"), BroadcastStyle);
+	}
+#endif
 
 	// 테스트용 자동 시작. 접속마다 타이머 재설정
 	if (bAutoStartForTesting)
@@ -393,6 +413,12 @@ void ACTGameMode::SpawnAIPlayers()
 		WantedCount = Settings.AiPlayers;
 		MaxPlayers = FMath::Min(Settings.MaxPlayers, CTColorCount);
 	}
+
+#if !UE_BUILD_SHIPPING
+	// 개발용: 명령줄 -CTAI=8 로 AI 수 지정 (로비 설정보다 우선)
+	int32 AiOverride = 0;
+	if (FParse::Value(FCommandLine::Get(), TEXT("CTAI="), AiOverride)) { WantedCount = AiOverride; MaxPlayers = CTColorCount; }
+#endif
 
 	// 사람 수: 관전자와 AI가 아닌 플레이어
 	int32 HumanCount = 0;

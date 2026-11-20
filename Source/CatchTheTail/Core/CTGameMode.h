@@ -198,6 +198,9 @@ private:
 	void SpawnAIPlayers();
 	bool bAIPlayersSpawned = false;
 
+	// 개발용 중계 촬영(-CTBroadcast): 로컬 플레이어를 관전자로 돌리고 중계 카메라를 놓음 (한 번만)
+	bool bBroadcastSetup = false;
+
 	// 유령 부활, 색 배정, 라운드 시간 설정
 	void StartNewRound();
 
