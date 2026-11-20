@@ -4223,6 +4223,44 @@ bool UCTUIBuildTools::SetHorizontalSlotPadding(UBlueprint* WidgetBlueprint, FNam
 }
 
 // 글자 상자의 글자를 바꿈 (번역 키는 위젯 이름 기준으로 유지). 위치, 크기, 색은 그대로
+bool UCTUIBuildTools::CloneTextBlock(UBlueprint* WidgetBlueprint, FName SourceName, FName NewName, const FString& NewText)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WidgetTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	UTextBlock* Source = WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(SourceName)) : nullptr;
+	if (!Source) { return false; }
+
+	UTextBlock* Copy = Cast<UTextBlock>(WidgetTree->FindWidget(NewName));
+	if (!Copy)
+	{
+		UPanelWidget* Parent = Source->GetParent();
+		UCanvasPanelSlot* SourceSlot = Cast<UCanvasPanelSlot>(Source->Slot);
+		if (!Parent || !SourceSlot) { return false; }
+		Copy = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), NewName);
+		Copy->SetFont(Source->GetFont());
+		Copy->SetColorAndOpacity(Source->GetColorAndOpacity());
+		Copy->SetShadowOffset(Source->GetShadowOffset());
+		Copy->SetShadowColorAndOpacity(Source->GetShadowColorAndOpacity());
+		Copy->SetJustification(ETextJustify::Center);
+		Copy->SetAutoWrapText(Source->GetAutoWrapText());
+		UCanvasPanelSlot* NewSlot = Cast<UCanvasPanelSlot>(Parent->AddChild(Copy));
+		if (!NewSlot) { return false; }
+		NewSlot->SetAnchors(SourceSlot->GetAnchors());
+		NewSlot->SetAlignment(SourceSlot->GetAlignment());
+		NewSlot->SetPosition(SourceSlot->GetPosition());
+		NewSlot->SetSize(SourceSlot->GetSize());
+	}
+	Copy->SetText(Loc(*NewName.ToString(), *NewText));
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
 bool UCTUIBuildTools::SetTextByName(UBlueprint* WidgetBlueprint, FName TextName, const FString& NewText)
 {
 #if WITH_EDITOR

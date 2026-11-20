@@ -172,6 +172,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool SetTextByName(UBlueprint* WidgetBlueprint, FName TextName, const FString& NewText);
 
+	// 글자 상자를 같은 부모(캔버스)에 복제하고 글자를 바꿈. 이미 있으면 글자만 바꿈
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool CloneTextBlock(UBlueprint* WidgetBlueprint, FName SourceName, FName NewName, const FString& NewText);
+
 	// 보물찾기 경기 결과 화면 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildTreasureResultDesign(UBlueprint* WidgetBlueprint);
