@@ -1,5 +1,7 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTBroadcastCamera.h"
+#include "CTExplosionFx.h"
+#include "Misc/CommandLine.h"
 #include "../Player/CTCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -95,6 +97,14 @@ void ACTBroadcastCamera::Tick(float Dt)
 
 	const FVector Vel = Hero->GetVelocity().GetSafeNormal2D();
 	if (!Vel.IsNearlyZero()) { Heading = FMath::VInterpTo(Heading, Vel, Dt, 3.f).GetSafeNormal2D(); }
+
+	// 개발용 효과 시험: 명령줄 -CTFxTest 면 3초, 7초에 주인공 앞에서 폭발 효과를 터뜨림
+	static const bool bFxTest = FParse::Param(FCommandLine::Get(), TEXT("CTFxTest"));
+	if (bFxTest && ((Elapsed > 3.f && !bFx1) || (Elapsed > 7.f && !bFx2)))
+	{
+		(bFx1 ? bFx2 : bFx1) = true;
+		ACTExplosionFx::Spawn(GetWorld(), Hero->GetActorLocation() + Heading * 450.f - FVector(0.f, 0.f, 85.f), 450.f);
+	}
 
 	if (Style == 1) { UpdateAerial(Dt); } else { UpdateGameplay(Dt); }
 

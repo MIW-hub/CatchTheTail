@@ -48,4 +48,6 @@ private:
 	FVector SmoothFocus = FVector::ZeroVector;
 	bool bFocusInit = false;
 	bool bPoseInit = false;
+	bool bFx1 = false;
+	bool bFx2 = false;
 };

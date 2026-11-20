@@ -1,5 +1,6 @@
 // Copyright Moon Party Games. All Rights Reserved.
 #include "CTExplosiveBarrel.h"
+#include "CTExplosionFx.h"
 #include "CTTailPickup.h"
 #include "../Core/CTGameState.h"
 #include "../Core/CTAudioSubsystem.h"
@@ -210,6 +211,7 @@ void ACTExplosiveBarrel::ApplyStateVisuals(ECTBarrelState OldState)
 	{
 		if (ExplosionSound) { UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation()); }
 		else { PlayDefaultSfx(ECTSfx::Explosion); }
+		if (bSpawnDefaultExplosionFx) { ACTExplosionFx::Spawn(GetWorld(), GetActorLocation(), ExplosionRadius); }
 		BP_OnExploded();
 	}
 }

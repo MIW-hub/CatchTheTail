@@ -12,8 +12,9 @@ New-Item -ItemType Directory $out -Force | Out-Null
 Get-ChildItem $out -File | ForEach-Object { $_.Delete() }
 $log = "$env:TEMP\cine_broadcast.log"
 $hudArg = ""
+$extra = $env:CT_EXTRA_ARGS
 if ($Hud) { $hudArg = "-CTBroadcastHud" }
-$a = "$root\CatchTheTail.uproject /Game/Levels/$Map -game -windowed -ResX=$Width -ResY=$Height -ForceRes -CTMode=$Mode -CTAI=8 -CTBroadcast=$Style -CTBroadcastScale=$Scale $hudArg -MovieSceneCaptureType=/Script/MovieSceneCapture.AutomatedLevelSequenceCapture -LevelSequence=/Game/Cinematic/LS_Broadcast$Seconds.LS_Broadcast$Seconds -MovieFormat=$Format -MovieFolder=`"$out`" -MovieName=$Name -MovieFrameRate=30 -NoTextureStreaming -NoLoadingScreen -MovieCinematicMode=yes -NoScreenMessages -nosound -nosplash -nop4 -log -ABSLOG=`"$log`""
+$a = "$root\CatchTheTail.uproject /Game/Levels/$Map -game -windowed -ResX=$Width -ResY=$Height -ForceRes -CTMode=$Mode -CTAI=8 -CTBroadcast=$Style -CTBroadcastScale=$Scale $hudArg $extra -MovieSceneCaptureType=/Script/MovieSceneCapture.AutomatedLevelSequenceCapture -LevelSequence=/Game/Cinematic/LS_Broadcast$Seconds.LS_Broadcast$Seconds -MovieFormat=$Format -MovieFolder=`"$out`" -MovieName=$Name -MovieFrameRate=30 -NoTextureStreaming -NoLoadingScreen -MovieCinematicMode=yes -NoScreenMessages -nosound -nosplash -nop4 -log -ABSLOG=`"$log`""
 $p = Start-Process -FilePath "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe" -ArgumentList $a -PassThru
 $p.WaitForExit(1800000) | Out-Null
 if (-not $p.HasExited) { $p.Kill() }

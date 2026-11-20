@@ -132,6 +132,10 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Barrel")
 	void BP_OnExploded();
 
+	// 폭발 때 기본 폭발 효과(불덩이, 충격파, 불꽃, 연기)를 보여 줌. 블루프린트에서 직접 이펙트를 넣었다면 끔
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|Barrel|Look")
+	bool bSpawnDefaultExplosionFx = true;
+
 	// 폭발에 휘말린 캐릭터 (서버)
 	UFUNCTION(BlueprintImplementableEvent, Category = "CT|Barrel")
 	void BP_OnHitCharacter(ACTCharacter* HitCharacter);
