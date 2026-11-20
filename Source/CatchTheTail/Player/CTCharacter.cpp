@@ -303,6 +303,14 @@ void ACTCharacter::BeginPlay()
 	}
 }
 
+void ACTCharacter::SetCinematicTint(const FLinearColor& Tint)
+{
+	NoColorTint = Tint;
+	RefreshBodyColor();
+	// 꼬리도 같은 색, 몸통 2칸으로 보이게
+	if (OwnedTail) { OwnedTail->SetCinematicLook(2, Tint); }
+}
+
 void ACTCharacter::FellOutOfWorld(const UDamageType& DmgType)
 {
 	if (!HasAuthority()) { return; }
@@ -2033,7 +2041,7 @@ void ACTCharacter::UpdateRunMontage()
 
 	// 달리기+이동+지상만, 공중은 점프 모션
 	const bool bWantRunMontage =
-		RunState == ECTRunState::Running &&
+		(RunState == ECTRunState::Running || bCinematicForceRun) &&
 		!IsGhost() &&
 		!GetCharacterMovement()->IsFalling() &&
 		GetVelocity().Size2D() > RunMontageMinSpeed;

@@ -17,8 +17,11 @@ mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS
 mat.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_BEFORE_BLOOM)
 
 CODE = """
-float2 UV = GetDefaultSceneTextureUV(Parameters, 14);
-float3 Color = SceneTextureLookup(UV, 14, false).rgb;
+// 각 버퍼(색, 깊이, 법선)의 UV 를 따로 구하고, 이웃 위치는 버퍼 한 칸(BufferSizeAndInvSize) 단위로 이동
+float2 UVc = GetDefaultSceneTextureUV(Parameters, 14);
+float2 UVd = GetDefaultSceneTextureUV(Parameters, 1);
+float2 UVn = GetDefaultSceneTextureUV(Parameters, 8);
+float3 Color = SceneTextureLookup(UVc, 14, false).rgb;
 
 // 1) 약한 카툰 음영 (예전 SemiToon 계산, ToonStrength 로 섞는 양 조절)
 float Lum = dot(Color, float3(0.3, 0.59, 0.11));
@@ -28,16 +31,19 @@ float B = lerp(Lum, S + max(Lum - Range, 0.0), ToonStrength);
 float3 Toon = Color * (B / max(Lum, 0.001));
 
 // 2) 외곽선: 주변 4방향의 깊이 차이와 법선 차이
-float2 px = ResolvedView.ViewSizeAndInvSize.zw * Thickness;
-float2 oR = UV + float2(px.x, 0);
-float2 oL = UV - float2(px.x, 0);
-float2 oU = UV - float2(0, px.y);
-float2 oD = UV + float2(0, px.y);
-float d0 = CalcSceneDepth(UV);
-float dMax = max(max(abs(d0 - CalcSceneDepth(oR)), abs(d0 - CalcSceneDepth(oL))), max(abs(d0 - CalcSceneDepth(oU)), abs(d0 - CalcSceneDepth(oD))));
+float2 px = ResolvedView.BufferSizeAndInvSize.zw * Thickness;
+float2 offs[4] = { float2(px.x, 0), float2(-px.x, 0), float2(0, px.y), float2(0, -px.y) };
+float d0 = CalcSceneDepth(UVd);
+float3 n0 = SceneTextureLookup(UVn, 8, false).xyz;
+float dMax = 0.0;
+float nMax = 0.0;
+[unroll]
+for (int i = 0; i < 4; ++i)
+{
+    dMax = max(dMax, abs(d0 - CalcSceneDepth(UVd + offs[i])));
+    nMax = max(nMax, 1.0 - dot(n0, SceneTextureLookup(UVn + offs[i], 8, false).xyz));
+}
 float depthEdge = dMax / max(d0, 1.0);
-float3 n0 = SceneTextureLookup(UV, 8, false).xyz;
-float nMax = max(max(1.0 - dot(n0, SceneTextureLookup(oR, 8, false).xyz), 1.0 - dot(n0, SceneTextureLookup(oL, 8, false).xyz)), max(1.0 - dot(n0, SceneTextureLookup(oU, 8, false).xyz), 1.0 - dot(n0, SceneTextureLookup(oD, 8, false).xyz)));
 float edge = saturate(max(smoothstep(DepthThreshold, DepthThreshold * 2.0, depthEdge), smoothstep(NormalThreshold, NormalThreshold * 2.0, nMax)));
 
 return lerp(Toon, OutlineColor, edge * OutlineStrength);
@@ -45,7 +51,7 @@ return lerp(Toon, OutlineColor, edge * OutlineStrength);
 
 scalars = [
     ("Steps", 4.0), ("Softness", 0.08), ("Range", 0.5), ("ToonStrength", 0.2),
-    ("Thickness", 1.0), ("DepthThreshold", 0.02), ("NormalThreshold", 0.5), ("OutlineStrength", 0.6),
+    ("Thickness", 1.0), ("DepthThreshold", 0.03), ("NormalThreshold", 0.85), ("OutlineStrength", 0.5),
 ]
 custom = L.create_material_expression(mat, unreal.MaterialExpressionCustom, -200, 0)
 names = [s[0] for s in scalars] + ["OutlineColor", "SceneColorIn", "SceneDepthIn", "SceneNormalIn"]
@@ -68,7 +74,7 @@ for n, v in scalars:
     y += 120
 cp = L.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -600, y)
 cp.set_editor_property("parameter_name", "OutlineColor")
-cp.set_editor_property("default_value", unreal.LinearColor(0.05, 0.03, 0.08, 1.0))
+cp.set_editor_property("default_value", unreal.LinearColor(0.035, 0.03, 0.04, 1.0))
 L.connect_material_expressions(cp, "", custom, "OutlineColor")
 
 # SceneTexture 노드를 실제로 연결해야 화면 읽기 함수가 셰이더에 포함됨

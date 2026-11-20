@@ -24,3 +24,5 @@ UE 5.7 / C++ (접두사 `CT`) 리슨 서버 파티 게임. 코드를 읽고 확�
 - 상체 몽타주: AnimBP에 `UpperBody` 슬롯과 뼈 단위 섞기(`Spine`부터)가 들어 있음. 도구는 `Source/CatchTheTail/Core/CTAnimTools.*` (에디터 전용).
 - 2026-11-18: 들고 있는 상체 몽타주는 반복하지 않고 마지막 자세에서 멈춰 유지함(들 때 한 번 재생, 놓으면 해제).
 - 2026-11-18: 큐브 시티(`L_Box`)에 NavMeshBoundsVolume 추가(`Tools/CTAddNavVolume.py`), AI 직선 이동 막힘 우회 추가(`02_AI_Rules.md` 참고).
+- 2026-11-20: 인트로/홍보용 시네마틱. 큐브 시티 복사 맵 `L_Cinematic` 의 연출 감독 액터(`ACTCinematicDirector`)가 흰 닭과 초록 닭을 만들어 컷(전경, 옆 2컷, 쿼터뷰에서 정면으로 도는 잡기 컷)을 진행함. 만들기 `Tools/CTBuildIntroCinematic.py`, 영상 뽑기 `Tools/CTRenderIntroCinematic.ps1` (에디터를 닫고 실행, 결과 `Saved/CineRender`). 캐릭터/꼬리에 시네마틱 전용 지정 함수가 있고 지정하지 않으면 게임 동작은 그대로임.
+- 2026-11-20: 후처리 외곽선 `M_PP_SoftOutline`(카툰 음영 약하게 + 얇은 외곽선)을 큐브 시티, 시골 마을, 작은 마을, 로비 후처리 볼륨에 적용. 도구 `Tools/CTMakeSoftOutline.py`, `Tools/CTApplySoftOutline.py`.

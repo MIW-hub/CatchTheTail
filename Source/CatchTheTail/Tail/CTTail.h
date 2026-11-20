@@ -47,6 +47,9 @@ public:
 	// 주인 색/꼬리 수/잡힘 기준 재설정
 	void RefreshVisual();
 
+	// 시네마틱용: 플레이어 상태 없이 꼬리 개수와 색을 직접 지정
+	void SetCinematicLook(int32 Count, const FLinearColor& Color);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnRep_AttachmentReplication() override;
@@ -151,5 +154,9 @@ private:
 	// 현재 불빛 0~1, 목표로 이동
 	float LightAmount = 1.f;
 	FLinearColor LitColor = FLinearColor::White;
+
+	bool bCinematicLook = false;
+	int32 CinematicCount = 0;
+	FLinearColor CinematicColor = FLinearColor::White;
 	bool bMeshAssetsApplied = false;
 };

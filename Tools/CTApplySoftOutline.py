@@ -3,7 +3,7 @@
 import unreal
 
 REMOVE = False
-MAPS = ["/Game/Levels/L_Box", "/Game/Levels/L_Country", "/Game/Levels/L_Building"]
+MAPS = ["/Game/Levels/L_Box", "/Game/Levels/L_Country", "/Game/Levels/L_Building", "/Game/Levels/L_Lobby"]
 MAT_PATH = "/Game/Material/M_PP_SoftOutline.M_PP_SoftOutline"
 mat = unreal.EditorAssetLibrary.load_asset(MAT_PATH)
 

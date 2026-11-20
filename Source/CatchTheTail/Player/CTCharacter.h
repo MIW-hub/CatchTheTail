@@ -242,6 +242,13 @@ public:
 	// AssignedColor 머티리얼 반영
 	void RefreshBodyColor();
 
+	// 시네마틱용: 플레이어 상태 없이 몸 색을 바로 지정
+	void SetCinematicTint(const FLinearColor& Tint);
+
+	// 시네마틱용: 달리기 시간/쿨타임과 상관없이 달리기 모션을 계속 보여줌
+	void SetCinematicRun(bool bForce) { bCinematicForceRun = bForce; }
+	bool bCinematicForceRun = false;
+
 	// 꼬리 수 변경 시 모양 갱신
 	void RefreshTailVisual();
 
@@ -587,7 +594,7 @@ protected:
 	FName BodyColorParameterName = TEXT("BodyColor");
 
 	// 색 없을 때 색
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CT|Color")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CT|Color")
 	FLinearColor NoColorTint = FLinearColor::White;
 
 	// 유령 몸 색

@@ -203,7 +203,8 @@ USkeletalMeshComponent* ACTTail::AddBodySegment()
 void ACTTail::RefreshSegments()
 {
 	// 주인 꼬리 수 (PlayerState 복제값)
-	int32 TargetCount = 0;
+	int32 TargetCount = bCinematicLook ? FMath::Clamp(CinematicCount, 0, MaxBodySegments) : 0;
+	if (!bCinematicLook)
 	if (const ACTCharacter* OwnerCharacter = GetTailOwnerCharacter())
 	{
 		if (const ACTPlayerState* OwnerState = OwnerCharacter->GetPlayerState<ACTPlayerState>())
@@ -313,12 +314,22 @@ void ACTTail::RefreshVisual()
 		}
 	}
 
+	if (bCinematicLook) { LitColor = CinematicColor; }
+
 	RefreshSegments();
 	if (Materials.IsEmpty())
 	{
 		RebuildMaterials();
 	}
 	ApplyLook();
+}
+
+void ACTTail::SetCinematicLook(int32 Count, const FLinearColor& Color)
+{
+	bCinematicLook = true;
+	CinematicCount = Count;
+	CinematicColor = Color;
+	RefreshVisual();
 }
 
 void ACTTail::ApplyLook()
