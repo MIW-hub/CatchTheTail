@@ -176,6 +176,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static bool CloneTextBlock(UBlueprint* WidgetBlueprint, FName SourceName, FName NewName, const FString& NewText);
 
+	// 메인 메뉴에 크레딧 화면(검은 바탕 + 올라가는 글, Panel_Credits)과 메인 패널의 크레딧 버튼을 만듦. 글 줄: "# 제목", "## 항목", 빈 줄은 간격
+	UFUNCTION(BlueprintCallable, Category = "CT|UI")
+	static bool BuildCreditsPanel(UBlueprint* WidgetBlueprint, const TArray<FString>& Entries, const FString& MenuButtonLabel);
+
 	// 보물찾기 경기 결과 화면 뼈대 (처음 한 번)
 	UFUNCTION(BlueprintCallable, Category = "CT|UI")
 	static int32 BuildTreasureResultDesign(UBlueprint* WidgetBlueprint);

@@ -4261,6 +4261,129 @@ bool UCTUIBuildTools::CloneTextBlock(UBlueprint* WidgetBlueprint, FName SourceNa
 #endif
 }
 
+bool UCTUIBuildTools::BuildCreditsPanel(UBlueprint* WidgetBlueprint, const TArray<FString>& Entries, const FString& MenuButtonLabel)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint) { return false; }
+	const FObjectProperty* TreeProperty = CastField<FObjectProperty>(WidgetBlueprint->GetClass()->FindPropertyByName(TEXT("WidgetTree")));
+	UWidgetTree* WTree = TreeProperty ? Cast<UWidgetTree>(TreeProperty->GetObjectPropertyValue_InContainer(WidgetBlueprint)) : nullptr;
+	if (!WTree) { return false; }
+
+	UCanvasPanel* Root = Cast<UCanvasPanel>(WTree->FindWidget(TEXT("Canvas_MainMenu")));
+	UCanvasPanel* Main = Cast<UCanvasPanel>(WTree->FindWidget(TEXT("Panel_Main")));
+	UTextBlock* SrcLine = Cast<UTextBlock>(WTree->FindWidget(TEXT("Label_HowTo1")));
+	UButton* SrcButton = Cast<UButton>(WTree->FindWidget(TEXT("Button_HowTo")));
+	UTextBlock* SrcButtonLabel = Cast<UTextBlock>(WTree->FindWidget(TEXT("Label_Button_HowTo")));
+	if (!Root || !Main || !SrcLine || !SrcButton || !SrcButtonLabel) { return false; }
+	if (WTree->FindWidget(TEXT("Panel_Credits"))) { return false; }
+
+	// 메인 메뉴 버튼 만들기 (게임 방법 버튼 모양을 따름)
+	{
+		UButton* Copy = WTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("Button_Credits"));
+		Copy->SetStyle(SrcButton->GetStyle());
+		Copy->SetColorAndOpacity(SrcButton->GetColorAndOpacity());
+		Copy->SetBackgroundColor(SrcButton->GetBackgroundColor());
+		Copy->bIsVariable = true;
+		UTextBlock* Text = WTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Label_Button_Credits"));
+		Text->SetFont(SrcButtonLabel->GetFont());
+		Text->SetColorAndOpacity(SrcButtonLabel->GetColorAndOpacity());
+		Text->SetShadowOffset(SrcButtonLabel->GetShadowOffset());
+		Text->SetShadowColorAndOpacity(SrcButtonLabel->GetShadowColorAndOpacity());
+		Text->SetJustification(ETextJustify::Center);
+		Text->SetText(Loc(TEXT("Label_Button_Credits"), *MenuButtonLabel));
+		Text->bIsVariable = true;
+		Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+		UButtonSlot* TextSlot = Cast<UButtonSlot>(Copy->AddChild(Text));
+		UButtonSlot* FromSlot = Cast<UButtonSlot>(SrcButtonLabel->Slot);
+		if (TextSlot)
+		{
+			TextSlot->SetHorizontalAlignment(HAlign_Center);
+			TextSlot->SetVerticalAlignment(VAlign_Center);
+			if (FromSlot) { TextSlot->SetPadding(FromSlot->GetPadding()); }
+		}
+		UCanvasPanelSlot* From = Cast<UCanvasPanelSlot>(SrcButton->Slot);
+		UCanvasPanelSlot* To = Cast<UCanvasPanelSlot>(Main->AddChild(Copy));
+		if (From && To)
+		{
+			To->SetAnchors(From->GetAnchors()); To->SetAlignment(From->GetAlignment());
+			To->SetPosition(FVector2D(-230.0, 300.0)); To->SetSize(FVector2D(461.0, 84.0));
+		}
+	}
+
+	// 크레딧 화면: 전체를 덮는 검은 바탕 + 위로 올라가는 글 묶음
+	UCanvasPanel* Panel = WTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Panel_Credits"));
+	Panel->bIsVariable = true;
+	Panel->SetVisibility(ESlateVisibility::Collapsed);
+	if (UCanvasPanelSlot* PanelSlot = Cast<UCanvasPanelSlot>(Root->AddChild(Panel)))
+	{
+		PanelSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		PanelSlot->SetOffsets(FMargin(0.f));
+	}
+
+	UImage* Backdrop = WTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("Image_CreditsBackdrop"));
+	Backdrop->SetColorAndOpacity(FLinearColor::Black);
+	Backdrop->SetVisibility(ESlateVisibility::Visible);
+	Backdrop->bIsVariable = true;
+	if (UCanvasPanelSlot* BackdropSlot = Cast<UCanvasPanelSlot>(Panel->AddChild(Backdrop)))
+	{
+		BackdropSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		BackdropSlot->SetOffsets(FMargin(0.f));
+	}
+
+	UCanvasPanel* Scroll = WTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Panel_CreditsScroll"));
+	Scroll->bIsVariable = true;
+	Scroll->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UCanvasPanelSlot* ScrollSlot = Cast<UCanvasPanelSlot>(Panel->AddChild(Scroll));
+
+	double Y = 0.0;
+	int32 Index = 0;
+	for (const FString& Entry : Entries)
+	{
+		++Index;
+		double Height = 40.0;
+		int32 FontSize = 30;
+		FLinearColor Color = FLinearColor::White;
+		FString Text = Entry;
+		if (Entry.StartsWith(TEXT("## "))) { Text = Entry.Mid(3); FontSize = 24; Height = 44.0; Color = FLinearColor(1.f, 0.82f, 0.25f); }
+		else if (Entry.StartsWith(TEXT("# "))) { Text = Entry.Mid(2); FontSize = 60; Height = 100.0; }
+		else if (Entry.IsEmpty()) { Y += 48.0; continue; }
+		else { Height = 52.0; }
+
+		const FName Name = *FString::Printf(TEXT("Label_CreditsLine%d"), Index);
+		UTextBlock* Line = WTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
+		FSlateFontInfo Font = SrcLine->GetFont();
+		Font.Size = FontSize;
+		Line->SetFont(Font);
+		Line->SetColorAndOpacity(FSlateColor(Color));
+		Line->SetJustification(ETextJustify::Center);
+		Line->SetText(Loc(*Name.ToString(), *Text));
+		Line->bIsVariable = true;
+		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UCanvasPanelSlot* LineSlot = Cast<UCanvasPanelSlot>(Scroll->AddChild(Line)))
+		{
+			LineSlot->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
+			LineSlot->SetAlignment(FVector2D(0.5, 0.0));
+			LineSlot->SetPosition(FVector2D(0.0, Y));
+			LineSlot->SetSize(FVector2D(1400.0, Height));
+		}
+		Y += Height;
+	}
+	if (ScrollSlot)
+	{
+		ScrollSlot->SetAnchors(FAnchors(0.5f, 0.f, 0.5f, 0.f));
+		ScrollSlot->SetAlignment(FVector2D(0.5, 0.0));
+		ScrollSlot->SetPosition(FVector2D(0.0, 1080.0));
+		ScrollSlot->SetSize(FVector2D(1400.0, Y));
+	}
+
+	WidgetBlueprint->Modify();
+	WidgetBlueprint->MarkPackageDirty();
+	return true;
+#else
+	return false;
+#endif
+}
+
 bool UCTUIBuildTools::SetTextByName(UBlueprint* WidgetBlueprint, FName TextName, const FString& NewText)
 {
 #if WITH_EDITOR

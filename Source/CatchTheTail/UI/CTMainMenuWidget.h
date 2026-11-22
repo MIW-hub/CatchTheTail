@@ -20,6 +20,7 @@ enum class ECTMenuPanel : uint8
 	Lobby		UMETA(DisplayName = "Lobby"),
 	Settings	UMETA(DisplayName = "Settings"),
 	HowTo		UMETA(DisplayName = "HowTo"),
+	Credits		UMETA(DisplayName = "Credits"),
 	QuitConfirm	UMETA(DisplayName = "QuitConfirm"),
 };
 
@@ -39,6 +40,9 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	// 오른쪽 아래 버전 표시 ("v0.1.0 · 초기 버전")
 	TSharedPtr<SWidget> VersionLabel;
@@ -72,6 +76,13 @@ protected:
 	TObjectPtr<UWidget> Panel_HowTo;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_Credits;
+
+	// 크레딧 글 묶음. 위로 올라가며 흐름
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_CreditsScroll;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> Panel_QuitConfirm;
 
 	// 메인 패널
@@ -86,6 +97,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_HowTo;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_Credits;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_Quit;
@@ -110,6 +124,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_HowToBack;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_CreditsBack;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Button_QuitCancel;
@@ -147,6 +164,9 @@ private:
 	void HandleHowToClicked();
 
 	UFUNCTION()
+	void HandleCreditsClicked();
+
+	UFUNCTION()
 	void HandleQuitClicked();
 
 	UFUNCTION()
@@ -173,4 +193,8 @@ private:
 	static void SetPanelVisible(UWidget* Panel, bool bVisible);
 
 	ECTMenuPanel CurrentPanel = ECTMenuPanel::Main;
+
+	// 크레딧 진행 시간(초). 검은 화면이 나타난 뒤 글이 올라가고, 끝나면 잠시 멈췄다가 메인으로 돌아감
+	float CreditsTime = 0.f;
+	void UpdateCredits(const FGeometry& MyGeometry);
 };
